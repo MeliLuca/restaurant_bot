@@ -1,0 +1,228 @@
+// Hand-written to match db/schema.sql. Once a Supabase project is linked,
+// regenerate with: npx supabase gen types typescript --linked > src/lib/database.types.ts
+
+export type TableStatus = "available" | "occupied" | "dirty";
+export type OrderStatus = "open" | "paid" | "cancelled";
+export type ReservationStatus = "booked" | "seated" | "cancelled" | "no_show";
+
+export interface Database {
+  public: {
+    Tables: {
+      tables: {
+        Row: {
+          id: string;
+          name: string;
+          capacity: number;
+          status: TableStatus;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          capacity: number;
+          status?: TableStatus;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          capacity?: number;
+          status?: TableStatus;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      reservations: {
+        Row: {
+          id: string;
+          table_id: string;
+          customer_name: string;
+          party_size: number;
+          reserved_at: string;
+          status: ReservationStatus;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          table_id: string;
+          customer_name: string;
+          party_size: number;
+          reserved_at: string;
+          status?: ReservationStatus;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          table_id?: string;
+          customer_name?: string;
+          party_size?: number;
+          reserved_at?: string;
+          status?: ReservationStatus;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "reservations_table_id_fkey";
+            columns: ["table_id"];
+            referencedRelation: "tables";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      categories: {
+        Row: {
+          id: string;
+          name: string;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          sort_order?: number;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
+      menu_items: {
+        Row: {
+          id: string;
+          category_id: string;
+          name: string;
+          price: number;
+          is_available: boolean;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          category_id: string;
+          name: string;
+          price: number;
+          is_available?: boolean;
+          sort_order?: number;
+        };
+        Update: {
+          id?: string;
+          category_id?: string;
+          name?: string;
+          price?: number;
+          is_available?: boolean;
+          sort_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "menu_items_category_id_fkey";
+            columns: ["category_id"];
+            referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      orders: {
+        Row: {
+          id: string;
+          table_id: string;
+          status: OrderStatus;
+          tax_rate: number;
+          subtotal: number;
+          tax: number;
+          total: number;
+          opened_at: string;
+          closed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          table_id: string;
+          status?: OrderStatus;
+          tax_rate?: number;
+          subtotal?: number;
+          tax?: number;
+          total?: number;
+          opened_at?: string;
+          closed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          table_id?: string;
+          status?: OrderStatus;
+          tax_rate?: number;
+          subtotal?: number;
+          tax?: number;
+          total?: number;
+          opened_at?: string;
+          closed_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "orders_table_id_fkey";
+            columns: ["table_id"];
+            referencedRelation: "tables";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      order_items: {
+        Row: {
+          id: string;
+          order_id: string;
+          menu_item_id: string;
+          quantity: number;
+          unit_price: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          menu_item_id: string;
+          quantity: number;
+          unit_price: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          order_id?: string;
+          menu_item_id?: string;
+          quantity?: number;
+          unit_price?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey";
+            columns: ["order_id"];
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_items_menu_item_id_fkey";
+            columns: ["menu_item_id"];
+            referencedRelation: "menu_items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: {
+      table_status: TableStatus;
+      order_status: OrderStatus;
+      reservation_status: ReservationStatus;
+    };
+    CompositeTypes: Record<string, never>;
+  };
+}
+
+// Convenience row aliases for app code
+export type RestaurantTable = Database["public"]["Tables"]["tables"]["Row"];
+export type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
+export type Category = Database["public"]["Tables"]["categories"]["Row"];
+export type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
+export type Order = Database["public"]["Tables"]["orders"]["Row"];
+export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
