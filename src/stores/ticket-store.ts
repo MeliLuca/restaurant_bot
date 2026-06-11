@@ -19,6 +19,8 @@ interface TicketState {
   /** Table the ticket belongs to (table mode); null = no table selected yet */
   tableId: string | null;
   tableName: string | null;
+  /** Split label within the table (e.g. "1", "Gino"); null = whole table */
+  subtable: string | null;
   /** Open take-away order being amended; null = new take-away not yet sent */
   takeawayOrderId: string | null;
   takeawayName: string | null;
@@ -28,6 +30,8 @@ interface TicketState {
   setMode: (mode: TicketMode) => void;
   /** Select a table; switching tables clears the in-progress ticket */
   setTable: (tableId: string, tableName: string) => void;
+  /** Switch split within the current table; clears pending lines */
+  setSubtable: (subtable: string | null) => void;
   /** Target a take-away: an existing open order, or a new customer name */
   setTakeaway: (orderId: string | null, name: string) => void;
   addItem: (item: Pick<MenuItem, "id" | "name" | "price">) => void;
@@ -42,6 +46,7 @@ interface TicketState {
 const EMPTY_TARGET = {
   tableId: null,
   tableName: null,
+  subtable: null,
   takeawayOrderId: null,
   takeawayName: null,
   lines: [] as TicketLine[],
@@ -59,6 +64,11 @@ export const useTicketStore = create<TicketState>((set) => ({
       state.mode === "table" && state.tableId === tableId
         ? { tableName }
         : { mode: "table", ...EMPTY_TARGET, tableId, tableName },
+    ),
+
+  setSubtable: (subtable) =>
+    set((state) =>
+      state.subtable === subtable ? {} : { subtable, lines: [] },
     ),
 
   setTakeaway: (orderId, name) =>

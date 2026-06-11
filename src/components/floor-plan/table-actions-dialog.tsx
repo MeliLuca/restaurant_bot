@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Armchair, ReceiptText, Sparkles, Trash2, Users } from "lucide-react";
@@ -12,7 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { updateTableStatus } from "@/lib/api";
+import { Separator } from "@/components/ui/separator";
+import {
+  fetchOpenOrdersWithItems,
+  updateTableStatus,
+  type OrderWithItems,
+} from "@/lib/api";
+import { formatMoney } from "@/lib/constants";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
 import { useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
@@ -31,9 +37,22 @@ export function TableActionsDialog({
 }: TableActionsDialogProps) {
   const router = useRouter();
   const setTicketTable = useTicketStore((s) => s.setTable);
+  const setSubtable = useTicketStore((s) => s.setSubtable);
   const canManageTables = usePermission("manage_tables");
   const canTakeOrders = usePermission("take_orders");
   const [busy, setBusy] = useState(false);
+  const [orders, setOrders] = useState<OrderWithItems[]>([]);
+
+  const tableDbId = table?.id ?? null;
+  useEffect(() => {
+    setOrders([]);
+    if (!tableDbId) return;
+    fetchOpenOrdersWithItems(tableDbId)
+      .then(setOrders)
+      .catch(() => {
+        // order list is supplementary; table actions still work without it
+      });
+  }, [tableDbId]);
 
   if (!table) return null;
   const status = STATUS_CONFIG[table.status];
@@ -56,9 +75,10 @@ export function TableActionsDialog({
     }
   }
 
-  function openInPos() {
+  function openInPos(subtable: string | null = null) {
     if (!table) return;
     setTicketTable(table.id, table.name);
+    setSubtable(subtable);
     onClose();
     router.push("/pos");
   }
@@ -79,6 +99,52 @@ export function TableActionsDialog({
             <Users className="h-4 w-4" /> Seats {table.capacity}
           </DialogDescription>
         </DialogHeader>
+
+        {orders.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Open orders
+            </h3>
+            {orders.map((o, idx) => (
+              <div key={o.id}>
+                {idx > 0 && <Separator className="mb-3" />}
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-semibold">
+                        {o.subtable ? `${table.name}/${o.subtable}` : table.name}
+                      </span>
+                      <span className="font-medium tabular-nums">
+                        {formatMoney(o.total)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      {o.order_items.map((i) => (
+                        <span
+                          key={i.id}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {i.quantity} × {i.menu_items?.name ?? "Item"}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {canTakeOrders && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-10 shrink-0"
+                      onClick={() => openInPos(o.subtable)}
+                    >
+                      <ReceiptText className="mr-1 h-4 w-4" /> Open
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <Separator />
+          </div>
+        )}
 
         <div className="flex flex-col gap-3">
           {noActions && (
@@ -107,7 +173,7 @@ export function TableActionsDialog({
                   variant="secondary"
                   className="h-14 text-base"
                   disabled={busy}
-                  onClick={openInPos}
+                  onClick={() => openInPos()}
                 >
                   <ReceiptText className="mr-2 h-5 w-5" /> Start order in POS
                 </Button>
@@ -122,7 +188,7 @@ export function TableActionsDialog({
                   size="lg"
                   className="h-14 text-base"
                   disabled={busy}
-                  onClick={openInPos}
+                  onClick={() => openInPos()}
                 >
                   <ReceiptText className="mr-2 h-5 w-5" /> Open ticket in POS
                 </Button>

@@ -131,6 +131,7 @@ export interface Database {
           table_id: string | null;
           order_type: OrderType;
           customer_name: string | null;
+          subtable: string | null;
           status: OrderStatus;
           tax_rate: number;
           subtotal: number;
@@ -144,6 +145,7 @@ export interface Database {
           table_id?: string | null;
           order_type?: OrderType;
           customer_name?: string | null;
+          subtable?: string | null;
           status?: OrderStatus;
           tax_rate?: number;
           subtotal?: number;
@@ -157,6 +159,7 @@ export interface Database {
           table_id?: string | null;
           order_type?: OrderType;
           customer_name?: string | null;
+          subtable?: string | null;
           status?: OrderStatus;
           tax_rate?: number;
           subtotal?: number;

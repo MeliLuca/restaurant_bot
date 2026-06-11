@@ -16,8 +16,16 @@ import { usePermission } from "@/stores/auth-store";
 const LEGEND: TableStatus[] = ["available", "occupied", "dirty"];
 
 export default function FloorPlanPage() {
-  const { tables, reservations, takeaways, loading, error, refresh } =
+  const { tables, reservations, takeaways, openOrders, loading, error, refresh } =
     useFloorData();
+
+  const splitsByTable = new Map<string, (string | null)[]>();
+  for (const o of openOrders) {
+    if (!o.table_id) continue;
+    const list = splitsByTable.get(o.table_id) ?? [];
+    list.push(o.subtable);
+    splitsByTable.set(o.table_id, list);
+  }
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(
     null,
   );
@@ -78,7 +86,12 @@ export default function FloorPlanPage() {
         ) : (
           <div className="grid auto-rows-min grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {tables.map((t) => (
-              <TableCard key={t.id} table={t} onSelect={setSelectedTable} />
+              <TableCard
+                key={t.id}
+                table={t}
+                splits={splitsByTable.get(t.id) ?? []}
+                onSelect={setSelectedTable}
+              />
             ))}
           </div>
         )}

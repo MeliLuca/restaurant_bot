@@ -120,17 +120,66 @@ async function fetchOrderItems(orderId: string): Promise<OrderItemWithName[]> {
   return data as OrderItemWithName[];
 }
 
-/** The single open order for a table (enforced by a DB unique index), if any */
-export async function fetchOpenOrder(tableId: string): Promise<OpenOrder | null> {
-  const { data: order, error } = await getSupabase()
+/**
+ * The single open order for a (table, split) pair — enforced by a DB unique
+ * index. `subtable: null` is the whole-table tab.
+ */
+export async function fetchOpenOrder(
+  tableId: string,
+  subtable: string | null,
+): Promise<OpenOrder | null> {
+  let query = getSupabase()
+    .from("orders")
+    .select("*")
+    .eq("table_id", tableId)
+    .eq("status", "open");
+  query = subtable === null
+    ? query.is("subtable", null)
+    : query.eq("subtable", subtable);
+  const { data: order, error } = await query.maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!order) return null;
+  return { order, items: await fetchOrderItems(order.id) };
+}
+
+/** All open orders on a table (one per split), oldest first */
+export async function fetchOpenOrdersForTable(tableId: string): Promise<Order[]> {
+  const { data, error } = await getSupabase()
     .from("orders")
     .select("*")
     .eq("table_id", tableId)
     .eq("status", "open")
-    .maybeSingle();
+    .order("opened_at");
   if (error) throw new Error(error.message);
-  if (!order) return null;
-  return { order, items: await fetchOrderItems(order.id) };
+  return data;
+}
+
+/** Every open dine-in order across the floor (for split badges on table cards) */
+export async function fetchOpenDineInOrders(): Promise<Order[]> {
+  const { data, error } = await getSupabase()
+    .from("orders")
+    .select("*")
+    .eq("status", "open")
+    .eq("order_type", "dine_in")
+    .order("opened_at");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export type OrderWithItems = Order & { order_items: OrderItemWithName[] };
+
+/** Open orders on a table including their items (table dialog detail view) */
+export async function fetchOpenOrdersWithItems(
+  tableId: string,
+): Promise<OrderWithItems[]> {
+  const { data, error } = await getSupabase()
+    .from("orders")
+    .select("*, order_items(*, menu_items(name))")
+    .eq("table_id", tableId)
+    .eq("status", "open")
+    .order("opened_at");
+  if (error) throw new Error(error.message);
+  return data as unknown as OrderWithItems[];
 }
 
 /** An order by id, but only while it's still open (closed orders return null
@@ -184,23 +233,24 @@ export interface TicketLineInput {
 }
 
 /**
- * Persist pending ticket lines: appends to the table's open order (creating
- * one if needed), recomputes stored totals, and marks the table occupied.
- * Returns the order id.
+ * Persist pending ticket lines: appends to the (table, split)'s open order
+ * (creating one if needed), recomputes stored totals, and marks the table
+ * occupied. Returns the order id.
  */
 export async function sendToKitchen(
   tableId: string,
   lines: TicketLineInput[],
+  subtable: string | null,
 ): Promise<string> {
   if (lines.length === 0) throw new Error("Ticket is empty");
   const sb = getSupabase();
 
-  const existing = await fetchOpenOrder(tableId);
+  const existing = await fetchOpenOrder(tableId, subtable);
   let orderId = existing?.order.id;
   if (!orderId) {
     const { data, error } = await sb
       .from("orders")
-      .insert({ table_id: tableId, tax_rate: TAX_RATE })
+      .insert({ table_id: tableId, subtable, tax_rate: TAX_RATE })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -263,15 +313,66 @@ export async function sendTakeawayToKitchen(
   return id;
 }
 
-/** Close the order as paid; dine-in additionally flags the table for cleaning */
+/**
+ * Close the order as paid. A dine-in table is flagged for cleaning only when
+ * this was its last open split — other splits keep the table occupied.
+ * Returns true if the table was flagged dirty.
+ */
 export async function checkoutOrder(
   orderId: string,
   tableId: string | null,
-): Promise<void> {
+): Promise<boolean> {
   const { error } = await getSupabase()
     .from("orders")
     .update({ status: "paid", closed_at: new Date().toISOString() })
     .eq("id", orderId);
   if (error) throw new Error(error.message);
-  if (tableId) await updateTableStatus(tableId, "dirty");
+  if (!tableId) return false;
+
+  const remaining = await fetchOpenOrdersForTable(tableId);
+  if (remaining.length > 0) return false;
+  await updateTableStatus(tableId, "dirty");
+  return true;
+}
+
+/**
+ * Amend an item already sent to the kitchen: change its quantity (or remove
+ * it with quantity <= 0) and recompute the order totals. An order left with
+ * no items is cancelled.
+ */
+export async function setSentItemQuantity(
+  orderId: string,
+  orderItemId: string,
+  quantity: number,
+): Promise<void> {
+  const sb = getSupabase();
+  if (quantity <= 0) {
+    const { error } = await sb
+      .from("order_items")
+      .delete()
+      .eq("id", orderItemId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await sb
+      .from("order_items")
+      .update({ quantity })
+      .eq("id", orderItemId);
+    if (error) throw new Error(error.message);
+  }
+
+  const { count, error: countError } = await sb
+    .from("order_items")
+    .select("id", { count: "exact", head: true })
+    .eq("order_id", orderId);
+  if (countError) throw new Error(countError.message);
+
+  if (count === 0) {
+    const { error } = await sb
+      .from("orders")
+      .update({ status: "cancelled", closed_at: new Date().toISOString() })
+      .eq("id", orderId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+  await recomputeOrderTotals(orderId);
 }

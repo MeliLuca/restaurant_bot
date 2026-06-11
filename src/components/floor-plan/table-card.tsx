@@ -7,10 +7,12 @@ import { STATUS_CONFIG } from "./status";
 
 interface TableCardProps {
   table: RestaurantTable;
+  /** Labels of this table's open orders: split names, null = whole table */
+  splits: (string | null)[];
   onSelect: (table: RestaurantTable) => void;
 }
 
-export function TableCard({ table, onSelect }: TableCardProps) {
+export function TableCard({ table, splits, onSelect }: TableCardProps) {
   const status = STATUS_CONFIG[table.status];
 
   return (
@@ -36,6 +38,18 @@ export function TableCard({ table, onSelect }: TableCardProps) {
       >
         {status.label}
       </span>
+      {splits.length > 0 && (
+        <span className="flex max-w-full flex-wrap justify-center gap-1">
+          {splits.map((s, i) => (
+            <span
+              key={`${s ?? "whole"}-${i}`}
+              className="rounded-full border border-foreground/20 bg-background/60 px-1.5 py-px text-[10px] font-medium text-foreground/80"
+            >
+              {s === null ? table.name : `${table.name}/${s}`}
+            </span>
+          ))}
+        </span>
+      )}
     </button>
   );
 }

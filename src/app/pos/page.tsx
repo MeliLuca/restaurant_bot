@@ -12,6 +12,7 @@ import {
   fetchMenuItems,
   fetchOpenOrder,
   fetchOpenOrderById,
+  fetchOpenOrdersForTable,
   fetchOpenTakeaways,
   fetchTables,
   type OpenOrder,
@@ -28,6 +29,7 @@ import { usePermission } from "@/stores/auth-store";
 export default function PosPage() {
   const mode = useTicketStore((s) => s.mode);
   const tableId = useTicketStore((s) => s.tableId);
+  const subtable = useTicketStore((s) => s.subtable);
   const takeawayOrderId = useTicketStore((s) => s.takeawayOrderId);
   const takeawayName = useTicketStore((s) => s.takeawayName);
   const addItem = useTicketStore((s) => s.addItem);
@@ -37,6 +39,7 @@ export default function PosPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [openOrder, setOpenOrder] = useState<OpenOrder | null>(null);
+  const [openSplits, setOpenSplits] = useState<Order[]>([]);
   const [openTakeaways, setOpenTakeaways] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,17 +65,19 @@ export default function PosPage() {
   const refreshOrder = useCallback(async () => {
     try {
       if (mode === "table") {
-        setOpenOrder(tableId ? await fetchOpenOrder(tableId) : null);
+        setOpenOrder(tableId ? await fetchOpenOrder(tableId, subtable) : null);
+        setOpenSplits(tableId ? await fetchOpenOrdersForTable(tableId) : []);
       } else {
         setOpenOrder(
           takeawayOrderId ? await fetchOpenOrderById(takeawayOrderId) : null,
         );
+        setOpenSplits([]);
       }
       setOpenTakeaways(await fetchOpenTakeaways());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load order");
     }
-  }, [mode, tableId, takeawayOrderId]);
+  }, [mode, tableId, subtable, takeawayOrderId]);
 
   useEffect(() => {
     void loadStatic();
@@ -154,6 +159,7 @@ export default function PosPage() {
         <TicketPanel
           tables={tables}
           openOrder={openOrder}
+          openSplits={openSplits}
           openTakeaways={openTakeaways}
           onOrderChanged={refreshOrder}
         />

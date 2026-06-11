@@ -25,6 +25,7 @@ import {
   checkoutOrder,
   sendTakeawayToKitchen,
   sendToKitchen,
+  setSentItemQuantity,
   type OpenOrder,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
@@ -32,11 +33,13 @@ import { calcTotals } from "@/lib/money";
 import type { Order, RestaurantTable } from "@/lib/database.types";
 import { useTicketStore, type TicketMode } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
+import { SplitPicker } from "./split-picker";
 import { TakeawayPicker } from "./takeaway-picker";
 
 interface TicketPanelProps {
   tables: RestaurantTable[];
   openOrder: OpenOrder | null;
+  openSplits: Order[];
   openTakeaways: Order[];
   onOrderChanged: () => Promise<void>;
 }
@@ -44,6 +47,7 @@ interface TicketPanelProps {
 export function TicketPanel({
   tables,
   openOrder,
+  openSplits,
   openTakeaways,
   onOrderChanged,
 }: TicketPanelProps) {
@@ -51,11 +55,13 @@ export function TicketPanel({
     mode,
     tableId,
     tableName,
+    subtable,
     takeawayOrderId,
     takeawayName,
     lines,
     setMode,
     setTable,
+    setSubtable,
     setTakeaway,
     removeItem,
     setQuantity,
@@ -66,7 +72,12 @@ export function TicketPanel({
   const [busy, setBusy] = useState(false);
 
   const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
-  const targetLabel = mode === "table" ? tableName : takeawayName;
+  const targetLabel =
+    mode === "table"
+      ? subtable
+        ? `${tableName}/${subtable}`
+        : tableName
+      : takeawayName;
 
   const sentLines =
     openOrder?.items.map((i) => ({
@@ -80,7 +91,7 @@ export function TicketPanel({
     setBusy(true);
     try {
       if (mode === "table") {
-        await sendToKitchen(tableId!, lines);
+        await sendToKitchen(tableId!, lines, subtable);
       } else {
         const orderId = await sendTakeawayToKitchen(
           takeawayOrderId,
@@ -108,7 +119,7 @@ export function TicketPanel({
       if (lines.length > 0) {
         orderId =
           mode === "table"
-            ? await sendToKitchen(tableId!, lines)
+            ? await sendToKitchen(tableId!, lines, subtable)
             : await sendTakeawayToKitchen(takeawayOrderId, takeawayName!, lines);
         clearLines();
       }
@@ -116,17 +127,36 @@ export function TicketPanel({
         toast.error("Nothing to check out");
         return;
       }
-      await checkoutOrder(orderId, mode === "table" ? tableId : null);
+      const tableFlagged = await checkoutOrder(
+        orderId,
+        mode === "table" ? tableId : null,
+      );
       const closedLabel = targetLabel;
       clearTicket();
       await onOrderChanged();
       toast.success(
-        mode === "table"
-          ? `${closedLabel} paid — table flagged for cleaning`
-          : `Take-away for ${closedLabel} paid`,
+        mode === "takeaway"
+          ? `Take-away for ${closedLabel} paid`
+          : tableFlagged
+            ? `${closedLabel} paid — table flagged for cleaning`
+            : `${closedLabel} paid — other splits still open`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Checkout failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function amendSentItem(orderItemId: string, quantity: number) {
+    if (!openOrder) return;
+    setBusy(true);
+    try {
+      await setSentItemQuantity(openOrder.order.id, orderItemId, quantity);
+      await onOrderChanged();
+      if (quantity <= 0) toast.success("Item removed from order");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update order");
     } finally {
       setBusy(false);
     }
@@ -147,24 +177,34 @@ export function TicketPanel({
         </Tabs>
 
         {mode === "table" ? (
-          <Select
-            value={tableId ?? ""}
-            onValueChange={(id) => {
-              const t = tables.find((x) => x.id === id);
-              if (t) setTable(t.id, t.name);
-            }}
-          >
-            <SelectTrigger className="h-12 text-base">
-              <SelectValue placeholder="Select a table" />
-            </SelectTrigger>
-            <SelectContent>
-              {tables.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  Table {t.name} · seats {t.capacity}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <>
+            <Select
+              value={tableId ?? ""}
+              onValueChange={(id) => {
+                const t = tables.find((x) => x.id === id);
+                if (t) setTable(t.id, t.name);
+              }}
+            >
+              <SelectTrigger className="h-12 text-base">
+                <SelectValue placeholder="Select a table" />
+              </SelectTrigger>
+              <SelectContent>
+                {tables.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    Table {t.name} · seats {t.capacity}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {tableId && (
+              <SplitPicker
+                tableName={tableName ?? ""}
+                openSplits={openSplits}
+                subtable={subtable}
+                onSelect={setSubtable}
+              />
+            )}
+          </>
         ) : takeawayName ? (
           <div className="flex h-12 items-center gap-2 rounded-md border px-3">
             <ShoppingBag className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -205,20 +245,55 @@ export function TicketPanel({
         {openOrder && openOrder.items.length > 0 && (
           <div className="mb-4">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Sent to kitchen
+              Sent to kitchen — tap to amend
             </h3>
             <div className="flex flex-col gap-1.5">
               {openOrder.items.map((i) => (
                 <div
                   key={i.id}
-                  className="flex items-center justify-between text-sm text-muted-foreground"
+                  className="flex items-center gap-2 text-sm text-muted-foreground"
                 >
-                  <span>
-                    {i.quantity} × {i.menu_items?.name ?? "Item"}
+                  <span className="min-w-0 flex-1 truncate">
+                    {i.menu_items?.name ?? "Item"}
                   </span>
-                  <span className="tabular-nums">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label={`Decrease sent ${i.menu_items?.name ?? "item"}`}
+                      disabled={busy}
+                      onClick={() => amendSentItem(i.id, i.quantity - 1)}
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="w-6 text-center font-semibold tabular-nums">
+                      {i.quantity}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label={`Increase sent ${i.menu_items?.name ?? "item"}`}
+                      disabled={busy}
+                      onClick={() => amendSentItem(i.id, i.quantity + 1)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <span className="w-14 text-right tabular-nums">
                     {formatMoney(i.unit_price * i.quantity)}
                   </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label={`Remove sent ${i.menu_items?.name ?? "item"}`}
+                    disabled={busy}
+                    onClick={() => amendSentItem(i.id, 0)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               ))}
             </div>
