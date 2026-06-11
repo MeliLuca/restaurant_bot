@@ -12,15 +12,20 @@ interface TableCardProps {
   onSelect: (table: RestaurantTable) => void;
 }
 
+/** Max split chips shown before collapsing the rest into an "…" chip */
+const MAX_SPLIT_CHIPS = 2;
+
 export function TableCard({ table, splits, onSelect }: TableCardProps) {
   const status = STATUS_CONFIG[table.status];
+  const visibleSplits = splits.slice(0, MAX_SPLIT_CHIPS);
+  const hiddenCount = splits.length - visibleSplits.length;
 
   return (
     <button
       type="button"
       onClick={() => onSelect(table)}
       className={cn(
-        "flex min-h-28 flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-4 transition-colors",
+        "flex h-36 w-36 shrink-0 grow-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 p-3 transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         status.card,
       )}
@@ -39,15 +44,20 @@ export function TableCard({ table, splits, onSelect }: TableCardProps) {
         {status.label}
       </span>
       {splits.length > 0 && (
-        <span className="flex max-w-full flex-wrap justify-center gap-1">
-          {splits.map((s, i) => (
+        <span className="flex max-w-full items-center justify-center gap-1 overflow-hidden whitespace-nowrap">
+          {visibleSplits.map((s, i) => (
             <span
               key={`${s ?? "whole"}-${i}`}
-              className="rounded-full border border-foreground/20 bg-background/60 px-1.5 py-px text-[10px] font-medium text-foreground/80"
+              className="max-w-[3.25rem] truncate rounded-full border border-foreground/20 bg-background/60 px-1.5 py-px text-[10px] font-medium text-foreground/80"
             >
               {s === null ? table.name : `${table.name}/${s}`}
             </span>
           ))}
+          {hiddenCount > 0 && (
+            <span className="shrink-0 rounded-full border border-foreground/20 bg-background/60 px-1.5 py-px text-[10px] font-medium text-foreground/80">
+              …
+            </span>
+          )}
         </span>
       )}
     </button>

@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarPlus, TriangleAlert } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarPlus,
+  ChevronDown,
+  TriangleAlert,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReservationDialog } from "@/components/floor-plan/reservation-dialog";
 import { ReservationsPanel } from "@/components/floor-plan/reservations-panel";
 import { STATUS_CONFIG } from "@/components/floor-plan/status";
@@ -11,6 +17,7 @@ import { TableCard } from "@/components/floor-plan/table-card";
 import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
 import { useFloorData } from "@/hooks/use-floor-data";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
+import { cn } from "@/lib/utils";
 import { usePermission } from "@/stores/auth-store";
 
 const LEGEND: TableStatus[] = ["available", "occupied", "dirty"];
@@ -30,7 +37,12 @@ export default function FloorPlanPage() {
     null,
   );
   const [reservationOpen, setReservationOpen] = useState(false);
+  const [reservationsExpanded, setReservationsExpanded] = useState(false);
   const canReserve = usePermission("manage_reservations");
+
+  const activeReservations = reservations.filter(
+    (r) => r.status === "booked" || r.status === "seated",
+  ).length;
 
   if (error) {
     return (
@@ -44,7 +56,7 @@ export default function FloorPlanPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-6">
           <h1 className="text-2xl font-semibold">Floor Plan</h1>
@@ -73,38 +85,91 @@ export default function FloorPlanPage() {
         )}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        {loading ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={i}
-                className="min-h-28 animate-pulse rounded-xl bg-muted"
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="grid auto-rows-min grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {tables.map((t) => (
-              <TableCard
-                key={t.id}
-                table={t}
-                splits={splitsByTable.get(t.id) ?? []}
-                onSelect={setSelectedTable}
-              />
-            ))}
-          </div>
-        )}
+      <Tabs defaultValue="tables" className="flex min-h-0 flex-1 flex-col">
+        <TabsList className="h-12 w-fit shrink-0">
+          <TabsTrigger value="tables" className="h-10 px-6 text-base">
+            Tables
+          </TabsTrigger>
+          <TabsTrigger value="delivery" className="h-10 px-6 text-base">
+            Delivery
+            {takeaways.length > 0 && (
+              <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                {takeaways.length}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-        <div className="flex flex-col gap-6">
-          <ReservationsPanel
-            reservations={reservations}
-            tables={tables}
-            onChanged={refresh}
-          />
-          <TakeawayPanel takeaways={takeaways} />
-        </div>
-      </div>
+        <TabsContent
+          value="tables"
+          className="mt-4 min-h-0 flex-1 data-[state=inactive]:hidden"
+        >
+          <div className="flex h-full min-h-0 flex-col gap-4 xl:flex-row">
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
+              <div>
+                <Button
+                  variant="outline"
+                  className="h-11"
+                  aria-expanded={reservationsExpanded}
+                  onClick={() => setReservationsExpanded((e) => !e)}
+                >
+                  <CalendarClock className="mr-2 h-4 w-4" />
+                  Today&apos;s reservations
+                  {activeReservations > 0 && ` (${activeReservations})`}
+                  <ChevronDown
+                    className={cn(
+                      "ml-2 h-4 w-4 transition-transform",
+                      reservationsExpanded && "rotate-180",
+                    )}
+                  />
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {loading ? (
+                  <div className="flex flex-wrap content-start gap-4">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-36 w-36 animate-pulse rounded-xl bg-muted"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap content-start gap-4">
+                    {tables.map((t) => (
+                      <TableCard
+                        key={t.id}
+                        table={t}
+                        splits={splitsByTable.get(t.id) ?? []}
+                        onSelect={setSelectedTable}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {reservationsExpanded && (
+              <div className="max-h-[45%] min-h-0 shrink-0 overflow-y-auto xl:h-full xl:max-h-none xl:w-[380px]">
+                <ReservationsPanel
+                  reservations={reservations}
+                  tables={tables}
+                  onChanged={refresh}
+                />
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent
+          value="delivery"
+          className="mt-4 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
+        >
+          <div className="max-w-2xl">
+            <TakeawayPanel takeaways={takeaways} />
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <TableActionsDialog
         table={selectedTable}
