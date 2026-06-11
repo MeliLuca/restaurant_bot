@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { ChefHat, CreditCard, Minus, Plus, Trash2 } from "lucide-react";
+import {
+  ChefHat,
+  CreditCard,
+  Minus,
+  Plus,
+  ShoppingBag,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -12,26 +20,53 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { checkoutOrder, sendToKitchen, type OpenOrder } from "@/lib/api";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  checkoutOrder,
+  sendTakeawayToKitchen,
+  sendToKitchen,
+  type OpenOrder,
+} from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import { calcTotals } from "@/lib/money";
-import type { RestaurantTable } from "@/lib/database.types";
-import { useTicketStore } from "@/stores/ticket-store";
+import type { Order, RestaurantTable } from "@/lib/database.types";
+import { useTicketStore, type TicketMode } from "@/stores/ticket-store";
+import { usePermission } from "@/stores/auth-store";
+import { TakeawayPicker } from "./takeaway-picker";
 
 interface TicketPanelProps {
   tables: RestaurantTable[];
   openOrder: OpenOrder | null;
+  openTakeaways: Order[];
   onOrderChanged: () => Promise<void>;
 }
 
 export function TicketPanel({
   tables,
   openOrder,
+  openTakeaways,
   onOrderChanged,
 }: TicketPanelProps) {
-  const { tableId, tableName, lines, setTable, removeItem, setQuantity, clearLines, clearTicket } =
-    useTicketStore();
+  const {
+    mode,
+    tableId,
+    tableName,
+    takeawayOrderId,
+    takeawayName,
+    lines,
+    setMode,
+    setTable,
+    setTakeaway,
+    removeItem,
+    setQuantity,
+    clearLines,
+    clearTicket,
+  } = useTicketStore();
+  const canCheckout = usePermission("checkout_orders");
   const [busy, setBusy] = useState(false);
+
+  const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
+  const targetLabel = mode === "table" ? tableName : takeawayName;
 
   const sentLines =
     openOrder?.items.map((i) => ({
@@ -41,13 +76,22 @@ export function TicketPanel({
   const totals = calcTotals([...sentLines, ...lines]);
 
   async function handleSend() {
-    if (!tableId) return;
+    if (!hasTarget) return;
     setBusy(true);
     try {
-      await sendToKitchen(tableId, lines);
+      if (mode === "table") {
+        await sendToKitchen(tableId!, lines);
+      } else {
+        const orderId = await sendTakeawayToKitchen(
+          takeawayOrderId,
+          takeawayName!,
+          lines,
+        );
+        setTakeaway(orderId, takeawayName!);
+      }
       clearLines();
       await onOrderChanged();
-      toast.success(`Order sent to kitchen for ${tableName}`);
+      toast.success(`Order sent to kitchen for ${targetLabel}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not send order");
     } finally {
@@ -56,24 +100,31 @@ export function TicketPanel({
   }
 
   async function handleCheckout() {
-    if (!tableId) return;
+    if (!hasTarget) return;
     setBusy(true);
     try {
       // anything still pending goes on the bill before payment
       let orderId = openOrder?.order.id ?? null;
       if (lines.length > 0) {
-        orderId = await sendToKitchen(tableId, lines);
+        orderId =
+          mode === "table"
+            ? await sendToKitchen(tableId!, lines)
+            : await sendTakeawayToKitchen(takeawayOrderId, takeawayName!, lines);
         clearLines();
       }
       if (!orderId) {
         toast.error("Nothing to check out");
         return;
       }
-      await checkoutOrder(orderId, tableId);
-      const closedTable = tableName;
+      await checkoutOrder(orderId, mode === "table" ? tableId : null);
+      const closedLabel = targetLabel;
       clearTicket();
       await onOrderChanged();
-      toast.success(`${closedTable} paid — table flagged for cleaning`);
+      toast.success(
+        mode === "table"
+          ? `${closedLabel} paid — table flagged for cleaning`
+          : `Take-away for ${closedLabel} paid`,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Checkout failed");
     } finally {
@@ -83,31 +134,71 @@ export function TicketPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b p-4">
-        <Select
-          value={tableId ?? ""}
-          onValueChange={(id) => {
-            const t = tables.find((x) => x.id === id);
-            if (t) setTable(t.id, t.name);
-          }}
-        >
-          <SelectTrigger className="h-12 text-base">
-            <SelectValue placeholder="Select a table" />
-          </SelectTrigger>
-          <SelectContent>
-            {tables.map((t) => (
-              <SelectItem key={t.id} value={t.id}>
-                Table {t.name} · seats {t.capacity}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col gap-3 border-b p-4">
+        <Tabs value={mode} onValueChange={(m) => setMode(m as TicketMode)}>
+          <TabsList className="grid h-12 w-full grid-cols-2">
+            <TabsTrigger value="table" className="h-10 text-base">
+              Dine-in
+            </TabsTrigger>
+            <TabsTrigger value="takeaway" className="h-10 text-base">
+              Take-away
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {mode === "table" ? (
+          <Select
+            value={tableId ?? ""}
+            onValueChange={(id) => {
+              const t = tables.find((x) => x.id === id);
+              if (t) setTable(t.id, t.name);
+            }}
+          >
+            <SelectTrigger className="h-12 text-base">
+              <SelectValue placeholder="Select a table" />
+            </SelectTrigger>
+            <SelectContent>
+              {tables.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  Table {t.name} · seats {t.capacity}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : takeawayName ? (
+          <div className="flex h-12 items-center gap-2 rounded-md border px-3">
+            <ShoppingBag className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{takeawayName}</span>
+              <span className="block text-xs text-muted-foreground">
+                {takeawayOrderId ? "open take-away order" : "new take-away"}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              aria-label="Clear take-away customer"
+              onClick={clearTicket}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <TakeawayPicker
+            openOrders={openTakeaways}
+            onPickExisting={(o) => setTakeaway(o.id, o.customer_name ?? "")}
+            onStartNew={(name) => setTakeaway(null, name)}
+          />
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {!tableId && (
+        {!hasTarget && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Pick a table to start a ticket.
+            {mode === "table"
+              ? "Pick a table to start a ticket."
+              : "Find an open take-away or type a customer name to start one."}
           </p>
         )}
 
@@ -135,7 +226,7 @@ export function TicketPanel({
           </div>
         )}
 
-        {tableId && lines.length === 0 && (
+        {hasTarget && lines.length === 0 && (
           <p className="py-4 text-center text-sm text-muted-foreground">
             {openOrder
               ? "Tap menu items to add another round."
@@ -212,20 +303,22 @@ export function TicketPanel({
           <Button
             size="lg"
             className="h-14 text-base"
-            disabled={busy || !tableId || lines.length === 0}
+            disabled={busy || !hasTarget || lines.length === 0}
             onClick={handleSend}
           >
             <ChefHat className="mr-2 h-5 w-5" /> Send to Kitchen
           </Button>
-          <Button
-            size="lg"
-            variant="secondary"
-            className="h-14 text-base"
-            disabled={busy || !tableId || (!openOrder && lines.length === 0)}
-            onClick={handleCheckout}
-          >
-            <CreditCard className="mr-2 h-5 w-5" /> Checkout · {formatMoney(totals.total)}
-          </Button>
+          {canCheckout && (
+            <Button
+              size="lg"
+              variant="secondary"
+              className="h-14 text-base"
+              disabled={busy || !hasTarget || (!openOrder && lines.length === 0)}
+              onClick={handleCheckout}
+            >
+              <CreditCard className="mr-2 h-5 w-5" /> Checkout · {formatMoney(totals.total)}
+            </Button>
+          )}
         </div>
       </div>
     </div>

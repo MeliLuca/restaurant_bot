@@ -110,10 +110,19 @@ export interface OpenOrder {
   items: OrderItemWithName[];
 }
 
+async function fetchOrderItems(orderId: string): Promise<OrderItemWithName[]> {
+  const { data, error } = await getSupabase()
+    .from("order_items")
+    .select("*, menu_items(name)")
+    .eq("order_id", orderId)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return data as OrderItemWithName[];
+}
+
 /** The single open order for a table (enforced by a DB unique index), if any */
 export async function fetchOpenOrder(tableId: string): Promise<OpenOrder | null> {
-  const sb = getSupabase();
-  const { data: order, error } = await sb
+  const { data: order, error } = await getSupabase()
     .from("orders")
     .select("*")
     .eq("table_id", tableId)
@@ -121,15 +130,33 @@ export async function fetchOpenOrder(tableId: string): Promise<OpenOrder | null>
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!order) return null;
+  return { order, items: await fetchOrderItems(order.id) };
+}
 
-  const { data: items, error: itemsError } = await sb
-    .from("order_items")
-    .select("*, menu_items(name)")
-    .eq("order_id", order.id)
-    .order("created_at");
-  if (itemsError) throw new Error(itemsError.message);
+/** An order by id, but only while it's still open (closed orders return null
+ * so a stale refetch after checkout can't resurrect them in the ticket) */
+export async function fetchOpenOrderById(orderId: string): Promise<OpenOrder | null> {
+  const { data: order, error } = await getSupabase()
+    .from("orders")
+    .select("*")
+    .eq("id", orderId)
+    .eq("status", "open")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!order) return null;
+  return { order, items: await fetchOrderItems(order.id) };
+}
 
-  return { order, items: items as OrderItemWithName[] };
+/** All open take-away orders, newest first (searched client-side by name) */
+export async function fetchOpenTakeaways(): Promise<Order[]> {
+  const { data, error } = await getSupabase()
+    .from("orders")
+    .select("*")
+    .eq("status", "open")
+    .eq("order_type", "takeaway")
+    .order("opened_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 async function recomputeOrderTotals(orderId: string): Promise<void> {
@@ -195,15 +222,56 @@ export async function sendToKitchen(
   return orderId;
 }
 
-/** Close the order as paid and flag the table for cleaning */
+/**
+ * Persist pending lines on a take-away order: appends to the given open order,
+ * or creates one for the customer. Returns the order id.
+ */
+export async function sendTakeawayToKitchen(
+  orderId: string | null,
+  customerName: string,
+  lines: TicketLineInput[],
+): Promise<string> {
+  if (lines.length === 0) throw new Error("Ticket is empty");
+  const sb = getSupabase();
+
+  let id = orderId;
+  if (!id) {
+    const { data, error } = await sb
+      .from("orders")
+      .insert({
+        order_type: "takeaway",
+        customer_name: customerName.trim(),
+        tax_rate: TAX_RATE,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    id = data.id;
+  }
+
+  const { error: itemsError } = await sb.from("order_items").insert(
+    lines.map((l) => ({
+      order_id: id!,
+      menu_item_id: l.menuItemId,
+      quantity: l.quantity,
+      unit_price: l.unitPrice,
+    })),
+  );
+  if (itemsError) throw new Error(itemsError.message);
+
+  await recomputeOrderTotals(id);
+  return id;
+}
+
+/** Close the order as paid; dine-in additionally flags the table for cleaning */
 export async function checkoutOrder(
   orderId: string,
-  tableId: string,
+  tableId: string | null,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from("orders")
     .update({ status: "paid", closed_at: new Date().toISOString() })
     .eq("id", orderId);
   if (error) throw new Error(error.message);
-  await updateTableStatus(tableId, "dirty");
+  if (tableId) await updateTableStatus(tableId, "dirty");
 }

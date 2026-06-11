@@ -78,3 +78,23 @@ insert into order_items (id, order_id, menu_item_id, quantity, unit_price) value
   ('60000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000006', 2, 14.00),
   ('60000000-0000-0000-0000-000000000003', '50000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000021', 1,  9.00)
 on conflict (id) do nothing;
+
+-- STAFF: roles + users (PINs: Ava 1234, Harper 1111, Sam 2222) ----------------
+set search_path to public, extensions;
+insert into roles (id, name, permissions) values
+  ('70000000-0000-0000-0000-000000000001', 'Admin',
+   array['manage_tables','manage_reservations','take_orders','checkout_orders','manage_staff']),
+  ('70000000-0000-0000-0000-000000000002', 'Host',
+   array['manage_tables','manage_reservations']),
+  ('70000000-0000-0000-0000-000000000003', 'Server',
+   array['manage_tables','take_orders','checkout_orders'])
+on conflict (id) do nothing;
+
+insert into app_users (id, name, role_id, pin_hash) values
+  ('80000000-0000-0000-0000-000000000001', 'Ava',
+   '70000000-0000-0000-0000-000000000001', crypt('1234', gen_salt('bf'))),
+  ('80000000-0000-0000-0000-000000000002', 'Harper',
+   '70000000-0000-0000-0000-000000000002', crypt('1111', gen_salt('bf'))),
+  ('80000000-0000-0000-0000-000000000003', 'Sam',
+   '70000000-0000-0000-0000-000000000003', crypt('2222', gen_salt('bf')))
+on conflict (id) do nothing;

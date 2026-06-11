@@ -8,17 +8,21 @@ import { ReservationsPanel } from "@/components/floor-plan/reservations-panel";
 import { STATUS_CONFIG } from "@/components/floor-plan/status";
 import { TableActionsDialog } from "@/components/floor-plan/table-actions-dialog";
 import { TableCard } from "@/components/floor-plan/table-card";
+import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
 import { useFloorData } from "@/hooks/use-floor-data";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
+import { usePermission } from "@/stores/auth-store";
 
 const LEGEND: TableStatus[] = ["available", "occupied", "dirty"];
 
 export default function FloorPlanPage() {
-  const { tables, reservations, loading, error, refresh } = useFloorData();
+  const { tables, reservations, takeaways, loading, error, refresh } =
+    useFloorData();
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(
     null,
   );
   const [reservationOpen, setReservationOpen] = useState(false);
+  const canReserve = usePermission("manage_reservations");
 
   if (error) {
     return (
@@ -50,13 +54,15 @@ export default function FloorPlanPage() {
             ))}
           </div>
         </div>
-        <Button
-          size="lg"
-          className="h-12"
-          onClick={() => setReservationOpen(true)}
-        >
-          <CalendarPlus className="mr-2 h-5 w-5" /> New reservation
-        </Button>
+        {canReserve && (
+          <Button
+            size="lg"
+            className="h-12"
+            onClick={() => setReservationOpen(true)}
+          >
+            <CalendarPlus className="mr-2 h-5 w-5" /> New reservation
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
@@ -77,11 +83,14 @@ export default function FloorPlanPage() {
           </div>
         )}
 
-        <ReservationsPanel
-          reservations={reservations}
-          tables={tables}
-          onChanged={refresh}
-        />
+        <div className="flex flex-col gap-6">
+          <ReservationsPanel
+            reservations={reservations}
+            tables={tables}
+            onChanged={refresh}
+          />
+          <TakeawayPanel takeaways={takeaways} />
+        </div>
       </div>
 
       <TableActionsDialog

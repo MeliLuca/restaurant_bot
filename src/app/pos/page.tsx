@@ -4,30 +4,40 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ItemSearch } from "@/components/pos/item-search";
 import { MenuPanel } from "@/components/pos/menu-panel";
 import { TicketPanel } from "@/components/pos/ticket-panel";
 import {
   fetchCategories,
   fetchMenuItems,
   fetchOpenOrder,
+  fetchOpenOrderById,
+  fetchOpenTakeaways,
   fetchTables,
   type OpenOrder,
 } from "@/lib/api";
 import type {
   Category,
   MenuItem,
+  Order,
   RestaurantTable,
 } from "@/lib/database.types";
 import { useTicketStore } from "@/stores/ticket-store";
+import { usePermission } from "@/stores/auth-store";
 
 export default function PosPage() {
+  const mode = useTicketStore((s) => s.mode);
   const tableId = useTicketStore((s) => s.tableId);
+  const takeawayOrderId = useTicketStore((s) => s.takeawayOrderId);
+  const takeawayName = useTicketStore((s) => s.takeawayName);
   const addItem = useTicketStore((s) => s.addItem);
+  const canTakeOrders = usePermission("take_orders");
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [openOrder, setOpenOrder] = useState<OpenOrder | null>(null);
+  const [openTakeaways, setOpenTakeaways] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,11 +61,18 @@ export default function PosPage() {
 
   const refreshOrder = useCallback(async () => {
     try {
-      setOpenOrder(tableId ? await fetchOpenOrder(tableId) : null);
+      if (mode === "table") {
+        setOpenOrder(tableId ? await fetchOpenOrder(tableId) : null);
+      } else {
+        setOpenOrder(
+          takeawayOrderId ? await fetchOpenOrderById(takeawayOrderId) : null,
+        );
+      }
+      setOpenTakeaways(await fetchOpenTakeaways());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load order");
     }
-  }, [tableId]);
+  }, [mode, tableId, takeawayOrderId]);
 
   useEffect(() => {
     void loadStatic();
@@ -65,12 +82,31 @@ export default function PosPage() {
     void refreshOrder();
   }, [refreshOrder]);
 
-  function handleAdd(item: MenuItem) {
-    if (!tableId) {
-      toast.error("Select a table first");
-      return;
+  function handleAdd(item: MenuItem): boolean {
+    const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
+    if (!hasTarget) {
+      toast.error(
+        mode === "table"
+          ? "Select a table first"
+          : "Pick or start a take-away first",
+      );
+      return false;
     }
     addItem(item);
+    return true;
+  }
+
+  if (!canTakeOrders) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <TriangleAlert className="h-10 w-10 text-amber-500" />
+        <h1 className="text-xl font-semibold">No POS access</h1>
+        <p className="max-w-md text-sm text-muted-foreground">
+          Your role doesn&apos;t include the &ldquo;Take orders&rdquo;
+          permission. Ask a manager if you need it.
+        </p>
+      </div>
+    );
   }
 
   if (error) {
@@ -86,7 +122,14 @@ export default function PosPage() {
 
   return (
     <div className="flex h-full">
-      <div className="min-w-0 flex-1 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 p-4">
+        {!loading && (
+          <ItemSearch
+            items={items}
+            categories={categories}
+            onAdd={handleAdd}
+          />
+        )}
         {loading ? (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
             {Array.from({ length: 9 }).map((_, i) => (
@@ -97,7 +140,13 @@ export default function PosPage() {
             ))}
           </div>
         ) : (
-          <MenuPanel categories={categories} items={items} onAdd={handleAdd} />
+          <div className="min-h-0 flex-1">
+            <MenuPanel
+              categories={categories}
+              items={items}
+              onAdd={handleAdd}
+            />
+          </div>
         )}
       </div>
 
@@ -105,6 +154,7 @@ export default function PosPage() {
         <TicketPanel
           tables={tables}
           openOrder={openOrder}
+          openTakeaways={openTakeaways}
           onOrderChanged={refreshOrder}
         />
       </div>

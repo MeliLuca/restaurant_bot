@@ -12,33 +12,67 @@ export interface TicketLine {
 export { calcTotals };
 export type { TicketTotals } from "@/lib/money";
 
+export type TicketMode = "table" | "takeaway";
+
 interface TicketState {
-  /** Table the ticket belongs to; null = no table selected yet */
+  mode: TicketMode;
+  /** Table the ticket belongs to (table mode); null = no table selected yet */
   tableId: string | null;
   tableName: string | null;
+  /** Open take-away order being amended; null = new take-away not yet sent */
+  takeawayOrderId: string | null;
+  takeawayName: string | null;
   lines: TicketLine[];
 
+  /** Switch dine-in / take-away; changing mode clears the in-progress ticket */
+  setMode: (mode: TicketMode) => void;
   /** Select a table; switching tables clears the in-progress ticket */
   setTable: (tableId: string, tableName: string) => void;
+  /** Target a take-away: an existing open order, or a new customer name */
+  setTakeaway: (orderId: string | null, name: string) => void;
   addItem: (item: Pick<MenuItem, "id" | "name" | "price">) => void;
   removeItem: (menuItemId: string) => void;
   /** Quantities below 1 remove the line */
   setQuantity: (menuItemId: string, quantity: number) => void;
-  /** Drop pending lines but keep the selected table (after Send to Kitchen) */
+  /** Drop pending lines but keep the target (after Send to Kitchen) */
   clearLines: () => void;
   clearTicket: () => void;
 }
 
-export const useTicketStore = create<TicketState>((set) => ({
+const EMPTY_TARGET = {
   tableId: null,
   tableName: null,
-  lines: [],
+  takeawayOrderId: null,
+  takeawayName: null,
+  lines: [] as TicketLine[],
+};
+
+export const useTicketStore = create<TicketState>((set) => ({
+  mode: "table",
+  ...EMPTY_TARGET,
+
+  setMode: (mode) =>
+    set((state) => (state.mode === mode ? {} : { mode, ...EMPTY_TARGET })),
 
   setTable: (tableId, tableName) =>
     set((state) =>
-      state.tableId === tableId
+      state.mode === "table" && state.tableId === tableId
         ? { tableName }
-        : { tableId, tableName, lines: [] },
+        : { mode: "table", ...EMPTY_TARGET, tableId, tableName },
+    ),
+
+  setTakeaway: (orderId, name) =>
+    set((state) =>
+      state.mode === "takeaway" &&
+      state.takeawayOrderId === orderId &&
+      state.takeawayName === name
+        ? {}
+        : {
+            mode: "takeaway",
+            ...EMPTY_TARGET,
+            takeawayOrderId: orderId,
+            takeawayName: name,
+          },
     ),
 
   addItem: (item) =>
@@ -81,5 +115,5 @@ export const useTicketStore = create<TicketState>((set) => ({
 
   clearLines: () => set({ lines: [] }),
 
-  clearTicket: () => set({ tableId: null, tableName: null, lines: [] }),
+  clearTicket: () => set({ ...EMPTY_TARGET }),
 }));

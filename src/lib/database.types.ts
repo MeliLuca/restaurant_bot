@@ -3,6 +3,7 @@
 
 export type TableStatus = "available" | "occupied" | "dirty";
 export type OrderStatus = "open" | "paid" | "cancelled";
+export type OrderType = "dine_in" | "takeaway";
 export type ReservationStatus = "booked" | "seated" | "cancelled" | "no_show";
 
 export interface Database {
@@ -127,7 +128,9 @@ export interface Database {
       orders: {
         Row: {
           id: string;
-          table_id: string;
+          table_id: string | null;
+          order_type: OrderType;
+          customer_name: string | null;
           status: OrderStatus;
           tax_rate: number;
           subtotal: number;
@@ -138,7 +141,9 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          table_id: string;
+          table_id?: string | null;
+          order_type?: OrderType;
+          customer_name?: string | null;
           status?: OrderStatus;
           tax_rate?: number;
           subtotal?: number;
@@ -149,7 +154,9 @@ export interface Database {
         };
         Update: {
           id?: string;
-          table_id?: string;
+          table_id?: string | null;
+          order_type?: OrderType;
+          customer_name?: string | null;
           status?: OrderStatus;
           tax_rate?: number;
           subtotal?: number;
@@ -207,12 +214,71 @@ export interface Database {
           },
         ];
       };
+      roles: {
+        Row: {
+          id: string;
+          name: string;
+          permissions: string[];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          permissions?: string[];
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          permissions?: string[];
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      app_users: {
+        // pin_hash exists in the DB but is not selectable via the API
+        Row: {
+          id: string;
+          name: string;
+          role_id: string;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: never; // users are created via the create_app_user function
+        Update: {
+          name?: string;
+          role_id?: string;
+          is_active?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "app_users_role_id_fkey";
+            columns: ["role_id"];
+            referencedRelation: "roles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      verify_user_pin: {
+        Args: { p_user_id: string; p_pin: string };
+        Returns: boolean;
+      };
+      create_app_user: {
+        Args: { p_name: string; p_role_id: string; p_pin: string };
+        Returns: string;
+      };
+      set_user_pin: {
+        Args: { p_user_id: string; p_pin: string };
+        Returns: undefined;
+      };
+    };
     Enums: {
       table_status: TableStatus;
       order_status: OrderStatus;
+      order_type: OrderType;
       reservation_status: ReservationStatus;
     };
     CompositeTypes: Record<string, never>;
@@ -226,3 +292,5 @@ export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
 export type Order = Database["public"]["Tables"]["orders"]["Row"];
 export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
+export type Role = Database["public"]["Tables"]["roles"]["Row"];
+export type AppUser = Database["public"]["Tables"]["app_users"]["Row"];

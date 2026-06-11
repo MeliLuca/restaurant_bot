@@ -1,17 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Armchair, CalendarClock, X } from "lucide-react";
+import {
+  Armchair,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  CalendarClock,
+  Search,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
   setReservationStatus,
   updateTableStatus,
 } from "@/lib/api";
 import type { Reservation, RestaurantTable } from "@/lib/database.types";
+import { usePermission } from "@/stores/auth-store";
 
 const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
@@ -30,6 +39,9 @@ export function ReservationsPanel({
   onChanged,
 }: ReservationsPanelProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sortAsc, setSortAsc] = useState(true);
+  const canManage = usePermission("manage_reservations");
   const tableName = (id: string) =>
     tables.find((t) => t.id === id)?.name ?? "?";
 
@@ -60,9 +72,23 @@ export function ReservationsPanel({
     }
   }
 
-  const active = reservations.filter(
-    (r) => r.status === "booked" || r.status === "seated",
-  );
+  const active = useMemo(() => {
+    let list = reservations.filter(
+      (r) => r.status === "booked" || r.status === "seated",
+    );
+    const q = query.trim().toLowerCase();
+    if (q) {
+      // digits = party size, anything else = customer name
+      list = /^\d+$/.test(q)
+        ? list.filter((r) => r.party_size === parseInt(q, 10))
+        : list.filter((r) => r.customer_name.toLowerCase().includes(q));
+    }
+    return [...list].sort((a, b) =>
+      sortAsc
+        ? a.reserved_at.localeCompare(b.reserved_at)
+        : b.reserved_at.localeCompare(a.reserved_at),
+    );
+  }, [reservations, query, sortAsc]);
 
   return (
     <Card className="h-fit">
@@ -72,9 +98,37 @@ export function ReservationsPanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
+        <div className="mb-2 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Name or party size…"
+              className="h-11 pl-9"
+              aria-label="Search reservations by name or party size"
+            />
+          </div>
+          <Button
+            variant="outline"
+            className="h-11 shrink-0"
+            aria-label={`Sort by time, currently ${sortAsc ? "earliest" : "latest"} first`}
+            onClick={() => setSortAsc((s) => !s)}
+          >
+            {sortAsc ? (
+              <ArrowUpNarrowWide className="mr-1.5 h-4 w-4" />
+            ) : (
+              <ArrowDownWideNarrow className="mr-1.5 h-4 w-4" />
+            )}
+            {sortAsc ? "Earliest" : "Latest"}
+          </Button>
+        </div>
+
         {active.length === 0 && (
           <p className="py-4 text-sm text-muted-foreground">
-            No reservations for today yet.
+            {query.trim()
+              ? `No reservations match “${query.trim()}”.`
+              : "No reservations for today yet."}
           </p>
         )}
         {active.map((r, i) => (
@@ -93,6 +147,8 @@ export function ReservationsPanel({
               </div>
               {r.status === "seated" ? (
                 <Badge variant="secondary">Seated</Badge>
+              ) : !canManage ? (
+                <Badge variant="outline">Booked</Badge>
               ) : (
                 <div className="flex shrink-0 gap-1">
                   <Button

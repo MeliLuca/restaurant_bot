@@ -2,17 +2,38 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, ReceiptText, Settings, UtensilsCrossed } from "lucide-react";
+import {
+  LayoutGrid,
+  LogOut,
+  ReceiptText,
+  Settings,
+  UserRound,
+  UtensilsCrossed,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { Permission } from "@/lib/auth/permissions";
+import { useAuthStore } from "@/stores/auth-store";
 
-const NAV_ITEMS = [
+const NAV_ITEMS: {
+  href: string;
+  label: string;
+  icon: typeof LayoutGrid;
+  permission?: Permission;
+}[] = [
   { href: "/floor-plan", label: "Floor Plan", icon: LayoutGrid },
-  { href: "/pos", label: "POS", icon: ReceiptText },
+  { href: "/pos", label: "POS", icon: ReceiptText, permission: "take_orders" },
   { href: "/settings", label: "Settings", icon: Settings },
-] as const;
+];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const user = useAuthStore((s) => s.user);
+  const signOut = useAuthStore((s) => s.signOut);
+
+  const visibleItems = NAV_ITEMS.filter(
+    (item) =>
+      !item.permission || (user?.permissions.includes(item.permission) ?? false),
+  );
 
   return (
     <aside className="flex h-full w-24 shrink-0 flex-col items-center border-r bg-card py-4 lg:w-56 lg:items-stretch lg:px-3">
@@ -22,7 +43,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-2">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {visibleItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
             <Link
@@ -43,6 +64,28 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {user && (
+        <div className="flex flex-col items-center gap-1 border-t pt-3 lg:items-stretch">
+          <div className="flex flex-col items-center gap-0.5 px-2 lg:flex-row lg:gap-2">
+            <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 text-center lg:text-left">
+              <div className="truncate text-sm font-medium">{user.name}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {user.roleName}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={signOut}
+            className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:text-sm"
+          >
+            <LogOut className="h-5 w-5" />
+            <span>Switch user</span>
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

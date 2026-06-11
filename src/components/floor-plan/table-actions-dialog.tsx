@@ -15,6 +15,7 @@ import {
 import { updateTableStatus } from "@/lib/api";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
 import { useTicketStore } from "@/stores/ticket-store";
+import { usePermission } from "@/stores/auth-store";
 import { STATUS_CONFIG } from "./status";
 
 interface TableActionsDialogProps {
@@ -30,10 +31,15 @@ export function TableActionsDialog({
 }: TableActionsDialogProps) {
   const router = useRouter();
   const setTicketTable = useTicketStore((s) => s.setTable);
+  const canManageTables = usePermission("manage_tables");
+  const canTakeOrders = usePermission("take_orders");
   const [busy, setBusy] = useState(false);
 
   if (!table) return null;
   const status = STATUS_CONFIG[table.status];
+  const noActions =
+    (!canManageTables && !canTakeOrders) ||
+    (table.status === "dirty" && !canManageTables);
 
   async function changeStatus(next: TableStatus, message: string) {
     if (!table) return;
@@ -75,55 +81,69 @@ export function TableActionsDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
+          {noActions && (
+            <p className="py-2 text-sm text-muted-foreground">
+              Your role doesn&apos;t allow any actions on this table.
+            </p>
+          )}
+
           {table.status === "available" && (
             <>
-              <Button
-                size="lg"
-                className="h-14 text-base"
-                disabled={busy}
-                onClick={() =>
-                  changeStatus("occupied", `Table ${table.name} seated`)
-                }
-              >
-                <Armchair className="mr-2 h-5 w-5" /> Seat guests
-              </Button>
-              <Button
-                size="lg"
-                variant="secondary"
-                className="h-14 text-base"
-                disabled={busy}
-                onClick={openInPos}
-              >
-                <ReceiptText className="mr-2 h-5 w-5" /> Start order in POS
-              </Button>
+              {canManageTables && (
+                <Button
+                  size="lg"
+                  className="h-14 text-base"
+                  disabled={busy}
+                  onClick={() =>
+                    changeStatus("occupied", `Table ${table.name} seated`)
+                  }
+                >
+                  <Armchair className="mr-2 h-5 w-5" /> Seat guests
+                </Button>
+              )}
+              {canTakeOrders && (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="h-14 text-base"
+                  disabled={busy}
+                  onClick={openInPos}
+                >
+                  <ReceiptText className="mr-2 h-5 w-5" /> Start order in POS
+                </Button>
+              )}
             </>
           )}
 
           {table.status === "occupied" && (
             <>
-              <Button
-                size="lg"
-                className="h-14 text-base"
-                disabled={busy}
-                onClick={openInPos}
-              >
-                <ReceiptText className="mr-2 h-5 w-5" /> Open ticket in POS
-              </Button>
-              <Button
-                size="lg"
-                variant="secondary"
-                className="h-14 text-base"
-                disabled={busy}
-                onClick={() =>
-                  changeStatus("dirty", `Table ${table.name} marked dirty`)
-                }
-              >
-                <Trash2 className="mr-2 h-5 w-5" /> Clear table (mark dirty)
-              </Button>
+              {canTakeOrders && (
+                <Button
+                  size="lg"
+                  className="h-14 text-base"
+                  disabled={busy}
+                  onClick={openInPos}
+                >
+                  <ReceiptText className="mr-2 h-5 w-5" /> Open ticket in POS
+                </Button>
+              )}
+              {canManageTables && (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="h-14 text-base"
+                  disabled={busy}
+                  onClick={() =>
+                    changeStatus("dirty", `Table ${table.name} marked dirty`)
+                  }
+                >
+                  <Trash2 className="mr-2 h-5 w-5" /> Clear table (mark dirty)
+                </Button>
+              )}
             </>
           )}
 
-          {table.status === "dirty" && (
+          {table.status === "dirty" && canManageTables && (
             <Button
               size="lg"
               className="h-14 text-base"
