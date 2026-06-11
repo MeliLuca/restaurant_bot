@@ -172,3 +172,13 @@ insert into menu_item_ingredients (menu_item_id, ingredient_id) values
   ('30000000-0000-0000-0000-000000000013', '90000000-0000-0000-0000-000000000013'),
   ('30000000-0000-0000-0000-000000000013', '90000000-0000-0000-0000-000000000004')
 on conflict do nothing;
+
+-- STAFF CHAT: a few team-channel messages so /chat isn't empty (prefix b0) ----
+insert into messages (id, sender_id, recipient_id, body, created_at) values
+  ('b0000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', null,
+   'Welcome to the team chat! Keep it short — we''re on service.', now() - interval '2 hours'),
+  ('b0000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000002', null,
+   'Party of 6 at 20:00 wants the patio if it''s warm enough.', now() - interval '50 minutes'),
+  ('b0000000-0000-0000-0000-000000000003', '80000000-0000-0000-0000-000000000003', null,
+   'T3 asked to split the bill three ways, already set up the subtables.', now() - interval '20 minutes')
+on conflict (id) do nothing;

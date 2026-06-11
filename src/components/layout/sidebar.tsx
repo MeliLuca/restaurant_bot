@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutGrid,
   LogOut,
+  MessageCircle,
   ReceiptText,
   Settings,
   UserRound,
@@ -13,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Permission } from "@/lib/auth/permissions";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUnreadTotal } from "@/stores/chat-store";
 
 const NAV_ITEMS: {
   href: string;
@@ -22,6 +24,7 @@ const NAV_ITEMS: {
 }[] = [
   { href: "/floor-plan", label: "Floor Plan", icon: LayoutGrid },
   { href: "/pos", label: "POS", icon: ReceiptText, permission: "take_orders" },
+  { href: "/chat", label: "Chat", icon: MessageCircle },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -29,6 +32,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+  const unread = useUnreadTotal();
 
   const visibleItems = NAV_ITEMS.filter(
     (item) =>
@@ -58,7 +62,17 @@ export function Sidebar() {
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
               )}
             >
-              <Icon className="h-6 w-6" />
+              <span className="relative">
+                <Icon className="h-6 w-6" />
+                {href === "/chat" && unread > 0 && (
+                  <span
+                    className="absolute -right-2.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                    aria-label={`${unread} unread messages`}
+                  >
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
+              </span>
               <span>{label}</span>
             </Link>
           );

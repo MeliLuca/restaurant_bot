@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthGate } from "@/components/auth/auth-gate";
+import { ChatListener } from "@/components/chat/chat-listener";
 import { Sidebar } from "@/components/layout/sidebar";
 import "./globals.css";
 
@@ -33,6 +34,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} font-sans antialiased`}>
         <AuthGate>
+          <ChatListener />
           <div className="flex h-dvh overflow-hidden">
             <Sidebar />
             <main className="flex-1 overflow-y-auto">{children}</main>

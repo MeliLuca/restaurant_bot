@@ -312,6 +312,68 @@ export interface Database {
           },
         ];
       };
+      messages: {
+        Row: {
+          id: string;
+          sender_id: string;
+          recipient_id: string | null;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          recipient_id?: string | null;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sender_id?: string;
+          recipient_id?: string | null;
+          body?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "messages_sender_id_fkey";
+            columns: ["sender_id"];
+            referencedRelation: "app_users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "messages_recipient_id_fkey";
+            columns: ["recipient_id"];
+            referencedRelation: "app_users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chat_reads: {
+        Row: {
+          user_id: string;
+          conversation: string;
+          last_read_at: string;
+        };
+        Insert: {
+          user_id: string;
+          conversation: string;
+          last_read_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          conversation?: string;
+          last_read_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_reads_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "app_users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       roles: {
         Row: {
           id: string;
@@ -394,3 +456,5 @@ export type Role = Database["public"]["Tables"]["roles"]["Row"];
 export type AppUser = Database["public"]["Tables"]["app_users"]["Row"];
 export type TableTag = Database["public"]["Tables"]["table_tags"]["Row"];
 export type Ingredient = Database["public"]["Tables"]["ingredients"]["Row"];
+export type ChatMessage = Database["public"]["Tables"]["messages"]["Row"];
+export type ChatRead = Database["public"]["Tables"]["chat_reads"]["Row"];
