@@ -217,6 +217,101 @@ export interface Database {
           },
         ];
       };
+      table_tags: {
+        Row: {
+          id: string;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      table_tag_links: {
+        Row: {
+          table_id: string;
+          tag_id: string;
+        };
+        Insert: {
+          table_id: string;
+          tag_id: string;
+        };
+        Update: {
+          table_id?: string;
+          tag_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "table_tag_links_table_id_fkey";
+            columns: ["table_id"];
+            referencedRelation: "tables";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "table_tag_links_tag_id_fkey";
+            columns: ["tag_id"];
+            referencedRelation: "table_tags";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ingredients: {
+        Row: {
+          id: string;
+          name: string;
+          is_available: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          is_available?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          is_available?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      menu_item_ingredients: {
+        Row: {
+          menu_item_id: string;
+          ingredient_id: string;
+        };
+        Insert: {
+          menu_item_id: string;
+          ingredient_id: string;
+        };
+        Update: {
+          menu_item_id?: string;
+          ingredient_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_ingredients_menu_item_id_fkey";
+            columns: ["menu_item_id"];
+            referencedRelation: "menu_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "menu_item_ingredients_ingredient_id_fkey";
+            columns: ["ingredient_id"];
+            referencedRelation: "ingredients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       roles: {
         Row: {
           id: string;
@@ -297,3 +392,5 @@ export type Order = Database["public"]["Tables"]["orders"]["Row"];
 export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
 export type Role = Database["public"]["Tables"]["roles"]["Row"];
 export type AppUser = Database["public"]["Tables"]["app_users"]["Row"];
+export type TableTag = Database["public"]["Tables"]["table_tags"]["Row"];
+export type Ingredient = Database["public"]["Tables"]["ingredients"]["Row"];

@@ -91,14 +91,24 @@ export async function fetchCategories(): Promise<Category[]> {
   return data;
 }
 
+/** Items orderable right now: available AND no out-of-stock ingredient (86'd) */
 export async function fetchMenuItems(): Promise<MenuItem[]> {
   const { data, error } = await getSupabase()
     .from("menu_items")
-    .select("*")
+    .select("*, ingredients(is_available)")
     .eq("is_available", true)
     .order("sort_order");
   if (error) throw new Error(error.message);
-  return data;
+  return (data as unknown as (MenuItem & { ingredients: { is_available: boolean }[] })[])
+    .filter((item) => item.ingredients.every((i) => i.is_available))
+    .map(({ id, category_id, name, price, is_available, sort_order }) => ({
+      id,
+      category_id,
+      name,
+      price,
+      is_available,
+      sort_order,
+    }));
 }
 
 export type OrderItemWithName = OrderItem & {

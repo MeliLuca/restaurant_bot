@@ -38,11 +38,29 @@ export default function FloorPlanPage() {
   );
   const [reservationOpen, setReservationOpen] = useState(false);
   const [reservationsExpanded, setReservationsExpanded] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const canReserve = usePermission("manage_reservations");
 
   const activeReservations = reservations.filter(
     (r) => r.status === "booked" || r.status === "seated",
   ).length;
+
+  const allTags = Array.from(
+    new Map(
+      tables.flatMap((t) => t.table_tags).map((tag) => [tag.id, tag]),
+    ).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  // AND semantics: a table must offer every selected feature
+  const visibleTables = tables.filter((t) =>
+    selectedTagIds.every((id) => t.table_tags.some((tag) => tag.id === id)),
+  );
+
+  function toggleTag(id: string) {
+    setSelectedTagIds((ids) =>
+      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
+    );
+  }
 
   if (error) {
     return (
@@ -106,7 +124,7 @@ export default function FloorPlanPage() {
         >
           <div className="flex h-full min-h-0 flex-col gap-4 xl:flex-row">
             <div className="flex min-h-0 flex-1 flex-col gap-3">
-              <div>
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   className="h-11"
@@ -123,6 +141,25 @@ export default function FloorPlanPage() {
                     )}
                   />
                 </Button>
+                {allTags.map((tag) => {
+                  const active = selectedTagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => toggleTag(tag.id)}
+                      className={cn(
+                        "flex h-11 items-center rounded-full border px-4 text-sm transition-colors",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                 {loading ? (
@@ -134,9 +171,13 @@ export default function FloorPlanPage() {
                       />
                     ))}
                   </div>
+                ) : visibleTables.length === 0 ? (
+                  <p className="py-6 text-sm text-muted-foreground">
+                    No tables offer all the selected features.
+                  </p>
                 ) : (
                   <div className="flex flex-wrap content-start gap-4">
-                    {tables.map((t) => (
+                    {visibleTables.map((t) => (
                       <TableCard
                         key={t.id}
                         table={t}

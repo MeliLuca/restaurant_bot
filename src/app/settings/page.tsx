@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RolesManager } from "@/components/settings/roles-manager";
+import { SettingsNav } from "@/components/settings/settings-nav";
 import { UsersManager } from "@/components/settings/users-manager";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { fetchRoles, fetchStaff, type StaffMember } from "@/lib/staff-api";
@@ -44,6 +45,7 @@ export default function SettingsPage() {
   return (
     <div className="flex max-w-3xl flex-col gap-6 p-6">
       <h1 className="text-2xl font-semibold">Settings</h1>
+      <SettingsNav />
 
       <Card>
         <CardHeader>

@@ -26,6 +26,21 @@ export const PERMISSIONS = [
     label: "Manage staff & roles",
     description: "Create users and roles, edit permissions",
   },
+  {
+    key: "manage_menu",
+    label: "Manage menu",
+    description: "Add and edit menu items, prices, and their ingredients",
+  },
+  {
+    key: "manage_floor",
+    label: "Manage floor layout",
+    description: "Add and remove tables, manage feature tags",
+  },
+  {
+    key: "manage_availability",
+    label: "Manage availability",
+    description: "Mark ingredients out of stock to disable items for the night",
+  },
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number]["key"];

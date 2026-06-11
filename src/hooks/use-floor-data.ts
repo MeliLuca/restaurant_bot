@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import {
   fetchOpenDineInOrders,
   fetchOpenTakeaways,
-  fetchTables,
   fetchTodayReservations,
 } from "@/lib/api";
-import type { Order, Reservation, RestaurantTable } from "@/lib/database.types";
+import { fetchTablesWithTags, type TableWithTags } from "@/lib/settings-api";
+import type { Order, Reservation } from "@/lib/database.types";
 
 interface FloorData {
-  tables: RestaurantTable[];
+  /** Tables including their feature tags (TV screen, accessible…) */
+  tables: TableWithTags[];
   reservations: Reservation[];
   takeaways: Order[];
   /** Open dine-in orders across all tables (split badges) */
@@ -21,7 +22,7 @@ interface FloorData {
 }
 
 export function useFloorData(): FloorData {
-  const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [tables, setTables] = useState<TableWithTags[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [takeaways, setTakeaways] = useState<Order[]>([]);
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
@@ -31,7 +32,7 @@ export function useFloorData(): FloorData {
   const refresh = useCallback(async () => {
     try {
       const [t, r, ta, oo] = await Promise.all([
-        fetchTables(),
+        fetchTablesWithTags(),
         fetchTodayReservations(),
         fetchOpenTakeaways(),
         fetchOpenDineInOrders(),
