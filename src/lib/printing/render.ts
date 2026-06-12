@@ -57,6 +57,14 @@ function renderCassa(printer: Printer, ticket: CassaTicket): Buffer {
     if (detail) p.line(detail);
   }
 
+  // Variant banner — pre-conto / partial payment markers, impossible to miss
+  if (ticket.banner && ticket.banner.length > 0) {
+    p.line(divider);
+    p.size(SIZE_DOUBLE).bold(true);
+    for (const bannerLine of ticket.banner) p.line(bannerLine);
+    p.bold(false).size(SIZE_NORMAL);
+  }
+
   // Document meta — ticket number, date, table, server
   p.align("left").line(divider);
   p.line(padRow(`DOC. N. ${ticket.meta.ticketNumber}`, formatTimestamp(ticket.meta.openedAt), width));

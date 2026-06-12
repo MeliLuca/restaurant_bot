@@ -34,13 +34,14 @@ import {
   updateMenuItem,
   type MenuItemWithIngredients,
 } from "@/lib/settings-api";
-import type { Category, Ingredient } from "@/lib/database.types";
+import type { Category, Ingredient, Printer } from "@/lib/database.types";
 import { cn } from "@/lib/utils";
 
 interface MenuManagerProps {
   categories: Category[];
   items: MenuItemWithIngredients[];
   ingredients: Ingredient[];
+  printers: Printer[];
   onChanged: () => Promise<void>;
 }
 
@@ -48,6 +49,7 @@ export function MenuManager({
   categories,
   items,
   ingredients,
+  printers,
   onChanged,
 }: MenuManagerProps) {
   const [busy, setBusy] = useState(false);
@@ -242,6 +244,7 @@ export function MenuManager({
         defaultCategoryId={dialogCategoryId}
         categories={categories}
         ingredients={ingredients}
+        printers={printers}
         items={items}
         onClose={() => setDialogOpen(false)}
         onSaved={onChanged}
@@ -332,12 +335,16 @@ function IngredientsCard({
   );
 }
 
+// Radix Select can't carry an empty-string value; sentinel for "no printer"
+const NO_PRINTER = "none";
+
 function MenuItemDialog({
   open,
   item,
   defaultCategoryId,
   categories,
   ingredients,
+  printers,
   items,
   onClose,
   onSaved,
@@ -347,6 +354,7 @@ function MenuItemDialog({
   defaultCategoryId: string;
   categories: Category[];
   ingredients: Ingredient[];
+  printers: Printer[];
   items: MenuItemWithIngredients[];
   onClose: () => void;
   onSaved: () => Promise<void>;
@@ -355,6 +363,7 @@ function MenuItemDialog({
   const [price, setPrice] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [ingredientIds, setIngredientIds] = useState<string[]>([]);
+  const [printerId, setPrinterId] = useState(NO_PRINTER);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -363,6 +372,7 @@ function MenuItemDialog({
     setPrice(item ? item.price.toFixed(2) : "");
     setCategoryId(item?.category_id ?? defaultCategoryId);
     setIngredientIds(item ? item.ingredients.map((g) => g.id) : []);
+    setPrinterId(item?.target_printer_id ?? NO_PRINTER);
   }, [open, item, defaultCategoryId]);
 
   function toggleIngredient(id: string) {
@@ -388,6 +398,7 @@ function MenuItemDialog({
       return;
     }
 
+    const targetPrinterId = printerId === NO_PRINTER ? null : printerId;
     setBusy(true);
     try {
       let itemId = item?.id;
@@ -396,6 +407,7 @@ function MenuItemDialog({
           name: trimmed,
           price: parsedPrice,
           category_id: categoryId,
+          target_printer_id: targetPrinterId,
         });
       } else {
         const maxSort = Math.max(
@@ -409,6 +421,7 @@ function MenuItemDialog({
           name: trimmed,
           price: parsedPrice,
           sortOrder: maxSort + 1,
+          targetPrinterId,
         });
       }
       await setMenuItemIngredients(itemId, ingredientIds);
@@ -472,6 +485,25 @@ function MenuItemDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Prints to</Label>
+            <Select value={printerId} onValueChange={setPrinterId}>
+              <SelectTrigger className="h-12">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_PRINTER}>
+                  Receipt only — no production slip
+                </SelectItem>
+                {printers.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} ({p.printer_type})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid gap-2">

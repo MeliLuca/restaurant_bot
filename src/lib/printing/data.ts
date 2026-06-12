@@ -23,6 +23,7 @@ type ItemRow = {
   quantity: number;
   unit_price: number;
   notes: string | null;
+  fraction_of: number | null;
   menu_items: { name: string; target_printer_id: string | null } | null;
 };
 
@@ -47,7 +48,9 @@ export async function loadOrderPrintContext(
 
   let itemQuery = sb
     .from("order_items")
-    .select("quantity, unit_price, notes, menu_items(name, target_printer_id)")
+    .select(
+      "quantity, unit_price, notes, fraction_of, menu_items(name, target_printer_id)",
+    )
     .eq("order_id", orderId)
     .order("created_at");
   if (orderItemIds && orderItemIds.length > 0) {
@@ -72,7 +75,10 @@ export async function loadOrderPrintContext(
       quantity: i.quantity,
       unit_price: i.unit_price,
       notes: i.notes,
-      name: i.menu_items?.name ?? "Item",
+      // fractional shares of a split item print as "Tiramisù (1/3)"
+      name:
+        (i.menu_items?.name ?? "Item") +
+        (i.fraction_of ? ` (1/${i.fraction_of})` : ""),
       target_printer_id: i.menu_items?.target_printer_id ?? null,
     })),
     printers,

@@ -3,11 +3,15 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  Check,
   ChefHat,
   CreditCard,
   Minus,
+  Pencil,
   Plus,
+  ReceiptText,
   ShoppingBag,
+  Split,
   Trash2,
   X,
 } from "lucide-react";
@@ -23,22 +27,63 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   checkoutOrder,
+  printPreReceipt,
   printProductionSlips,
   printReceipt,
   sendTakeawayToKitchen,
   sendToKitchen,
+  setSentItemPrice,
   setSentItemQuantity,
   type OpenOrder,
   type PrintJobResult,
   type SentRound,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
-import { calcTotals } from "@/lib/money";
+import { calcTotals, toCents } from "@/lib/money";
 import type { Order, RestaurantTable } from "@/lib/database.types";
-import { useTicketStore, type TicketMode } from "@/stores/ticket-store";
+import {
+  lineUnitPrice,
+  useTicketStore,
+  type TicketMode,
+} from "@/stores/ticket-store";
 import { useAuthStore, usePermission } from "@/stores/auth-store";
+import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
+import { SplitBillDialog } from "./split-bill-dialog";
 import { SplitPicker } from "./split-picker";
 import { TakeawayPicker } from "./takeaway-picker";
+
+/** Selected modifiers, indented right under their parent line with their
+ * individual price adjustments (already included in the line price). */
+function ModifierRows({
+  modifiers,
+  muted,
+}: {
+  modifiers: Array<{ key: string; name: string; priceAdjustment: number }>;
+  muted?: boolean;
+}) {
+  if (modifiers.length === 0) return null;
+  return (
+    <ul
+      className={
+        muted
+          ? "flex flex-col gap-0.5 pl-5 text-xs text-muted-foreground/60"
+          : "flex flex-col gap-0.5 pl-5 text-xs text-muted-foreground"
+      }
+    >
+      {modifiers.map((m) => (
+        <li key={m.key} className="flex justify-between gap-2">
+          <span className="min-w-0 truncate">› {m.name}</span>
+          {m.priceAdjustment !== 0 && (
+            <span className="shrink-0 tabular-nums">
+              {m.priceAdjustment > 0 ? "+" : "−"}
+              {formatMoney(Math.abs(m.priceAdjustment))}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 interface TicketPanelProps {
   tables: RestaurantTable[];
@@ -69,12 +114,15 @@ export function TicketPanel({
     setTakeaway,
     removeItem,
     setQuantity,
+    setLinePrice,
     clearLines,
     clearTicket,
   } = useTicketStore();
   const canCheckout = usePermission("checkout_orders");
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [busy, setBusy] = useState(false);
+  const [priceEdit, setPriceEdit] = useState<PriceEditTarget | null>(null);
+  const [splitOpen, setSplitOpen] = useState(false);
 
   const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
   const targetLabel =
@@ -84,12 +132,25 @@ export function TicketPanel({
         : tableName
       : takeawayName;
 
+  // sent unit_price already includes modifier adjustments (snapshot at send);
+  // pending lines add them here
   const sentLines =
     openOrder?.items.map((i) => ({
       unitPrice: i.unit_price,
       quantity: i.quantity,
     })) ?? [];
-  const totals = calcTotals([...sentLines, ...lines]);
+  const totals = calcTotals([
+    ...sentLines,
+    ...lines.map((l) => ({
+      unitPrice: lineUnitPrice(l),
+      quantity: l.quantity,
+    })),
+  ]);
+
+  // Split-bill payments already taken reduce what the checkout collects
+  const payments = openOrder?.payments ?? [];
+  const paidCents = payments.reduce((sum, p) => sum + toCents(p.amount), 0);
+  const balanceCents = toCents(totals.total) - paidCents;
 
   // Printing is best-effort: the order is already saved, so a dead printer
   // warns instead of failing the send.
@@ -200,6 +261,55 @@ export function TicketPanel({
     }
   }
 
+  // Manual price override — current ticket/order only, never the menu.
+  async function applyPriceEdit(target: PriceEditTarget, unitPrice: number) {
+    if (target.kind === "pending") {
+      setLinePrice(target.id, unitPrice);
+      return;
+    }
+    if (!openOrder) return;
+    setBusy(true);
+    try {
+      await setSentItemPrice(openOrder.order.id, target.id, unitPrice);
+      await onOrderChanged();
+      toast.success(`${target.name} now ${formatMoney(unitPrice)}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update price");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Courtesy bill: print only — no payment, no order/table state change.
+  async function handlePreReceipt() {
+    if (!openOrder) return;
+    setBusy(true);
+    try {
+      const [jobs] = await Promise.allSettled([
+        printPreReceipt(openOrder.order.id),
+      ]);
+      warnOnPrintFailure(jobs);
+      if (jobs.status === "fulfilled" && jobs.value.every((j) => j.ok)) {
+        toast.success("Pre-receipt printed");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSplitOrderClosed(tableFlagged: boolean) {
+    const closedLabel = targetLabel;
+    clearTicket();
+    await onOrderChanged();
+    toast.success(
+      mode === "takeaway"
+        ? `Take-away for ${closedLabel} fully paid`
+        : tableFlagged
+          ? `${closedLabel} fully paid — table flagged for cleaning`
+          : `${closedLabel} fully paid — other splits still open`,
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-col gap-3 border-b p-4">
@@ -286,54 +396,104 @@ export function TicketPanel({
               Sent to kitchen — tap to amend
             </h3>
             <div className="flex flex-col gap-1.5">
-              {openOrder.items.map((i) => (
-                <div
-                  key={i.id}
-                  className="flex items-center gap-2 text-sm text-muted-foreground"
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    {i.menu_items?.name ?? "Item"}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label={`Decrease sent ${i.menu_items?.name ?? "item"}`}
-                      disabled={busy}
-                      onClick={() => amendSentItem(i.id, i.quantity - 1)}
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </Button>
-                    <span className="w-6 text-center font-semibold tabular-nums">
-                      {i.quantity}
+              {openOrder.items.map((i) => {
+                const name =
+                  (i.menu_items?.name ?? "Item") +
+                  (i.fraction_of ? ` (1/${i.fraction_of})` : "");
+                const modifierRows = (i.order_item_modifiers ?? []).map(
+                  (m) => ({
+                    key: m.id,
+                    name: m.name,
+                    priceAdjustment: m.price_adjustment,
+                  }),
+                );
+                if (i.paid_by_payment_id) {
+                  // settled by a split payment — immutable from here on
+                  return (
+                    <div key={i.id}>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground/60">
+                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <span className="min-w-0 flex-1 truncate line-through">
+                          {i.quantity > 1 ? `${i.quantity}× ` : ""}
+                          {name}
+                        </span>
+                        <span className="text-xs font-medium uppercase">
+                          Paid
+                        </span>
+                        <span className="w-14 text-right tabular-nums line-through">
+                          {formatMoney(i.unit_price * i.quantity)}
+                        </span>
+                      </div>
+                      <ModifierRows modifiers={modifierRows} muted />
+                    </div>
+                  );
+                }
+                return (
+                  <div key={i.id}>
+                  <div
+                    className="flex items-center gap-2 text-sm text-muted-foreground"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{name}</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={`Decrease sent ${name}`}
+                        disabled={busy}
+                        onClick={() => amendSentItem(i.id, i.quantity - 1)}
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </Button>
+                      <span className="w-6 text-center font-semibold tabular-nums">
+                        {i.quantity}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={`Increase sent ${name}`}
+                        disabled={busy}
+                        onClick={() => amendSentItem(i.id, i.quantity + 1)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <span className="w-14 text-right tabular-nums">
+                      {formatMoney(i.unit_price * i.quantity)}
                     </span>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      aria-label={`Increase sent ${i.menu_items?.name ?? "item"}`}
+                      aria-label={`Adjust price of ${name}`}
                       disabled={busy}
-                      onClick={() => amendSentItem(i.id, i.quantity + 1)}
+                      onClick={() =>
+                        setPriceEdit({
+                          kind: "sent",
+                          id: i.id,
+                          name,
+                          unitPrice: i.unit_price,
+                        })
+                      }
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label={`Remove sent ${name}`}
+                      disabled={busy}
+                      onClick={() => amendSentItem(i.id, 0)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                  <span className="w-14 text-right tabular-nums">
-                    {formatMoney(i.unit_price * i.quantity)}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label={`Remove sent ${i.menu_items?.name ?? "item"}`}
-                    disabled={busy}
-                    onClick={() => amendSentItem(i.id, 0)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
+                  <ModifierRows modifiers={modifierRows} />
+                  </div>
+                );
+              })}
             </div>
             <Separator className="mt-3" />
           </div>
@@ -349,48 +509,78 @@ export function TicketPanel({
 
         <div className="flex flex-col gap-2">
           {lines.map((l) => (
-            <div key={l.menuItemId} className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{l.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {formatMoney(l.unitPrice)} each
+            <div key={l.lineId}>
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{l.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatMoney(lineUnitPrice(l))} each
+                    {l.priceOverridden && (
+                      <span className="ml-1 font-medium text-amber-600">
+                        · adjusted
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
-                  className="h-10 w-10"
-                  aria-label={`Decrease ${l.name}`}
-                  onClick={() => setQuantity(l.menuItemId, l.quantity - 1)}
+                  className="h-10 w-10 text-muted-foreground"
+                  aria-label={`Adjust price of ${l.name}`}
+                  onClick={() =>
+                    setPriceEdit({
+                      kind: "pending",
+                      id: l.lineId,
+                      name: l.name,
+                      unitPrice: l.unitPrice,
+                    })
+                  }
                 >
-                  <Minus className="h-4 w-4" />
+                  <Pencil className="h-4 w-4" />
                 </Button>
-                <span className="w-8 text-center font-semibold tabular-nums">
-                  {l.quantity}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10"
+                    aria-label={`Decrease ${l.name}`}
+                    onClick={() => setQuantity(l.lineId, l.quantity - 1)}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <span className="w-8 text-center font-semibold tabular-nums">
+                    {l.quantity}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10"
+                    aria-label={`Increase ${l.name}`}
+                    onClick={() => setQuantity(l.lineId, l.quantity + 1)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <span className="w-16 text-right font-medium tabular-nums">
+                  {formatMoney(lineUnitPrice(l) * l.quantity)}
                 </span>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
-                  className="h-10 w-10"
-                  aria-label={`Increase ${l.name}`}
-                  onClick={() => setQuantity(l.menuItemId, l.quantity + 1)}
+                  className="h-10 w-10 text-muted-foreground"
+                  aria-label={`Remove ${l.name}`}
+                  onClick={() => removeItem(l.lineId)}
                 >
-                  <Plus className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-              <span className="w-16 text-right font-medium tabular-nums">
-                {formatMoney(l.unitPrice * l.quantity)}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 text-muted-foreground"
-                aria-label={`Remove ${l.name}`}
-                onClick={() => removeItem(l.menuItemId)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <ModifierRows
+                modifiers={l.modifiers.map((m) => ({
+                  key: m.modifierId,
+                  name: m.name,
+                  priceAdjustment: m.priceAdjustment,
+                }))}
+              />
             </div>
           ))}
         </div>
@@ -410,6 +600,25 @@ export function TicketPanel({
             <span>Total</span>
             <span className="tabular-nums">{formatMoney(totals.total)}</span>
           </div>
+          {paidCents > 0 && (
+            <>
+              <div className="flex justify-between text-muted-foreground">
+                <span>
+                  Paid ({payments.length} payment
+                  {payments.length === 1 ? "" : "s"})
+                </span>
+                <span className="tabular-nums">
+                  -{formatMoney(paidCents / 100)}
+                </span>
+              </div>
+              <div className="flex justify-between text-lg font-semibold">
+                <span>Balance due</span>
+                <span className="tabular-nums">
+                  {formatMoney(balanceCents / 100)}
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -421,6 +630,30 @@ export function TicketPanel({
           >
             <ChefHat className="mr-2 h-5 w-5" /> Send to Kitchen
           </Button>
+          {openOrder && (
+            <div className="flex gap-2">
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 flex-1 text-sm"
+                disabled={busy}
+                onClick={handlePreReceipt}
+              >
+                <ReceiptText className="mr-2 h-4 w-4" /> Pre-Receipt
+              </Button>
+              {canCheckout && (
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 flex-1 text-sm"
+                  disabled={busy}
+                  onClick={() => setSplitOpen(true)}
+                >
+                  <Split className="mr-2 h-4 w-4" /> Split Bill
+                </Button>
+              )}
+            </div>
+          )}
           {canCheckout && (
             <Button
               size="lg"
@@ -429,11 +662,28 @@ export function TicketPanel({
               disabled={busy || !hasTarget || (!openOrder && lines.length === 0)}
               onClick={handleCheckout}
             >
-              <CreditCard className="mr-2 h-5 w-5" /> Checkout · {formatMoney(totals.total)}
+              <CreditCard className="mr-2 h-5 w-5" /> Checkout ·{" "}
+              {formatMoney(balanceCents / 100)}
             </Button>
           )}
         </div>
       </div>
+
+      <PriceEditDialog
+        target={priceEdit}
+        onClose={() => setPriceEdit(null)}
+        onSubmit={applyPriceEdit}
+      />
+      {openOrder && (
+        <SplitBillDialog
+          open={splitOpen}
+          onOpenChange={setSplitOpen}
+          openOrder={openOrder}
+          targetLabel={targetLabel ?? ""}
+          onPaymentsChanged={onOrderChanged}
+          onOrderClosed={handleSplitOrderClosed}
+        />
+      )}
     </div>
   );
 }

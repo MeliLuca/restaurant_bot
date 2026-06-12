@@ -1,6 +1,9 @@
 // POST /api/print/receipt — fire the full CASSA receipt for an order (all
 // lines, company header, totals). Callable any time: checkout or reprint.
-// Body: { orderId: string }
+// With preconto: true it prints the same itemized bill under a big
+// "PRE-CONTO / NON FISCALE" banner — purely informative, the order is not
+// touched (this route never changes order/table state).
+// Body: { orderId: string, preconto?: boolean }
 
 import { NextResponse } from "next/server";
 import { loadOrderPrintContext } from "@/lib/printing/data";
@@ -13,6 +16,7 @@ export async function POST(request: Request) {
   if (typeof orderId !== "string") {
     return NextResponse.json({ error: "orderId is required" }, { status: 400 });
   }
+  const preconto = body?.preconto === true;
 
   try {
     const ctx = await loadOrderPrintContext(orderId);
@@ -25,6 +29,7 @@ export async function POST(request: Request) {
       ctx.printers,
       ctx.settings,
       ctx.meta,
+      preconto ? ["PRE-CONTO", "NON FISCALE"] : undefined,
     );
     if (!payload) {
       return NextResponse.json(

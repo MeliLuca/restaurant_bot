@@ -1,7 +1,10 @@
 import { getSupabase } from "@/lib/supabase/client";
 import type {
+  Database,
   Ingredient,
   MenuItem,
+  Printer,
+  RestaurantSettings,
   RestaurantTable,
   TableTag,
 } from "@/lib/database.types";
@@ -188,6 +191,7 @@ export async function createMenuItem(item: {
   name: string;
   price: number;
   sortOrder: number;
+  targetPrinterId: string | null;
 }): Promise<string> {
   const { data, error } = await getSupabase()
     .from("menu_items")
@@ -196,6 +200,7 @@ export async function createMenuItem(item: {
       name: item.name.trim(),
       price: item.price,
       sort_order: item.sortOrder,
+      target_printer_id: item.targetPrinterId,
     })
     .select("id")
     .single();
@@ -210,6 +215,7 @@ export async function updateMenuItem(
     price?: number;
     category_id?: string;
     is_available?: boolean;
+    target_printer_id?: string | null;
   },
 ): Promise<void> {
   const { error } = await getSupabase()
@@ -229,6 +235,65 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
       error,
       "This item appears on past orders and can't be deleted — mark it unavailable instead.",
     );
+}
+
+// ---------------------------------------------------------------------------
+// Printers & receipt settings
+// ---------------------------------------------------------------------------
+
+export type PrinterInput = Database["public"]["Tables"]["printers"]["Insert"];
+
+export async function fetchPrinters(): Promise<Printer[]> {
+  const { data, error } = await getSupabase()
+    .from("printers")
+    .select("*")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createPrinter(printer: PrinterInput): Promise<void> {
+  const { error } = await getSupabase().from("printers").insert(printer);
+  if (error) throw new Error(error.message);
+}
+
+export async function updatePrinter(
+  printerId: string,
+  fields: Partial<PrinterInput>,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from("printers")
+    .update(fields)
+    .eq("id", printerId);
+  if (error) throw new Error(error.message);
+}
+
+/** Items routed to the printer fall back to "receipt only" (FK set-null) */
+export async function deletePrinter(printerId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("printers")
+    .delete()
+    .eq("id", printerId);
+  if (error) throw new Error(error.message);
+}
+
+export async function fetchRestaurantSettings(): Promise<RestaurantSettings> {
+  const { data, error } = await getSupabase()
+    .from("restaurant_settings")
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function updateRestaurantSettings(
+  fields: Partial<Omit<RestaurantSettings, "id" | "updated_at">>,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from("restaurant_settings")
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq("id", true);
+  if (error) throw new Error(error.message);
 }
 
 export async function setMenuItemIngredients(

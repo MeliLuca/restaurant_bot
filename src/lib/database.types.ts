@@ -6,6 +6,7 @@ export type OrderStatus = "open" | "paid" | "cancelled";
 export type OrderType = "dine_in" | "takeaway";
 export type ReservationStatus = "booked" | "seated" | "cancelled" | "no_show";
 export type PrinterType = "CASSA" | "CUCINA" | "BAR";
+export type PaymentKind = "even" | "items";
 export type PaperSize = "80mm" | "58mm";
 export type PrintJobStatus = "queued" | "sent" | "failed";
 
@@ -209,6 +210,8 @@ export interface Database {
           quantity: number;
           unit_price: number;
           notes: string | null;
+          paid_by_payment_id: string | null;
+          fraction_of: number | null;
           created_at: string;
         };
         Insert: {
@@ -218,6 +221,8 @@ export interface Database {
           quantity: number;
           unit_price: number;
           notes?: string | null;
+          paid_by_payment_id?: string | null;
+          fraction_of?: number | null;
           created_at?: string;
         };
         Update: {
@@ -227,6 +232,8 @@ export interface Database {
           quantity?: number;
           unit_price?: number;
           notes?: string | null;
+          paid_by_payment_id?: string | null;
+          fraction_of?: number | null;
           created_at?: string;
         };
         Relationships: [
@@ -240,6 +247,52 @@ export interface Database {
             foreignKeyName: "order_items_menu_item_id_fkey";
             columns: ["menu_item_id"];
             referencedRelation: "menu_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_items_paid_by_payment_id_fkey";
+            columns: ["paid_by_payment_id"];
+            referencedRelation: "order_payments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      order_payments: {
+        Row: {
+          id: string;
+          order_id: string;
+          kind: PaymentKind;
+          amount: number;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          kind: PaymentKind;
+          amount: number;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          order_id?: string;
+          kind?: PaymentKind;
+          amount?: number;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "order_payments_order_id_fkey";
+            columns: ["order_id"];
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_payments_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "app_users";
             referencedColumns: ["id"];
           },
         ];
@@ -335,6 +388,137 @@ export interface Database {
             foreignKeyName: "menu_item_ingredients_ingredient_id_fkey";
             columns: ["ingredient_id"];
             referencedRelation: "ingredients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      modifier_groups: {
+        Row: {
+          id: string;
+          name: string;
+          min_selections: number;
+          max_selections: number;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          min_selections?: number;
+          max_selections?: number;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          min_selections?: number;
+          max_selections?: number;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      modifiers: {
+        Row: {
+          id: string;
+          group_id: string;
+          name: string;
+          price_adjustment: number;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          name: string;
+          price_adjustment?: number;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          name?: string;
+          price_adjustment?: number;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "modifiers_group_id_fkey";
+            columns: ["group_id"];
+            referencedRelation: "modifier_groups";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      menu_item_modifier_groups: {
+        Row: {
+          menu_item_id: string;
+          group_id: string;
+        };
+        Insert: {
+          menu_item_id: string;
+          group_id: string;
+        };
+        Update: {
+          menu_item_id?: string;
+          group_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_modifier_groups_menu_item_id_fkey";
+            columns: ["menu_item_id"];
+            referencedRelation: "menu_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "menu_item_modifier_groups_group_id_fkey";
+            columns: ["group_id"];
+            referencedRelation: "modifier_groups";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      order_item_modifiers: {
+        // name/price_adjustment are order-time snapshots; modifier_id is
+        // informational only and nulls out if the menu modifier is deleted
+        Row: {
+          id: string;
+          order_item_id: string;
+          modifier_id: string | null;
+          name: string;
+          price_adjustment: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_item_id: string;
+          modifier_id?: string | null;
+          name: string;
+          price_adjustment: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          order_item_id?: string;
+          modifier_id?: string | null;
+          name?: string;
+          price_adjustment?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "order_item_modifiers_order_item_id_fkey";
+            columns: ["order_item_id"];
+            referencedRelation: "order_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_item_modifiers_modifier_id_fkey";
+            columns: ["modifier_id"];
+            referencedRelation: "modifiers";
             referencedColumns: ["id"];
           },
         ];
@@ -617,10 +801,16 @@ export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
 export type Order = Database["public"]["Tables"]["orders"]["Row"];
 export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
+export type OrderPayment = Database["public"]["Tables"]["order_payments"]["Row"];
 export type Role = Database["public"]["Tables"]["roles"]["Row"];
 export type AppUser = Database["public"]["Tables"]["app_users"]["Row"];
 export type TableTag = Database["public"]["Tables"]["table_tags"]["Row"];
 export type Ingredient = Database["public"]["Tables"]["ingredients"]["Row"];
+export type ModifierGroup =
+  Database["public"]["Tables"]["modifier_groups"]["Row"];
+export type Modifier = Database["public"]["Tables"]["modifiers"]["Row"];
+export type OrderItemModifier =
+  Database["public"]["Tables"]["order_item_modifiers"]["Row"];
 export type ChatMessage = Database["public"]["Tables"]["messages"]["Row"];
 export type ChatRead = Database["public"]["Tables"]["chat_reads"]["Row"];
 export type Printer = Database["public"]["Tables"]["printers"]["Row"];

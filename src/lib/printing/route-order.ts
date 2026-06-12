@@ -11,11 +11,18 @@ import type {
   TicketMeta,
 } from "./types";
 
+// One structured modifier on an order line (order_item_modifiers snapshot).
+export interface RoutableModifier {
+  name: string;
+  price_adjustment: number;
+}
+
 // One order_items row joined with its menu item — the routing input shape.
 export interface RoutableItem {
   quantity: number;
   unit_price: number;
   notes: string | null;
+  modifiers: RoutableModifier[];
   name: string;
   target_printer_id: string | null;
 }
@@ -29,11 +36,34 @@ export function parseModifiers(notes: string | null): string[] {
     .filter(Boolean);
 }
 
+// "+ Bufala" / "- Acciughe" — paid additions/discounts get a sign; zero-cost
+// modifiers ("No Basilico") already carry their meaning in the name.
+function modifierLabel(m: RoutableModifier): string {
+  if (m.price_adjustment > 0) return `+ ${m.name}`;
+  if (m.price_adjustment < 0) return `- ${m.name}`;
+  return m.name;
+}
+
+// CASSA shows each adjustment amount; the line's unit price column already
+// includes them, so the amounts are detail, not extra charges.
+function cassaModifierLabel(m: RoutableModifier): string {
+  if (m.price_adjustment === 0) return modifierLabel(m);
+  return `${modifierLabel(m)} (${m.price_adjustment > 0 ? "+" : "-"}${formatEuro(Math.abs(m.price_adjustment))})`;
+}
+
+/** Structured modifiers first, then free-text notes — one print row each */
+function itemModifiers(
+  item: RoutableItem,
+  label: (m: RoutableModifier) => string,
+): string[] {
+  return [...item.modifiers.map(label), ...parseModifiers(item.notes)];
+}
+
 function toTicketLine(item: RoutableItem): TicketLine {
   return {
     quantity: item.quantity,
     name: item.name,
-    modifiers: parseModifiers(item.notes),
+    modifiers: itemModifiers(item, cassaModifierLabel),
     unitPrice: item.unit_price,
     // integer-cent math, same convention as lib/money.ts
     lineTotal: (Math.round(item.unit_price * 100) * item.quantity) / 100,
@@ -81,7 +111,8 @@ export function buildProductionPayloads(
 
 /**
  * The full customer receipt, bound to the first active CASSA printer.
- * Returns null when no CASSA printer is configured.
+ * Returns null when no CASSA printer is configured. `banner` marks the
+ * non-fiscal variants (pre-conto, partial payment).
  */
 export function buildCassaPayload(
   order: Order,
@@ -89,6 +120,7 @@ export function buildCassaPayload(
   printers: Printer[],
   company: RestaurantSettings,
   meta: TicketMeta,
+  banner?: string[],
 ): PrintPayload | null {
   const cassa = printers.find(
     (p) => p.is_active && p.printer_type === "CASSA",
@@ -99,6 +131,7 @@ export function buildCassaPayload(
     kind: "CASSA",
     meta,
     company,
+    banner,
     lines: items.map(toTicketLine),
     subtotal: order.subtotal,
     taxRate: order.tax_rate,

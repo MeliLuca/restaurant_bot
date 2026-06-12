@@ -14,6 +14,7 @@ const LINKS: { href: string; label: string; permission: string | null }[] = [
     label: "Availability",
     permission: "manage_availability",
   },
+  { href: "/settings/printers", label: "Printers", permission: "manage_printers" },
 ];
 
 export function SettingsNav() {

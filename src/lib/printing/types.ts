@@ -52,6 +52,9 @@ export interface CassaTicket {
   kind: "CASSA";
   meta: TicketMeta;
   company: RestaurantSettings;
+  // Prominent double-size lines under the company header marking non-fiscal
+  // variants: ["PRE-CONTO", "NON FISCALE"] or ["PAGAMENTO PARZIALE"].
+  banner?: string[];
   lines: TicketLine[];
   subtotal: number;
   taxRate: number; // aliquota IVA, e.g. 0.08

@@ -10,9 +10,10 @@ import { fetchCategories } from "@/lib/api";
 import {
   fetchIngredients,
   fetchMenuItemsWithIngredients,
+  fetchPrinters,
   type MenuItemWithIngredients,
 } from "@/lib/settings-api";
-import type { Category, Ingredient } from "@/lib/database.types";
+import type { Category, Ingredient, Printer } from "@/lib/database.types";
 import { usePermission } from "@/stores/auth-store";
 
 export default function MenuSettingsPage() {
@@ -20,6 +21,7 @@ export default function MenuSettingsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemWithIngredients[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [printers, setPrinters] = useState<Printer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,14 +31,16 @@ export default function MenuSettingsPage() {
       return;
     }
     try {
-      const [c, i, g] = await Promise.all([
+      const [c, i, g, p] = await Promise.all([
         fetchCategories(),
         fetchMenuItemsWithIngredients(),
         fetchIngredients(),
+        fetchPrinters(),
       ]);
       setCategories(c);
       setItems(i);
       setIngredients(g);
+      setPrinters(p);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load the menu");
@@ -74,6 +78,7 @@ export default function MenuSettingsPage() {
           categories={categories}
           items={items}
           ingredients={ingredients}
+          printers={printers}
           onChanged={refresh}
         />
       )}

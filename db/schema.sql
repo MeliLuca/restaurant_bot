@@ -379,3 +379,80 @@ set permissions = (
   from unnest(permissions || array['manage_printers']) as p
 )
 where 'manage_staff' = any(permissions);
+-- Split-bill module: one order can be settled by several partial payments —
+-- "alla romana" even shares of the remaining balance, or payments covering
+-- specific lines. The order closes when payments reach orders.total; every
+-- transaction is kept for reconciliation.
+
+create table order_payments (
+  id         uuid primary key default gen_random_uuid(),
+  order_id   uuid not null references orders(id) on delete cascade,
+  -- 'even' = alla-romana share of the remaining balance
+  -- 'items' = payment covering specific order_items (linked below)
+  kind       text not null check (kind in ('even', 'items')),
+  amount     numeric(10,2) not null check (amount >= 0),
+  created_by uuid references app_users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index idx_order_payments_order_id on order_payments(order_id);
+
+alter table order_items
+  -- set when this line was covered by a per-item partial payment
+  add column paid_by_payment_id uuid references order_payments(id) on delete set null,
+  -- a shared item split X ways: each share row is one 1/X part (quantity 1,
+  -- unit_price = its cent-exact slice of the original line total)
+  add column fraction_of int check (fraction_of is null or fraction_of >= 2);
+-- Item modifiers (pizzeria-style variations): admin-defined modifier groups
+-- ("Impasto" min:1 max:1, "Aggiunte" min:0 max:10) hold priced modifiers
+-- ("Integrale" +1.50, "Bufala" +2.00, "No Basilico" +0.00). Menu items link to
+-- the groups they offer; the POS forces a valid selection before the item can
+-- join the ticket.
+--
+-- Accounting: order_items.unit_price keeps snapshotting the FULL price charged
+-- per unit (base price + sum of modifier adjustments), so totals, split
+-- payments and stats stay correct with no changes. order_item_modifiers rows
+-- are per-line detail — name + adjustment frozen at order time — consumed by
+-- the ticket UI and the print engine.
+
+create table modifier_groups (
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null unique,
+  min_selections int  not null default 0 check (min_selections >= 0),
+  max_selections int  not null default 1 check (max_selections >= 1),
+  sort_order     int  not null default 0,
+  created_at     timestamptz not null default now(),
+  check (max_selections >= min_selections)
+);
+
+create table modifiers (
+  id               uuid primary key default gen_random_uuid(),
+  group_id         uuid not null references modifier_groups(id) on delete cascade,
+  name             text not null,
+  price_adjustment numeric(10,2) not null default 0,
+  sort_order       int  not null default 0,
+  created_at       timestamptz not null default now(),
+  unique (group_id, name)
+);
+create index idx_modifiers_group_id on modifiers(group_id);
+
+-- Which groups a menu item offers (the POS opens the picker when any exist).
+create table menu_item_modifier_groups (
+  menu_item_id uuid not null references menu_items(id) on delete cascade,
+  group_id     uuid not null references modifier_groups(id) on delete cascade,
+  primary key (menu_item_id, group_id)
+);
+create index idx_menu_item_modifier_groups_group_id
+  on menu_item_modifier_groups(group_id);
+
+-- Modifiers picked on one cart line. modifier_id is set-null so editing the
+-- menu never breaks order history — the snapshotted name/price are what count.
+create table order_item_modifiers (
+  id               uuid primary key default gen_random_uuid(),
+  order_item_id    uuid not null references order_items(id) on delete cascade,
+  modifier_id      uuid references modifiers(id) on delete set null,
+  name             text not null,
+  price_adjustment numeric(10,2) not null,
+  created_at       timestamptz not null default now()
+);
+create index idx_order_item_modifiers_order_item_id
+  on order_item_modifiers(order_item_id);
