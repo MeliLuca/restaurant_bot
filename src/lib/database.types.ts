@@ -5,6 +5,9 @@ export type TableStatus = "available" | "occupied" | "dirty";
 export type OrderStatus = "open" | "paid" | "cancelled";
 export type OrderType = "dine_in" | "takeaway";
 export type ReservationStatus = "booked" | "seated" | "cancelled" | "no_show";
+export type PrinterType = "CASSA" | "CUCINA" | "BAR";
+export type PaperSize = "80mm" | "58mm";
+export type PrintJobStatus = "queued" | "sent" | "failed";
 
 export interface Database {
   public: {
@@ -99,6 +102,7 @@ export interface Database {
           price: number;
           is_available: boolean;
           sort_order: number;
+          target_printer_id: string | null;
         };
         Insert: {
           id?: string;
@@ -107,6 +111,7 @@ export interface Database {
           price: number;
           is_available?: boolean;
           sort_order?: number;
+          target_printer_id?: string | null;
         };
         Update: {
           id?: string;
@@ -115,12 +120,19 @@ export interface Database {
           price?: number;
           is_available?: boolean;
           sort_order?: number;
+          target_printer_id?: string | null;
         };
         Relationships: [
           {
             foreignKeyName: "menu_items_category_id_fkey";
             columns: ["category_id"];
             referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "menu_items_target_printer_id_fkey";
+            columns: ["target_printer_id"];
+            referencedRelation: "printers";
             referencedColumns: ["id"];
           },
         ];
@@ -137,6 +149,8 @@ export interface Database {
           subtotal: number;
           tax: number;
           total: number;
+          ticket_number: number;
+          opened_by: string | null;
           opened_at: string;
           closed_at: string | null;
         };
@@ -151,6 +165,8 @@ export interface Database {
           subtotal?: number;
           tax?: number;
           total?: number;
+          ticket_number?: number;
+          opened_by?: string | null;
           opened_at?: string;
           closed_at?: string | null;
         };
@@ -165,6 +181,8 @@ export interface Database {
           subtotal?: number;
           tax?: number;
           total?: number;
+          ticket_number?: number;
+          opened_by?: string | null;
           opened_at?: string;
           closed_at?: string | null;
         };
@@ -173,6 +191,12 @@ export interface Database {
             foreignKeyName: "orders_table_id_fkey";
             columns: ["table_id"];
             referencedRelation: "tables";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "orders_opened_by_fkey";
+            columns: ["opened_by"];
+            referencedRelation: "app_users";
             referencedColumns: ["id"];
           },
         ];
@@ -184,6 +208,7 @@ export interface Database {
           menu_item_id: string;
           quantity: number;
           unit_price: number;
+          notes: string | null;
           created_at: string;
         };
         Insert: {
@@ -192,6 +217,7 @@ export interface Database {
           menu_item_id: string;
           quantity: number;
           unit_price: number;
+          notes?: string | null;
           created_at?: string;
         };
         Update: {
@@ -200,6 +226,7 @@ export interface Database {
           menu_item_id?: string;
           quantity?: number;
           unit_price?: number;
+          notes?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -374,6 +401,141 @@ export interface Database {
           },
         ];
       };
+      printers: {
+        Row: {
+          id: string;
+          name: string;
+          local_ip: string;
+          port: number;
+          paper_size: PaperSize;
+          printer_type: PrinterType;
+          is_active: boolean;
+          print_prices: boolean;
+          print_grand_total: boolean;
+          print_legal_footer: boolean;
+          header_text: string;
+          footer_text: string;
+          extra_feed_lines: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          local_ip: string;
+          port?: number;
+          paper_size?: PaperSize;
+          printer_type: PrinterType;
+          is_active?: boolean;
+          print_prices?: boolean;
+          print_grand_total?: boolean;
+          print_legal_footer?: boolean;
+          header_text?: string;
+          footer_text?: string;
+          extra_feed_lines?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          local_ip?: string;
+          port?: number;
+          paper_size?: PaperSize;
+          printer_type?: PrinterType;
+          is_active?: boolean;
+          print_prices?: boolean;
+          print_grand_total?: boolean;
+          print_legal_footer?: boolean;
+          header_text?: string;
+          footer_text?: string;
+          extra_feed_lines?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      restaurant_settings: {
+        // Singleton: exactly one row, primary key is the constant `true`.
+        Row: {
+          id: boolean;
+          business_name: string;
+          address: string;
+          vat_number: string;
+          phone: string;
+          receipt_greeting: string;
+          legal_footer: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          business_name?: string;
+          address?: string;
+          vat_number?: string;
+          phone?: string;
+          receipt_greeting?: string;
+          legal_footer?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          business_name?: string;
+          address?: string;
+          vat_number?: string;
+          phone?: string;
+          receipt_greeting?: string;
+          legal_footer?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      print_jobs: {
+        // payload is bytea: PostgREST expects/returns it hex-encoded ("\x1b40…")
+        Row: {
+          id: string;
+          printer_id: string;
+          order_id: string | null;
+          payload: string;
+          status: PrintJobStatus;
+          attempts: number;
+          last_error: string | null;
+          created_at: string;
+          sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          printer_id: string;
+          order_id?: string | null;
+          payload: string;
+          status?: PrintJobStatus;
+          attempts?: number;
+          last_error?: string | null;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          printer_id?: string;
+          order_id?: string | null;
+          payload?: string;
+          status?: PrintJobStatus;
+          attempts?: number;
+          last_error?: string | null;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "print_jobs_printer_id_fkey";
+            columns: ["printer_id"];
+            referencedRelation: "printers";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "print_jobs_order_id_fkey";
+            columns: ["order_id"];
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       roles: {
         Row: {
           id: string;
@@ -440,6 +602,9 @@ export interface Database {
       order_status: OrderStatus;
       order_type: OrderType;
       reservation_status: ReservationStatus;
+      printer_type: PrinterType;
+      paper_size: PaperSize;
+      print_job_status: PrintJobStatus;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -458,3 +623,7 @@ export type TableTag = Database["public"]["Tables"]["table_tags"]["Row"];
 export type Ingredient = Database["public"]["Tables"]["ingredients"]["Row"];
 export type ChatMessage = Database["public"]["Tables"]["messages"]["Row"];
 export type ChatRead = Database["public"]["Tables"]["chat_reads"]["Row"];
+export type Printer = Database["public"]["Tables"]["printers"]["Row"];
+export type RestaurantSettings =
+  Database["public"]["Tables"]["restaurant_settings"]["Row"];
+export type PrintJob = Database["public"]["Tables"]["print_jobs"]["Row"];

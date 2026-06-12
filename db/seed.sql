@@ -83,7 +83,7 @@ set search_path to public, extensions;
 insert into roles (id, name, permissions) values
   ('70000000-0000-0000-0000-000000000001', 'Admin',
    array['manage_tables','manage_reservations','take_orders','checkout_orders','manage_staff',
-         'manage_menu','manage_floor','manage_availability','view_stats']),
+         'manage_menu','manage_floor','manage_availability','view_stats','manage_printers']),
   ('70000000-0000-0000-0000-000000000002', 'Host',
    array['manage_tables','manage_reservations']),
   ('70000000-0000-0000-0000-000000000003', 'Server',
@@ -181,3 +181,33 @@ insert into messages (id, sender_id, recipient_id, body, created_at) values
   ('b0000000-0000-0000-0000-000000000003', '80000000-0000-0000-0000-000000000003', null,
    'T3 asked to split the bill three ways, already set up the subtables.', now() - interval '20 minutes')
 on conflict (id) do nothing;
+
+-- PRINTERS: LAN thermal printers (prefix c0) -----------------------------------
+insert into printers (id, name, local_ip, port, paper_size, printer_type,
+                      print_prices, print_grand_total, print_legal_footer) values
+  ('c0000000-0000-0000-0000-000000000001', 'Cassa',  '192.168.1.200', 9100, '80mm', 'CASSA',  true,  true,  true),
+  ('c0000000-0000-0000-0000-000000000002', 'Cucina', '192.168.1.201', 9100, '80mm', 'CUCINA', false, false, false),
+  ('c0000000-0000-0000-0000-000000000003', 'Bar',    '192.168.1.202', 9100, '58mm', 'BAR',    false, false, false)
+on conflict (id) do nothing;
+
+-- Route production slips: Drinks -> Bar, food categories -> Cucina. Guarded on
+-- null so re-running the seed never clobbers routing changed in the admin UI.
+update menu_items set target_printer_id = 'c0000000-0000-0000-0000-000000000003'
+  where category_id = '20000000-0000-0000-0000-000000000004' and target_printer_id is null;
+update menu_items set target_printer_id = 'c0000000-0000-0000-0000-000000000002'
+  where category_id <> '20000000-0000-0000-0000-000000000004' and target_printer_id is null;
+
+-- Demo company identity for the CASSA receipt header
+update restaurant_settings set
+  business_name = 'Trattoria Demo',
+  address       = 'Via Roma 12, 20121 Milano (MI)',
+  vat_number    = 'IT01234567890',
+  phone         = '+39 02 1234 5678',
+  legal_footer  = 'Documento commerciale di vendita o prestazione - non valido ai fini fiscali'
+where business_name = '';
+
+-- The open T3 order gets a server and a modifier so slips have demo content
+update orders set opened_by = '80000000-0000-0000-0000-000000000003'
+  where id = '50000000-0000-0000-0000-000000000001' and opened_by is null;
+update order_items set notes = 'NO BASILICO, ben cotta'
+  where id = '60000000-0000-0000-0000-000000000002' and notes is null;

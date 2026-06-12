@@ -42,6 +42,11 @@ export const PERMISSIONS = [
     description: "Mark ingredients out of stock to disable items for the night",
   },
   {
+    key: "manage_printers",
+    label: "Manage printers",
+    description: "Configure network printers, ticket layouts, and receipt text",
+  },
+  {
     key: "view_stats",
     label: "View stats",
     description: "See the night's sales totals, items ordered, and past bills",

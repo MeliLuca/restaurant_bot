@@ -101,13 +101,14 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
   if (error) throw new Error(error.message);
   return (data as unknown as (MenuItem & { ingredients: { is_available: boolean }[] })[])
     .filter((item) => item.ingredients.every((i) => i.is_available))
-    .map(({ id, category_id, name, price, is_available, sort_order }) => ({
+    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id }) => ({
       id,
       category_id,
       name,
       price,
       is_available,
       sort_order,
+      target_printer_id,
     }));
 }
 
@@ -240,18 +241,47 @@ export interface TicketLineInput {
   menuItemId: string;
   unitPrice: number;
   quantity: number;
+  notes?: string | null;
+}
+
+/** A persisted round: the order plus the ids of the lines just inserted
+ * (the print API receives exactly these so reorders don't reprint). */
+export interface SentRound {
+  orderId: string;
+  newItemIds: string[];
+}
+
+async function insertOrderItems(
+  orderId: string,
+  lines: TicketLineInput[],
+): Promise<string[]> {
+  const { data, error } = await getSupabase()
+    .from("order_items")
+    .insert(
+      lines.map((l) => ({
+        order_id: orderId,
+        menu_item_id: l.menuItemId,
+        quantity: l.quantity,
+        unit_price: l.unitPrice,
+        notes: l.notes ?? null,
+      })),
+    )
+    .select("id");
+  if (error) throw new Error(error.message);
+  return data.map((d) => d.id);
 }
 
 /**
  * Persist pending ticket lines: appends to the (table, split)'s open order
- * (creating one if needed), recomputes stored totals, and marks the table
- * occupied. Returns the order id.
+ * (creating one if needed, stamped with the ordering user), recomputes stored
+ * totals, and marks the table occupied.
  */
 export async function sendToKitchen(
   tableId: string,
   lines: TicketLineInput[],
   subtable: string | null,
-): Promise<string> {
+  openedBy: string | null,
+): Promise<SentRound> {
   if (lines.length === 0) throw new Error("Ticket is empty");
   const sb = getSupabase();
 
@@ -260,37 +290,29 @@ export async function sendToKitchen(
   if (!orderId) {
     const { data, error } = await sb
       .from("orders")
-      .insert({ table_id: tableId, subtable, tax_rate: TAX_RATE })
+      .insert({ table_id: tableId, subtable, tax_rate: TAX_RATE, opened_by: openedBy })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
     orderId = data.id;
   }
 
-  const { error: itemsError } = await sb.from("order_items").insert(
-    lines.map((l) => ({
-      order_id: orderId!,
-      menu_item_id: l.menuItemId,
-      quantity: l.quantity,
-      unit_price: l.unitPrice,
-    })),
-  );
-  if (itemsError) throw new Error(itemsError.message);
-
+  const newItemIds = await insertOrderItems(orderId, lines);
   await recomputeOrderTotals(orderId);
   await updateTableStatus(tableId, "occupied");
-  return orderId;
+  return { orderId, newItemIds };
 }
 
 /**
  * Persist pending lines on a take-away order: appends to the given open order,
- * or creates one for the customer. Returns the order id.
+ * or creates one for the customer.
  */
 export async function sendTakeawayToKitchen(
   orderId: string | null,
   customerName: string,
   lines: TicketLineInput[],
-): Promise<string> {
+  openedBy: string | null,
+): Promise<SentRound> {
   if (lines.length === 0) throw new Error("Ticket is empty");
   const sb = getSupabase();
 
@@ -302,6 +324,7 @@ export async function sendTakeawayToKitchen(
         order_type: "takeaway",
         customer_name: customerName.trim(),
         tax_rate: TAX_RATE,
+        opened_by: openedBy,
       })
       .select("id")
       .single();
@@ -309,18 +332,48 @@ export async function sendTakeawayToKitchen(
     id = data.id;
   }
 
-  const { error: itemsError } = await sb.from("order_items").insert(
-    lines.map((l) => ({
-      order_id: id!,
-      menu_item_id: l.menuItemId,
-      quantity: l.quantity,
-      unit_price: l.unitPrice,
-    })),
-  );
-  if (itemsError) throw new Error(itemsError.message);
-
+  const newItemIds = await insertOrderItems(id, lines);
   await recomputeOrderTotals(id);
-  return id;
+  return { orderId: id, newItemIds };
+}
+
+// ---------------------------------------------------------------------------
+// Printing (LAN thermal printers, dispatched server-side via /api/print/*)
+// ---------------------------------------------------------------------------
+
+export interface PrintJobResult {
+  printerName: string;
+  ok: boolean;
+  error?: string;
+}
+
+async function postPrint(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<PrintJobResult[]> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.error ?? "Print service unavailable");
+  }
+  return data.jobs;
+}
+
+/** Fire CUCINA/BAR slips for the given lines (a just-sent round). */
+export function printProductionSlips(
+  orderId: string,
+  orderItemIds: string[],
+): Promise<PrintJobResult[]> {
+  return postPrint("/api/print/order", { orderId, orderItemIds });
+}
+
+/** Fire the full CASSA receipt for an order (checkout or reprint). */
+export function printReceipt(orderId: string): Promise<PrintJobResult[]> {
+  return postPrint("/api/print/receipt", { orderId });
 }
 
 /**

@@ -23,16 +23,20 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   checkoutOrder,
+  printProductionSlips,
+  printReceipt,
   sendTakeawayToKitchen,
   sendToKitchen,
   setSentItemQuantity,
   type OpenOrder,
+  type PrintJobResult,
+  type SentRound,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import { calcTotals } from "@/lib/money";
 import type { Order, RestaurantTable } from "@/lib/database.types";
 import { useTicketStore, type TicketMode } from "@/stores/ticket-store";
-import { usePermission } from "@/stores/auth-store";
+import { useAuthStore, usePermission } from "@/stores/auth-store";
 import { SplitPicker } from "./split-picker";
 import { TakeawayPicker } from "./takeaway-picker";
 
@@ -69,6 +73,7 @@ export function TicketPanel({
     clearTicket,
   } = useTicketStore();
   const canCheckout = usePermission("checkout_orders");
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const [busy, setBusy] = useState(false);
 
   const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
@@ -86,23 +91,53 @@ export function TicketPanel({
     })) ?? [];
   const totals = calcTotals([...sentLines, ...lines]);
 
+  // Printing is best-effort: the order is already saved, so a dead printer
+  // warns instead of failing the send.
+  function warnOnPrintFailure(jobs: PromiseSettledResult<PrintJobResult[]>) {
+    if (jobs.status === "rejected") {
+      toast.warning(
+        jobs.reason instanceof Error ? jobs.reason.message : "Printing failed",
+      );
+      return;
+    }
+    const failed = jobs.value.filter((j) => !j.ok);
+    if (failed.length > 0) {
+      toast.warning(
+        `Printer offline: ${failed.map((f) => f.printerName).join(", ")}`,
+      );
+    }
+  }
+
+  async function printRound(round: SentRound) {
+    const [jobs] = await Promise.allSettled([
+      printProductionSlips(round.orderId, round.newItemIds),
+    ]);
+    warnOnPrintFailure(jobs);
+  }
+
+  async function sendPendingLines(): Promise<SentRound> {
+    if (mode === "table") {
+      return sendToKitchen(tableId!, lines, subtable, userId);
+    }
+    const round = await sendTakeawayToKitchen(
+      takeawayOrderId,
+      takeawayName!,
+      lines,
+      userId,
+    );
+    setTakeaway(round.orderId, takeawayName!);
+    return round;
+  }
+
   async function handleSend() {
     if (!hasTarget) return;
     setBusy(true);
     try {
-      if (mode === "table") {
-        await sendToKitchen(tableId!, lines, subtable);
-      } else {
-        const orderId = await sendTakeawayToKitchen(
-          takeawayOrderId,
-          takeawayName!,
-          lines,
-        );
-        setTakeaway(orderId, takeawayName!);
-      }
+      const round = await sendPendingLines();
       clearLines();
       await onOrderChanged();
       toast.success(`Order sent to kitchen for ${targetLabel}`);
+      await printRound(round);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not send order");
     } finally {
@@ -116,11 +151,10 @@ export function TicketPanel({
     try {
       // anything still pending goes on the bill before payment
       let orderId = openOrder?.order.id ?? null;
+      let round: SentRound | null = null;
       if (lines.length > 0) {
-        orderId =
-          mode === "table"
-            ? await sendToKitchen(tableId!, lines, subtable)
-            : await sendTakeawayToKitchen(takeawayOrderId, takeawayName!, lines);
+        round = await sendPendingLines();
+        orderId = round.orderId;
         clearLines();
       }
       if (!orderId) {
@@ -141,6 +175,10 @@ export function TicketPanel({
             ? `${closedLabel} paid — table flagged for cleaning`
             : `${closedLabel} paid — other splits still open`,
       );
+      // last-second items still reach the kitchen, then the bill prints
+      if (round) await printRound(round);
+      const [receipt] = await Promise.allSettled([printReceipt(orderId)]);
+      warnOnPrintFailure(receipt);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Checkout failed");
     } finally {
