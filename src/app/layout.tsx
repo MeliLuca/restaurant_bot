@@ -35,9 +35,11 @@ export default function RootLayout({
       <body className={`${geistSans.variable} font-sans antialiased`}>
         <AuthGate>
           <ChatListener />
-          <div className="flex h-dvh overflow-hidden">
+          <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
             <Sidebar />
-            <main className="flex-1 overflow-y-auto">{children}</main>
+            <main className="flex-1 overflow-y-auto print:overflow-visible">
+              {children}
+            </main>
           </div>
         </AuthGate>
         <Toaster richColors position="top-center" />

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   LayoutGrid,
   LogOut,
   MessageCircle,
@@ -25,6 +26,7 @@ const NAV_ITEMS: {
   { href: "/floor-plan", label: "Floor Plan", icon: LayoutGrid },
   { href: "/pos", label: "POS", icon: ReceiptText, permission: "take_orders" },
   { href: "/chat", label: "Chat", icon: MessageCircle },
+  { href: "/stats", label: "Stats", icon: BarChart3, permission: "view_stats" },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -40,7 +42,7 @@ export function Sidebar() {
   );
 
   return (
-    <aside className="flex h-full w-24 shrink-0 flex-col items-center border-r bg-card py-4 lg:w-56 lg:items-stretch lg:px-3">
+    <aside className="flex h-full w-24 shrink-0 flex-col items-center border-r bg-card py-4 print:hidden lg:w-56 lg:items-stretch lg:px-3">
       <div className="mb-6 flex items-center justify-center gap-2 px-2 lg:justify-start">
         <UtensilsCrossed className="h-8 w-8 text-primary" />
         <span className="hidden text-lg font-semibold lg:inline">Trattoria</span>

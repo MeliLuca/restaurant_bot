@@ -90,3 +90,14 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Print: white paper background, no toast popups (report layout lives in
+   src/components/stats/night-report.tsx via Tailwind print: variants). */
+@media print {
+  body {
+    background: white;
+  }
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+}

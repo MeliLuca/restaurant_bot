@@ -84,7 +84,7 @@ set search_path to public, extensions;
 insert into roles (id, name, permissions) values
   ('70000000-0000-0000-0000-000000000001', 'Admin',
    array['manage_tables','manage_reservations','take_orders','checkout_orders','manage_staff',
-         'manage_menu','manage_floor','manage_availability']),
+         'manage_menu','manage_floor','manage_availability','view_stats']),
   ('70000000-0000-0000-0000-000000000002', 'Host',
    array['manage_tables','manage_reservations']),
   ('70000000-0000-0000-0000-000000000003', 'Server',

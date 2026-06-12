@@ -41,6 +41,11 @@ export const PERMISSIONS = [
     label: "Manage availability",
     description: "Mark ingredients out of stock to disable items for the night",
   },
+  {
+    key: "view_stats",
+    label: "View stats",
+    description: "See the night's sales totals, items ordered, and past bills",
+  },
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number]["key"];
