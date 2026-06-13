@@ -32,7 +32,7 @@ export const DEFAULT_PRINTER_PORT = 9100;
 export interface TicketLine {
   quantity: number;
   name: string;
-  modifiers: string[]; // split from order_items.notes; rendered "* NO BASILICO *"
+  modifiers: string[]; // order_item_modifiers + free-text notes; rendered "* NO BASILICO *"
   unitPrice: number;
   lineTotal: number;
 }

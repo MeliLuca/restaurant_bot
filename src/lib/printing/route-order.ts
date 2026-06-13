@@ -3,6 +3,7 @@
 // target_printer_id points; the CASSA receipt always carries the whole order.
 
 import type { Order, Printer, RestaurantSettings } from "@/lib/database.types";
+import { formatEuro } from "./escpos";
 import type {
   CassaTicket,
   PrintPayload,
@@ -99,10 +100,13 @@ export function buildProductionPayloads(
     const ticket: ProductionTicket = {
       kind: printer.printer_type === "BAR" ? "BAR" : "CUCINA",
       meta,
+      // production slips show the variation, not its price — the kitchen only
+      // needs WHAT to make. modifierLabel signs paid additions/removals
+      // (+ Bufala / - Acciughe); the renderer uppercases + asterisks them.
       lines: group.map((i) => ({
         quantity: i.quantity,
         name: i.name,
-        modifiers: parseModifiers(i.notes),
+        modifiers: itemModifiers(i, modifierLabel),
       })),
     };
     return { printer, ticket };

@@ -25,6 +25,7 @@ type ItemRow = {
   notes: string | null;
   fraction_of: number | null;
   menu_items: { name: string; target_printer_id: string | null } | null;
+  order_item_modifiers: { name: string; price_adjustment: number }[];
 };
 
 /**
@@ -49,7 +50,7 @@ export async function loadOrderPrintContext(
   let itemQuery = sb
     .from("order_items")
     .select(
-      "quantity, unit_price, notes, fraction_of, menu_items(name, target_printer_id)",
+      "quantity, unit_price, notes, fraction_of, menu_items(name, target_printer_id), order_item_modifiers(name, price_adjustment)",
     )
     .eq("order_id", orderId)
     .order("created_at");
@@ -75,6 +76,8 @@ export async function loadOrderPrintContext(
       quantity: i.quantity,
       unit_price: i.unit_price,
       notes: i.notes,
+      // per-line variations snapshotted at order time (Bufala, No Basilico)
+      modifiers: i.order_item_modifiers ?? [],
       // fractional shares of a split item print as "Tiramisù (1/3)"
       name:
         (i.menu_items?.name ?? "Item") +

@@ -206,8 +206,52 @@ update restaurant_settings set
   legal_footer  = 'Documento commerciale di vendita o prestazione - non valido ai fini fiscali'
 where business_name = '';
 
--- The open T3 order gets a server and a modifier so slips have demo content
+-- The open T3 order gets a server and a free-text cooking note so slips have
+-- demo content; the structured "No Basilico" variation is added further below.
 update orders set opened_by = '80000000-0000-0000-0000-000000000003'
   where id = '50000000-0000-0000-0000-000000000001' and opened_by is null;
-update order_items set notes = 'NO BASILICO, ben cotta'
+update order_items set notes = 'ben cotta'
   where id = '60000000-0000-0000-0000-000000000002' and notes is null;
+
+-- =============================================================================
+-- ITEM MODIFIERS (pizzeria-style variations) ----------------------------------
+-- Groups (prefix d0) hold priced modifiers (prefix e0); menu items link to the
+-- groups they offer; one order line carries its picked variations (prefix f0).
+-- =============================================================================
+insert into modifier_groups (id, name, min_selections, max_selections, sort_order) values
+  ('d0000000-0000-0000-0000-000000000001', 'Impasto',  1, 1,  1),   -- dough: pick exactly one
+  ('d0000000-0000-0000-0000-000000000002', 'Aggiunte', 0, 10, 2),   -- paid additions
+  ('d0000000-0000-0000-0000-000000000003', 'Senza',    0, 10, 3)    -- free removals
+on conflict (id) do nothing;
+
+insert into modifiers (id, group_id, name, price_adjustment, sort_order) values
+  -- Impasto (dough type): classic is the no-cost default
+  ('e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'Classico',         0.00, 1),
+  ('e0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000001', 'Integrale',        1.50, 2),
+  ('e0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000001', 'Senza Glutine',    2.00, 3),
+  -- Aggiunte (paid additions)
+  ('e0000000-0000-0000-0000-000000000004', 'd0000000-0000-0000-0000-000000000002', 'Bufala',           2.00, 1),
+  ('e0000000-0000-0000-0000-000000000005', 'd0000000-0000-0000-0000-000000000002', 'Funghi',           1.50, 2),
+  ('e0000000-0000-0000-0000-000000000006', 'd0000000-0000-0000-0000-000000000002', 'Nduja',            2.50, 3),
+  ('e0000000-0000-0000-0000-000000000007', 'd0000000-0000-0000-0000-000000000002', 'Prosciutto Crudo', 3.00, 4),
+  -- Senza (free removals)
+  ('e0000000-0000-0000-0000-000000000008', 'd0000000-0000-0000-0000-000000000003', 'No Basilico',      0.00, 1),
+  ('e0000000-0000-0000-0000-000000000009', 'd0000000-0000-0000-0000-000000000003', 'No Mozzarella',    0.00, 2),
+  ('e0000000-0000-0000-0000-000000000010', 'd0000000-0000-0000-0000-000000000003', 'No Pomodoro',      0.00, 3)
+on conflict (id) do nothing;
+
+-- Margherita Pizza offers all three groups: the POS forces a dough choice
+-- (Impasto min:1) before the item can join the ticket.
+insert into menu_item_modifier_groups (menu_item_id, group_id) values
+  ('30000000-0000-0000-0000-000000000006', 'd0000000-0000-0000-0000-000000000001'),
+  ('30000000-0000-0000-0000-000000000006', 'd0000000-0000-0000-0000-000000000002'),
+  ('30000000-0000-0000-0000-000000000006', 'd0000000-0000-0000-0000-000000000003')
+on conflict do nothing;
+
+-- A structured zero-cost variation on the open T3 Margherita: demonstrates
+-- order_item_modifiers flowing onto kitchen slips next to the free-text note.
+-- Zero adjustment, so the order's hand-computed totals above still hold.
+insert into order_item_modifiers (id, order_item_id, modifier_id, name, price_adjustment) values
+  ('f0000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000002',
+   'e0000000-0000-0000-0000-000000000008', 'No Basilico', 0.00)
+on conflict (id) do nothing;
