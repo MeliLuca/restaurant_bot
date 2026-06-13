@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase/client";
+import type { ModifierGroupWithModifiers } from "@/lib/api";
 import type {
   Database,
   Ingredient,
@@ -154,17 +155,30 @@ export async function setIngredientAvailability(
 // Menu (categories + items + their ingredients)
 // ---------------------------------------------------------------------------
 
-export type MenuItemWithIngredients = MenuItem & { ingredients: Ingredient[] };
+export type MenuItemWithIngredients = MenuItem & {
+  ingredients: Ingredient[];
+  /** ids of the modifier groups (pizzeria variations) linked to this item */
+  modifierGroupIds: string[];
+};
 
 export async function fetchMenuItemsWithIngredients(): Promise<
   MenuItemWithIngredients[]
 > {
   const { data, error } = await getSupabase()
     .from("menu_items")
-    .select("*, ingredients(*)")
+    .select("*, ingredients(*), menu_item_modifier_groups(group_id)")
     .order("sort_order");
   if (error) throw new Error(error.message);
-  return data as unknown as MenuItemWithIngredients[];
+  const rows = data as unknown as Array<
+    MenuItem & {
+      ingredients: Ingredient[];
+      menu_item_modifier_groups: { group_id: string }[];
+    }
+  >;
+  return rows.map(({ menu_item_modifier_groups, ...item }) => ({
+    ...item,
+    modifierGroupIds: menu_item_modifier_groups.map((g) => g.group_id),
+  }));
 }
 
 export async function createCategory(
@@ -315,5 +329,117 @@ export async function setMenuItemIngredients(
         ingredient_id,
       })),
     );
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// Modifier groups & options (pizzeria-style variations)
+// ---------------------------------------------------------------------------
+
+/** Every modifier group with its options, each sorted by sort_order. */
+export async function fetchModifierGroups(): Promise<
+  ModifierGroupWithModifiers[]
+> {
+  const { data, error } = await getSupabase()
+    .from("modifier_groups")
+    .select("*, modifiers(*)")
+    .order("sort_order");
+  if (error) throw new Error(error.message);
+  const groups = data as unknown as ModifierGroupWithModifiers[];
+  return groups.map((g) => ({
+    ...g,
+    modifiers: [...g.modifiers].sort((a, b) => a.sort_order - b.sort_order),
+  }));
+}
+
+export async function createModifierGroup(group: {
+  name: string;
+  minSelections: number;
+  maxSelections: number;
+  sortOrder: number;
+}): Promise<string> {
+  const { data, error } = await getSupabase()
+    .from("modifier_groups")
+    .insert({
+      name: group.name.trim(),
+      min_selections: group.minSelections,
+      max_selections: group.maxSelections,
+      sort_order: group.sortOrder,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return data.id;
+}
+
+export async function updateModifierGroup(
+  groupId: string,
+  fields: { name?: string; min_selections?: number; max_selections?: number },
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from("modifier_groups")
+    .update(fields)
+    .eq("id", groupId);
+  if (error) throw new Error(error.message);
+}
+
+// Cascades to its options and any item links; order snapshots keep their copy.
+export async function deleteModifierGroup(groupId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("modifier_groups")
+    .delete()
+    .eq("id", groupId);
+  if (error) throw new Error(error.message);
+}
+
+export async function createModifier(modifier: {
+  groupId: string;
+  name: string;
+  priceAdjustment: number;
+  sortOrder: number;
+}): Promise<void> {
+  const { error } = await getSupabase().from("modifiers").insert({
+    group_id: modifier.groupId,
+    name: modifier.name.trim(),
+    price_adjustment: modifier.priceAdjustment,
+    sort_order: modifier.sortOrder,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateModifier(
+  modifierId: string,
+  fields: { name?: string; price_adjustment?: number },
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from("modifiers")
+    .update(fields)
+    .eq("id", modifierId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteModifier(modifierId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("modifiers")
+    .delete()
+    .eq("id", modifierId);
+  if (error) throw new Error(error.message);
+}
+
+/** Replace the set of modifier groups offered by an item (mirrors ingredients). */
+export async function setMenuItemModifierGroups(
+  itemId: string,
+  groupIds: string[],
+): Promise<void> {
+  const sb = getSupabase();
+  const { error: delError } = await sb
+    .from("menu_item_modifier_groups")
+    .delete()
+    .eq("menu_item_id", itemId);
+  if (delError) throw new Error(delError.message);
+  if (groupIds.length === 0) return;
+  const { error } = await sb
+    .from("menu_item_modifier_groups")
+    .insert(groupIds.map((group_id) => ({ menu_item_id: itemId, group_id })));
   if (error) throw new Error(error.message);
 }
