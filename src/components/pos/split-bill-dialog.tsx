@@ -39,8 +39,9 @@ interface SplitBillDialogProps {
   targetLabel: string;
   /** Refetch the open order after a payment / fraction split */
   onPaymentsChanged: () => Promise<void>;
-  /** The last payment settled the bill — order is closed */
-  onOrderClosed: (tableFlagged: boolean) => void;
+  /** The last payment settled the bill — order is closed. The flag is true when
+   * the whole table is now free (caller asks dirty vs. available). */
+  onOrderClosed: (tableClosed: boolean) => void;
 }
 
 function itemDisplayName(item: OpenOrder["items"][number]): string {
@@ -111,7 +112,7 @@ export function SplitBillDialog({
     await onPaymentsChanged();
     if (result.orderClosed) {
       onOpenChange(false);
-      onOrderClosed(result.tableFlagged);
+      onOrderClosed(result.tableClosed);
     } else {
       toast.success(
         `${formatMoney(result.paidAmount)} paid — ${formatMoney(result.remainingCents / 100)} to go`,

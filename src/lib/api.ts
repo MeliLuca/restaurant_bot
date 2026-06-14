@@ -449,6 +449,96 @@ export async function sendTakeawayToKitchen(
 }
 
 // ---------------------------------------------------------------------------
+// Delivery counter & saved labels
+// ---------------------------------------------------------------------------
+
+/** Start of the current "night" = the later of today's local midnight and the
+ * last manual reset. The delivery number counts orders opened since then. */
+async function deliveryNightStart(): Promise<Date> {
+  const { data, error } = await getSupabase()
+    .from("delivery_counter")
+    .select("last_reset_at")
+    .eq("singleton", true)
+    .single();
+  if (error) throw new Error(error.message);
+
+  const localMidnight = new Date();
+  localMidnight.setHours(0, 0, 0, 0);
+  const lastReset = new Date(data.last_reset_at);
+  // The most recent boundary wins, so a manual reset mid-night takes effect
+  // immediately while the calendar rollover handles the unattended case.
+  return lastReset > localMidnight ? lastReset : localMidnight;
+}
+
+/** Next sequential delivery number for tonight (1-based). */
+export async function nextDeliveryNumber(): Promise<number> {
+  const since = await deliveryNightStart();
+  const { data, error } = await getSupabase()
+    .from("orders")
+    .select("delivery_number")
+    .eq("order_type", "takeaway")
+    .gte("opened_at", since.toISOString())
+    .not("delivery_number", "is", null)
+    .order("delivery_number", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const highest = data[0]?.delivery_number ?? 0;
+  return highest + 1;
+}
+
+/** Force the counter back to 1 from now on (end-of-night close). */
+export async function resetDeliveryCounter(): Promise<void> {
+  const { error } = await getSupabase()
+    .from("delivery_counter")
+    .update({ last_reset_at: new Date().toISOString() })
+    .eq("singleton", true);
+  if (error) throw new Error(error.message);
+}
+
+/** Names previously used on delivery orders, offered as quick-picks. */
+export async function fetchDeliveryLabels(): Promise<string[]> {
+  const { data, error } = await getSupabase()
+    .from("delivery_labels")
+    .select("name")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return data.map((l) => l.name);
+}
+
+/**
+ * Open a new delivery (take-away) order eagerly so its nightly counter number
+ * is assigned and visible right away. The name is saved as a reusable label.
+ * Returns the order id and its delivery number; the POS then loads it.
+ */
+export async function createDeliveryOrder(
+  name: string,
+  openedBy: string | null,
+): Promise<{ orderId: string; deliveryNumber: number }> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("A name is required");
+  const sb = getSupabase();
+  const deliveryNumber = await nextDeliveryNumber();
+
+  const { data, error } = await sb
+    .from("orders")
+    .insert({
+      order_type: "takeaway",
+      customer_name: trimmed,
+      delivery_number: deliveryNumber,
+      tax_rate: TAX_RATE,
+      opened_by: openedBy,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  // Remember the name for next time (ignore the conflict if it already exists).
+  await sb.from("delivery_labels").upsert({ name: trimmed }, { onConflict: "name" });
+
+  return { orderId: data.id, deliveryNumber };
+}
+
+// ---------------------------------------------------------------------------
 // Printing (LAN thermal printers, dispatched server-side via /api/print/*)
 // ---------------------------------------------------------------------------
 
@@ -513,6 +603,12 @@ export function printTest(printerId: string): Promise<PrintJobResult[]> {
  * this was its last open split — other splits keep the table occupied.
  * Returns true if the table was flagged dirty.
  */
+/**
+ * Close one order as paid. Returns true when this was the table's last open
+ * order (the whole table is now free). The table status is intentionally left
+ * untouched: the caller asks the user whether to flag the table dirty or
+ * available and applies that choice via updateTableStatus.
+ */
 export async function checkoutOrder(
   orderId: string,
   tableId: string | null,
@@ -525,9 +621,7 @@ export async function checkoutOrder(
   if (!tableId) return false;
 
   const remaining = await fetchOpenOrdersForTable(tableId);
-  if (remaining.length > 0) return false;
-  await updateTableStatus(tableId, "dirty");
-  return true;
+  return remaining.length === 0;
 }
 
 /**
@@ -606,8 +700,9 @@ export interface PaymentResult {
   remainingCents: number;
   /** True when this payment settled the order (now closed as paid) */
   orderClosed: boolean;
-  /** True when closing also flagged the table for cleaning (last open split) */
-  tableFlagged: boolean;
+  /** True when this was the table's last open split — the table is now free
+   * and the UI should ask whether to flag it dirty or available */
+  tableClosed: boolean;
 }
 
 /**
@@ -649,12 +744,12 @@ async function recordPayment(
   const remainingCents = remainingBalanceCents(order, payments);
 
   let orderClosed = false;
-  let tableFlagged = false;
+  let tableClosed = false;
   if (remainingCents <= 0) {
     orderClosed = true;
-    tableFlagged = await checkoutOrder(order.id, order.table_id);
+    tableClosed = await checkoutOrder(order.id, order.table_id);
   }
-  return { paidAmount: amountCents / 100, remainingCents, orderClosed, tableFlagged };
+  return { paidAmount: amountCents / 100, remainingCents, orderClosed, tableClosed };
 }
 
 async function requireOpenOrder(orderId: string): Promise<OpenOrder> {

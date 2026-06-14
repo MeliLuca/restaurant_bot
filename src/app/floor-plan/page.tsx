@@ -1,28 +1,52 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
+  Bike,
   CalendarClock,
   CalendarPlus,
   ChevronDown,
+  RotateCcw,
+  Search,
   TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NewDeliveryDialog } from "@/components/floor-plan/new-delivery-dialog";
 import { ReservationDialog } from "@/components/floor-plan/reservation-dialog";
 import { ReservationsPanel } from "@/components/floor-plan/reservations-panel";
-import { STATUS_CONFIG } from "@/components/floor-plan/status";
+import { STATUS_CONFIG, type TableDisplayStatus } from "@/components/floor-plan/status";
 import { TableActionsDialog } from "@/components/floor-plan/table-actions-dialog";
 import { TableCard } from "@/components/floor-plan/table-card";
 import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
+import { resetDeliveryCounter } from "@/lib/api";
 import { useFloorData } from "@/hooks/use-floor-data";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
 import { cn } from "@/lib/utils";
 import { usePermission } from "@/stores/auth-store";
+import { useTicketStore } from "@/stores/ticket-store";
 
-const LEGEND: TableStatus[] = ["available", "occupied", "dirty"];
+const LEGEND: TableDisplayStatus[] = [
+  "available",
+  "occupied",
+  "ordered",
+  "dirty",
+];
+
+// Status quick-filters (by stored status; "occupied" covers ordered tables too).
+const STATUS_FILTERS: { value: TableStatus; label: string }[] = [
+  { value: "available", label: "Available" },
+  { value: "occupied", label: "Occupied" },
+  { value: "dirty", label: "Dirty" },
+];
 
 export default function FloorPlanPage() {
+  const router = useRouter();
+  const setTicketTable = useTicketStore((s) => s.setTable);
+  const setSubtable = useTicketStore((s) => s.setSubtable);
   const { tables, reservations, takeaways, openOrders, loading, error, refresh } =
     useFloorData();
 
@@ -37,9 +61,13 @@ export default function FloorPlanPage() {
     null,
   );
   const [reservationOpen, setReservationOpen] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [reservationsExpanded, setReservationsExpanded] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TableStatus | null>(null);
   const canReserve = usePermission("manage_reservations");
+  const canTakeOrders = usePermission("take_orders");
 
   const activeReservations = reservations.filter(
     (r) => r.status === "booked" || r.status === "seated",
@@ -51,15 +79,42 @@ export default function FloorPlanPage() {
     ).values(),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
-  // AND semantics: a table must offer every selected feature
-  const visibleTables = tables.filter((t) =>
-    selectedTagIds.every((id) => t.table_tags.some((tag) => tag.id === id)),
+  const query = search.trim().toLowerCase();
+  // A table must match the search, the status filter, AND every selected tag.
+  const visibleTables = tables.filter(
+    (t) =>
+      (query === "" || t.name.toLowerCase().includes(query)) &&
+      (statusFilter === null || t.status === statusFilter) &&
+      selectedTagIds.every((id) => t.table_tags.some((tag) => tag.id === id)),
   );
 
   function toggleTag(id: string) {
     setSelectedTagIds((ids) =>
       ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
     );
+  }
+
+  // Clicking a table with exactly one open order jumps straight to its bill in
+  // the POS. No order (or several splits) falls back to the actions/picker.
+  function handleTableClick(table: RestaurantTable) {
+    const splits = splitsByTable.get(table.id) ?? [];
+    if (splits.length === 1) {
+      setTicketTable(table.id, table.name);
+      setSubtable(splits[0]);
+      router.push("/pos");
+      return;
+    }
+    setSelectedTable(table);
+  }
+
+  async function handleResetCounter() {
+    try {
+      await resetDeliveryCounter();
+      await refresh();
+      toast.success("Delivery counter reset — next order is #1");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reset failed");
+    }
   }
 
   if (error) {
@@ -75,32 +130,19 @@ export default function FloorPlanPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-6">
-          <h1 className="text-2xl font-semibold">Floor Plan</h1>
-          <div className="hidden items-center gap-4 sm:flex">
-            {LEGEND.map((s) => (
-              <span
-                key={s}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground"
-              >
-                <span
-                  className={`h-3 w-3 rounded-full ${STATUS_CONFIG[s].dot}`}
-                />
-                {STATUS_CONFIG[s].label}
-              </span>
-            ))}
-          </div>
+      <div className="flex flex-wrap items-center gap-6">
+        <h1 className="text-2xl font-semibold">Floor Plan</h1>
+        <div className="hidden items-center gap-4 sm:flex">
+          {LEGEND.map((s) => (
+            <span
+              key={s}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground"
+            >
+              <span className={`h-3 w-3 rounded-full ${STATUS_CONFIG[s].dot}`} />
+              {STATUS_CONFIG[s].label}
+            </span>
+          ))}
         </div>
-        {canReserve && (
-          <Button
-            size="lg"
-            className="h-12"
-            onClick={() => setReservationOpen(true)}
-          >
-            <CalendarPlus className="mr-2 h-5 w-5" /> New reservation
-          </Button>
-        )}
       </div>
 
       <Tabs defaultValue="tables" className="flex min-h-0 flex-1 flex-col">
@@ -124,7 +166,40 @@ export default function FloorPlanPage() {
         >
           <div className="flex h-full min-h-0 flex-col gap-4 xl:flex-row">
             <div className="flex min-h-0 flex-1 flex-col gap-3">
+              {/* Search + status filters + reservation actions */}
               <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search tables…"
+                    className="h-11 w-44 pl-9"
+                    aria-label="Search tables by name"
+                  />
+                </div>
+                {STATUS_FILTERS.map((f) => {
+                  const active = statusFilter === f.value;
+                  return (
+                    <button
+                      key={f.value}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() =>
+                        setStatusFilter(active ? null : f.value)
+                      }
+                      className={cn(
+                        "flex h-11 items-center rounded-full border px-4 text-sm transition-colors",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  );
+                })}
+
                 <Button
                   variant="outline"
                   className="h-11"
@@ -141,26 +216,41 @@ export default function FloorPlanPage() {
                     )}
                   />
                 </Button>
-                {allTags.map((tag) => {
-                  const active = selectedTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => toggleTag(tag.id)}
-                      className={cn(
-                        "flex h-11 items-center rounded-full border px-4 text-sm transition-colors",
-                        active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent",
-                      )}
-                    >
-                      {tag.name}
-                    </button>
-                  );
-                })}
+                {canReserve && (
+                  <Button
+                    className="ml-auto h-11"
+                    onClick={() => setReservationOpen(true)}
+                  >
+                    <CalendarPlus className="mr-2 h-4 w-4" /> New reservation
+                  </Button>
+                )}
               </div>
+
+              {/* Feature tags (TV screen, accessible…) on their own row */}
+              {allTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {allTags.map((tag) => {
+                    const active = selectedTagIds.includes(tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleTag(tag.id)}
+                        className={cn(
+                          "flex h-9 items-center rounded-full border px-3 text-sm transition-colors",
+                          active
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-accent",
+                        )}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                 {loading ? (
                   <div className="flex flex-wrap content-start gap-4">
@@ -173,7 +263,7 @@ export default function FloorPlanPage() {
                   </div>
                 ) : visibleTables.length === 0 ? (
                   <p className="py-6 text-sm text-muted-foreground">
-                    No tables offer all the selected features.
+                    No tables match the current search and filters.
                   </p>
                 ) : (
                   <div className="flex flex-wrap content-start gap-4">
@@ -182,7 +272,7 @@ export default function FloorPlanPage() {
                         key={t.id}
                         table={t}
                         splits={splitsByTable.get(t.id) ?? []}
-                        onSelect={setSelectedTable}
+                        onSelect={handleTableClick}
                       />
                     ))}
                   </div>
@@ -206,7 +296,25 @@ export default function FloorPlanPage() {
           value="delivery"
           className="mt-4 min-h-0 flex-1 overflow-y-auto data-[state=inactive]:hidden"
         >
-          <div className="max-w-2xl">
+          <div className="flex max-w-2xl flex-col gap-4">
+            {canTakeOrders && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="lg"
+                  className="h-12"
+                  onClick={() => setDeliveryOpen(true)}
+                >
+                  <Bike className="mr-2 h-5 w-5" /> New delivery order
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-12"
+                  onClick={() => void handleResetCounter()}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" /> Reset counter
+                </Button>
+              </div>
+            )}
             <TakeawayPanel takeaways={takeaways} />
           </div>
         </TabsContent>
@@ -221,6 +329,11 @@ export default function FloorPlanPage() {
         open={reservationOpen}
         tables={tables}
         onClose={() => setReservationOpen(false)}
+        onCreated={refresh}
+      />
+      <NewDeliveryDialog
+        open={deliveryOpen}
+        onClose={() => setDeliveryOpen(false)}
         onCreated={refresh}
       />
     </div>

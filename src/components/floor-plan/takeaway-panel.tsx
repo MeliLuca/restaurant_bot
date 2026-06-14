@@ -50,7 +50,14 @@ export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
                 {TIME_FORMATTER.format(new Date(o.opened_at))}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{o.customer_name}</div>
+                <div className="flex items-center gap-2">
+                  {o.delivery_number !== null && (
+                    <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground tabular-nums">
+                      #{o.delivery_number}
+                    </span>
+                  )}
+                  <span className="truncate font-medium">{o.customer_name}</span>
+                </div>
                 <div className="text-xs text-muted-foreground">
                   {formatMoney(o.total)} · open
                 </div>

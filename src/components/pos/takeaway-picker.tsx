@@ -13,12 +13,15 @@ const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
 
 interface TakeawayPickerProps {
   openOrders: Order[];
+  /** Reusable customer-name labels offered as quick-picks */
+  savedLabels?: string[];
   onPickExisting: (order: Order) => void;
   onStartNew: (name: string) => void;
 }
 
 export function TakeawayPicker({
   openOrders,
+  savedLabels = [],
   onPickExisting,
   onStartNew,
 }: TakeawayPickerProps) {
@@ -33,8 +36,23 @@ export function TakeawayPicker({
     );
   }, [openOrders, query]);
 
+  // Saved labels matching the query (or all when empty), capped for the list.
+  const labelMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = q
+      ? savedLabels.filter((l) => l.toLowerCase().includes(q))
+      : savedLabels;
+    return list.slice(0, 8);
+  }, [savedLabels, query]);
+
   function pick(order: Order) {
     onPickExisting(order);
+    setQuery("");
+    setOpen(false);
+  }
+
+  function pickLabel(name: string) {
+    onStartNew(name);
     setQuery("");
     setOpen(false);
   }
@@ -103,6 +121,23 @@ export function TakeawayPicker({
               ))}
             </ul>
           )}
+          {labelMatches.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-t p-3">
+              {labelMatches.map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pickLabel(l);
+                  }}
+                  className="flex h-9 items-center rounded-full border px-3 text-sm text-muted-foreground transition-colors hover:bg-accent"
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
           {query.trim() ? (
             <button
               type="button"
@@ -116,7 +151,8 @@ export function TakeawayPicker({
               {query.trim()}&rdquo;
             </button>
           ) : (
-            matches.length === 0 && (
+            matches.length === 0 &&
+            labelMatches.length === 0 && (
               <p className="px-4 py-3 text-sm text-muted-foreground">
                 No open take-away orders — type a name to start one.
               </p>

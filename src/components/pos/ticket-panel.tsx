@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Check,
@@ -23,10 +23,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   checkoutOrder,
+  createDeliveryOrder,
+  fetchDeliveryLabels,
   printPreReceipt,
   printProductionSlips,
   printReceipt,
@@ -34,6 +43,7 @@ import {
   sendToKitchen,
   setSentItemPrice,
   setSentItemQuantity,
+  updateTableStatus,
   type ModifierGroupWithModifiers,
   type OpenOrder,
   type PrintJobResult,
@@ -41,7 +51,7 @@ import {
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import { calcTotals, toCents } from "@/lib/money";
-import type { Order, RestaurantTable } from "@/lib/database.types";
+import type { Order, RestaurantTable, TableStatus } from "@/lib/database.types";
 import {
   lineUnitPrice,
   useTicketStore,
@@ -131,6 +141,22 @@ export function TicketPanel({
   const [priceEdit, setPriceEdit] = useState<PriceEditTarget | null>(null);
   const [editLine, setEditLine] = useState<TicketLine | null>(null);
   const [splitOpen, setSplitOpen] = useState(false);
+  // Reusable customer-name labels, shown as quick-picks when starting a
+  // take-away (same saved-labels list as the floor-plan New Delivery flow).
+  const [savedLabels, setSavedLabels] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchDeliveryLabels()
+      .then(setSavedLabels)
+      .catch(() => {
+        // labels are a convenience; the picker still works without them
+      });
+  }, []);
+  // Set when a checkout frees a whole table, prompting dirty-vs-available.
+  const [cleanup, setCleanup] = useState<{
+    tableId: string;
+    tableName: string;
+  } | null>(null);
 
   const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
   const targetLabel =
@@ -230,20 +256,25 @@ export function TicketPanel({
         toast.error("Nothing to check out");
         return;
       }
-      const tableFlagged = await checkoutOrder(
+      const tableClosed = await checkoutOrder(
         orderId,
         mode === "table" ? tableId : null,
       );
       const closedLabel = targetLabel;
+      const closedTableId = tableId;
+      const closedTableName = tableName ?? "";
       clearTicket();
       await onOrderChanged();
-      toast.success(
-        mode === "takeaway"
-          ? `Take-away for ${closedLabel} paid`
-          : tableFlagged
-            ? `${closedLabel} paid — table flagged for cleaning`
+      if (mode === "table" && tableClosed && closedTableId) {
+        // Whole table is free — let the user decide dirty vs. available.
+        setCleanup({ tableId: closedTableId, tableName: closedTableName });
+      } else {
+        toast.success(
+          mode === "takeaway"
+            ? `Take-away for ${closedLabel} paid`
             : `${closedLabel} paid — other splits still open`,
-      );
+        );
+      }
       // last-second items still reach the kitchen, then the bill prints
       if (round) await printRound(round);
       const [receipt] = await Promise.allSettled([printReceipt(orderId)]);
@@ -305,17 +336,64 @@ export function TicketPanel({
     }
   }
 
-  async function handleSplitOrderClosed(tableFlagged: boolean) {
+  // Start a new take-away from the POS using the same logic as the floor-plan
+  // New Delivery: create the order eagerly so it gets tonight's counter number,
+  // save the name as a reusable label, then load it as the active ticket.
+  async function startNewTakeaway(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || busy) return;
+    setBusy(true);
+    try {
+      const { orderId, deliveryNumber } = await createDeliveryOrder(
+        trimmed,
+        userId,
+      );
+      setTakeaway(orderId, trimmed);
+      await onOrderChanged();
+      setSavedLabels(await fetchDeliveryLabels());
+      toast.success(`Take-away #${deliveryNumber} started for ${trimmed}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not start take-away");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSplitOrderClosed(tableClosed: boolean) {
     const closedLabel = targetLabel;
+    const closedTableId = tableId;
+    const closedTableName = tableName ?? "";
     clearTicket();
     await onOrderChanged();
-    toast.success(
-      mode === "takeaway"
-        ? `Take-away for ${closedLabel} fully paid`
-        : tableFlagged
-          ? `${closedLabel} fully paid — table flagged for cleaning`
+    if (mode === "table" && tableClosed && closedTableId) {
+      setCleanup({ tableId: closedTableId, tableName: closedTableName });
+    } else {
+      toast.success(
+        mode === "takeaway"
+          ? `Take-away for ${closedLabel} fully paid`
           : `${closedLabel} fully paid — other splits still open`,
-    );
+      );
+    }
+  }
+
+  // Apply the dirty/available choice from the post-checkout cleanup prompt.
+  async function applyCleanup(status: TableStatus) {
+    if (!cleanup) return;
+    setBusy(true);
+    try {
+      await updateTableStatus(cleanup.tableId, status);
+      await onOrderChanged();
+      toast.success(
+        status === "dirty"
+          ? `Table ${cleanup.tableName} flagged for cleaning`
+          : `Table ${cleanup.tableName} is free`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setBusy(false);
+      setCleanup(null);
+    }
   }
 
   return (
@@ -364,6 +442,11 @@ export function TicketPanel({
         ) : takeawayName ? (
           <div className="flex h-12 items-center gap-2 rounded-md border px-3">
             <ShoppingBag className="h-5 w-5 shrink-0 text-muted-foreground" />
+            {openOrder?.order.delivery_number != null && (
+              <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground tabular-nums">
+                #{openOrder.order.delivery_number}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <span className="block truncate font-medium">{takeawayName}</span>
               <span className="block text-xs text-muted-foreground">
@@ -383,8 +466,9 @@ export function TicketPanel({
         ) : (
           <TakeawayPicker
             openOrders={openTakeaways}
+            savedLabels={savedLabels}
             onPickExisting={(o) => setTakeaway(o.id, o.customer_name ?? "")}
-            onStartNew={(name) => setTakeaway(null, name)}
+            onStartNew={(name) => void startNewTakeaway(name)}
           />
         )}
       </div>
@@ -713,6 +797,37 @@ export function TicketPanel({
           onOrderClosed={handleSplitOrderClosed}
         />
       )}
+
+      {/* Post-checkout: how should the freed table be left? */}
+      <Dialog open={!!cleanup} onOpenChange={(o) => !o && setCleanup(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Table {cleanup?.tableName} paid</DialogTitle>
+            <DialogDescription>
+              How do you want to leave this table?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <Button
+              size="lg"
+              variant="secondary"
+              className="h-14 text-base"
+              disabled={busy}
+              onClick={() => applyCleanup("dirty")}
+            >
+              <Trash2 className="mr-2 h-5 w-5" /> Mark dirty
+            </Button>
+            <Button
+              size="lg"
+              className="h-14 text-base"
+              disabled={busy}
+              onClick={() => applyCleanup("available")}
+            >
+              <Check className="mr-2 h-5 w-5" /> Mark available
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

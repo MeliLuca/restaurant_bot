@@ -151,6 +151,8 @@ export interface Database {
           tax: number;
           total: number;
           ticket_number: number;
+          /** Per-night take-away sequence (null for dine-in) */
+          delivery_number: number | null;
           opened_by: string | null;
           opened_at: string;
           closed_at: string | null;
@@ -167,6 +169,7 @@ export interface Database {
           tax?: number;
           total?: number;
           ticket_number?: number;
+          delivery_number?: number | null;
           opened_by?: string | null;
           opened_at?: string;
           closed_at?: string | null;
@@ -183,6 +186,7 @@ export interface Database {
           tax?: number;
           total?: number;
           ticket_number?: number;
+          delivery_number?: number | null;
           opened_by?: string | null;
           opened_at?: string;
           closed_at?: string | null;
@@ -201,6 +205,18 @@ export interface Database {
             referencedColumns: ["id"];
           },
         ];
+      };
+      delivery_counter: {
+        Row: { singleton: boolean; last_reset_at: string };
+        Insert: { singleton?: boolean; last_reset_at?: string };
+        Update: { singleton?: boolean; last_reset_at?: string };
+        Relationships: [];
+      };
+      delivery_labels: {
+        Row: { id: string; name: string; created_at: string };
+        Insert: { id?: string; name: string; created_at?: string };
+        Update: { id?: string; name?: string; created_at?: string };
+        Relationships: [];
       };
       order_items: {
         Row: {

@@ -456,3 +456,22 @@ create table order_item_modifiers (
 );
 create index idx_order_item_modifiers_order_item_id
   on order_item_modifiers(order_item_id);
+
+-- Floor-plan & delivery rework (2026-06-15) --------------------------------
+
+-- Per-night delivery counter: take-away orders restart numbering from 1 each
+-- night, derived app-side from orders opened since this reset marker.
+create table delivery_counter (
+  singleton    boolean primary key default true check (singleton),
+  last_reset_at timestamptz not null default '-infinity'
+);
+insert into delivery_counter (singleton) values (true);
+
+alter table orders add column delivery_number integer;
+
+-- Reusable customer-name labels, auto-saved from each delivery order.
+create table delivery_labels (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null unique,
+  created_at timestamptz not null default now()
+);

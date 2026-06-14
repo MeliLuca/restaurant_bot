@@ -3,7 +3,7 @@
 import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable } from "@/lib/database.types";
-import { STATUS_CONFIG } from "./status";
+import { STATUS_CONFIG, displayStatus } from "./status";
 
 interface TableCardProps {
   table: RestaurantTable;
@@ -16,7 +16,8 @@ interface TableCardProps {
 const MAX_SPLIT_CHIPS = 2;
 
 export function TableCard({ table, splits, onSelect }: TableCardProps) {
-  const status = STATUS_CONFIG[table.status];
+  // An occupied table with an open order reads as "ordered" (red).
+  const status = STATUS_CONFIG[displayStatus(table.status, splits.length > 0)];
   const visibleSplits = splits.slice(0, MAX_SPLIT_CHIPS);
   const hiddenCount = splits.length - visibleSplits.length;
 
