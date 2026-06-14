@@ -36,26 +36,38 @@ export function toCents(amount: number): number {
 /**
  * Extra charge for the ingredients ADDED to a dish, on a diminishing
  * logarithmic scale. Add-ons range ≈€1–€3 and customers heavily modify
- * standard pizzas, so the linear sum is tapered as the order grows:
+ * standard pizzas, so each successive ingredient is charged less than the
+ * last. The ingredients are ranked most-expensive-first and the i-th one
+ * (1-based) is charged at weight:
  *
- *     P_total = S · log2(n + 1) / n
+ *     w(i) = log2(1 + 1/i)            // w(1)=1, w(2)≈0.585, w(3)≈0.415, …
  *
- * where S is the linear sum of the added ingredients and n is how many were
- * added. n=1 charges the full price, n=2 ≈0.79×, n=3 ≈0.67×, … — the per-item
- * cost keeps falling. Only true additions (positive adjustment) feed S and n;
- * removing a standard ingredient is never a deduction, so non-positive
- * modifiers contribute exactly 0 (the POS "−" action). Order-independent: it
- * reads only the current set of modifiers. Euros, rounded to the cent.
+ * so P_total = Σ price(i) · w(i). The weights telescope — Σ_{i=1..n} w(i) =
+ * log2(n+1) — so when every add-on costs the same this is exactly the old
+ * aggregate form S·log2(n+1)/n (n=1 full price, n=2 ≈0.79×, n=3 ≈0.67×, …).
+ * Charging per rank rather than tapering the whole sum keeps it MONOTONE:
+ * because every weight is ≥ 0 and ranks only shift down (to weaker weights)
+ * when a pricier item is inserted, adding an ingredient can never lower the
+ * surcharge — the old closed form could (a cheap add-on shrank the factor
+ * faster than it grew the sum, dropping the charge). Only true additions
+ * (positive adjustment) are charged; removing a standard ingredient is never a
+ * deduction, so non-positive modifiers contribute exactly 0 (the POS "−"
+ * action). Order-independent: it reads only the current set of modifiers.
+ * Euros, rounded to the cent.
  */
 export function addedIngredientsSurcharge(
   modifiers: Array<{ priceAdjustment: number }>,
 ): number {
-  const added = modifiers.filter((m) => m.priceAdjustment > 0);
-  const n = added.length;
-  if (n === 0) return 0;
-  const sumCents = added.reduce((sum, m) => sum + toCents(m.priceAdjustment), 0);
-  const factor = Math.log2(n + 1) / n;
-  return Math.round(sumCents * factor) / 100;
+  const ranked = modifiers
+    .filter((m) => m.priceAdjustment > 0)
+    .map((m) => toCents(m.priceAdjustment))
+    .sort((a, b) => b - a);
+  if (ranked.length === 0) return 0;
+  const totalCents = ranked.reduce(
+    (sum, cents, i) => sum + cents * Math.log2(1 + 1 / (i + 1)),
+    0,
+  );
+  return Math.round(totalCents) / 100;
 }
 
 /**
