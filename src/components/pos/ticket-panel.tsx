@@ -34,6 +34,7 @@ import {
   sendToKitchen,
   setSentItemPrice,
   setSentItemQuantity,
+  type ModifierGroupWithModifiers,
   type OpenOrder,
   type PrintJobResult,
   type SentRound,
@@ -44,16 +45,19 @@ import type { Order, RestaurantTable } from "@/lib/database.types";
 import {
   lineUnitPrice,
   useTicketStore,
+  type TicketLine,
   type TicketMode,
 } from "@/stores/ticket-store";
 import { useAuthStore, usePermission } from "@/stores/auth-store";
+import { ModifierDialog } from "./modifier-dialog";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
 import { SplitBillDialog } from "./split-bill-dialog";
 import { SplitPicker } from "./split-picker";
 import { TakeawayPicker } from "./takeaway-picker";
 
-/** Selected modifiers, indented right under their parent line with their
- * individual price adjustments (already included in the line price). */
+/** Selected modifiers, indented right under their parent line. Additions show
+ * their list price as detail (the line price carries the diminishing-scaled
+ * surcharge); removals never deduct, so they show no amount. */
 function ModifierRows({
   modifiers,
   muted,
@@ -73,10 +77,9 @@ function ModifierRows({
       {modifiers.map((m) => (
         <li key={m.key} className="flex justify-between gap-2">
           <span className="min-w-0 truncate">› {m.name}</span>
-          {m.priceAdjustment !== 0 && (
+          {m.priceAdjustment > 0 && (
             <span className="shrink-0 tabular-nums">
-              {m.priceAdjustment > 0 ? "+" : "−"}
-              {formatMoney(Math.abs(m.priceAdjustment))}
+              +{formatMoney(m.priceAdjustment)}
             </span>
           )}
         </li>
@@ -90,6 +93,8 @@ interface TicketPanelProps {
   openOrder: OpenOrder | null;
   openSplits: Order[];
   openTakeaways: Order[];
+  /** Modifier groups offered per menu item id — drives the ingredient editor */
+  modifierGroups: Record<string, ModifierGroupWithModifiers[]>;
   onOrderChanged: () => Promise<void>;
 }
 
@@ -98,6 +103,7 @@ export function TicketPanel({
   openOrder,
   openSplits,
   openTakeaways,
+  modifierGroups,
   onOrderChanged,
 }: TicketPanelProps) {
   const {
@@ -115,6 +121,7 @@ export function TicketPanel({
     removeItem,
     setQuantity,
     setLinePrice,
+    setLineModifiers,
     clearLines,
     clearTicket,
   } = useTicketStore();
@@ -122,6 +129,7 @@ export function TicketPanel({
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [priceEdit, setPriceEdit] = useState<PriceEditTarget | null>(null);
+  const [editLine, setEditLine] = useState<TicketLine | null>(null);
   const [splitOpen, setSplitOpen] = useState(false);
 
   const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
@@ -581,6 +589,16 @@ export function TicketPanel({
                   priceAdjustment: m.priceAdjustment,
                 }))}
               />
+              {(modifierGroups[l.menuItemId] ?? []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setEditLine(l)}
+                  className="ml-5 mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <Plus className="h-3 w-3" />
+                  {l.modifiers.length ? "Edit ingredients" : "Add ingredients"}
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -673,6 +691,17 @@ export function TicketPanel({
         target={priceEdit}
         onClose={() => setPriceEdit(null)}
         onSubmit={applyPriceEdit}
+      />
+      <ModifierDialog
+        open={editLine !== null}
+        itemName={editLine?.name ?? ""}
+        basePrice={editLine?.unitPrice ?? 0}
+        groups={editLine ? (modifierGroups[editLine.menuItemId] ?? []) : []}
+        initialModifiers={editLine?.modifiers ?? []}
+        onClose={() => setEditLine(null)}
+        onConfirm={(modifiers) => {
+          if (editLine) setLineModifiers(editLine.lineId, modifiers);
+        }}
       />
       {openOrder && (
         <SplitBillDialog

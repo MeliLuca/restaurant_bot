@@ -45,11 +45,12 @@ function modifierLabel(m: RoutableModifier): string {
   return m.name;
 }
 
-// CASSA shows each adjustment amount; the line's unit price column already
-// includes them, so the amounts are detail, not extra charges.
+// CASSA shows each addition's list price as detail; the line's unit price
+// already carries the (diminishing-scaled) surcharge, so these are detail, not
+// extra charges. Removals never deduct, so they print without an amount.
 function cassaModifierLabel(m: RoutableModifier): string {
-  if (m.price_adjustment === 0) return modifierLabel(m);
-  return `${modifierLabel(m)} (${m.price_adjustment > 0 ? "+" : "-"}${formatEuro(Math.abs(m.price_adjustment))})`;
+  if (m.price_adjustment <= 0) return modifierLabel(m);
+  return `${modifierLabel(m)} (+${formatEuro(m.price_adjustment)})`;
 }
 
 /** Structured modifiers first, then free-text notes — one print row each */

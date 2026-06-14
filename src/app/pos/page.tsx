@@ -6,7 +6,6 @@ import { TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ItemSearch } from "@/components/pos/item-search";
 import { MenuPanel } from "@/components/pos/menu-panel";
-import { ModifierDialog } from "@/components/pos/modifier-dialog";
 import { TicketPanel } from "@/components/pos/ticket-panel";
 import {
   fetchCategories,
@@ -43,7 +42,6 @@ export default function PosPage() {
   const [modifierGroups, setModifierGroups] = useState<
     Record<string, ModifierGroupWithModifiers[]>
   >({});
-  const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [openOrder, setOpenOrder] = useState<OpenOrder | null>(null);
   const [openSplits, setOpenSplits] = useState<Order[]>([]);
@@ -106,12 +104,8 @@ export default function PosPage() {
       );
       return false;
     }
-    // Items with linked modifier groups never join the ticket directly: the
-    // dialog collects a valid selection first.
-    if ((modifierGroups[item.id] ?? []).length > 0) {
-      setModifierItem(item);
-      return true;
-    }
+    // The dish goes straight onto the ticket at its base price. Ingredients are
+    // added later, on demand, from the line itself (no forced selection).
     addItem(item);
     return true;
   }
@@ -176,16 +170,10 @@ export default function PosPage() {
           openOrder={openOrder}
           openSplits={openSplits}
           openTakeaways={openTakeaways}
+          modifierGroups={modifierGroups}
           onOrderChanged={refreshOrder}
         />
       </div>
-
-      <ModifierDialog
-        item={modifierItem}
-        groups={modifierItem ? (modifierGroups[modifierItem.id] ?? []) : []}
-        onClose={() => setModifierItem(null)}
-        onConfirm={(item, modifiers) => addItem(item, modifiers)}
-      />
     </div>
   );
 }

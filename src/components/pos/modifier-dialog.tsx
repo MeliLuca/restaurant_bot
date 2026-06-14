@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Minus, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -11,23 +13,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatMoney } from "@/lib/constants";
-import { unitPriceWithModifiers } from "@/lib/money";
+import {
+  addedIngredientsLinearSum,
+  addedIngredientsSurcharge,
+} from "@/lib/money";
 import type { ModifierGroupWithModifiers } from "@/lib/api";
-import type { MenuItem, Modifier } from "@/lib/database.types";
+import type { Modifier } from "@/lib/database.types";
 import type { SelectedModifier } from "@/stores/ticket-store";
 import { cn } from "@/lib/utils";
 
 interface ModifierDialogProps {
-  /** Item being configured; null = dialog closed */
-  item: MenuItem | null;
+  /** Whether the editor is open */
+  open: boolean;
+  /** Name of the ticket line being customized (dialog title) */
+  itemName: string;
+  /** Base price of the line, for the live total preview */
+  basePrice: number;
   groups: ModifierGroupWithModifiers[];
+  /** The line's current ingredients — the picker opens pre-filled with these */
+  initialModifiers?: SelectedModifier[];
   onClose: () => void;
-  onConfirm: (item: MenuItem, modifiers: SelectedModifier[]) => void;
-}
-
-function adjustmentLabel(amount: number): string {
-  if (amount === 0) return "";
-  return `${amount > 0 ? "+" : "−"}${formatMoney(Math.abs(amount))}`;
+  onConfirm: (modifiers: SelectedModifier[]) => void;
 }
 
 function selectionRule(group: ModifierGroupWithModifiers): string {
@@ -37,23 +43,51 @@ function selectionRule(group: ModifierGroupWithModifiers): string {
   return `choose ${min}–${max}`;
 }
 
+/** Map the line's existing modifiers back to picked ids, per group. */
+function seedPicked(
+  groups: ModifierGroupWithModifiers[],
+  initial: SelectedModifier[],
+): Record<string, string[]> {
+  const chosen = new Set(initial.map((m) => m.modifierId));
+  const picked: Record<string, string[]> = {};
+  for (const g of groups) {
+    const ids = g.modifiers.filter((m) => chosen.has(m.id)).map((m) => m.id);
+    if (ids.length) picked[g.id] = ids;
+  }
+  return picked;
+}
+
 /**
- * Pizzeria-style variations picker. Items linked to modifier groups never go
- * straight to the ticket: this dialog enforces each group's min/max before
- * "Add to Order" unlocks, and previews the price including adjustments.
+ * Ingredient editor for a line that's already on the ticket. Adding a dish
+ * drops it straight onto the table at its base price; this dialog is opened
+ * on demand to add (+) or remove (−) ingredients afterwards — nothing is
+ * forced. Added ingredients are charged on the diminishing scale (removals
+ * never deduct), previewed live.
  */
 export function ModifierDialog({
-  item,
+  open,
+  itemName,
+  basePrice,
   groups,
+  initialModifiers = [],
   onClose,
   onConfirm,
 }: ModifierDialogProps) {
   // modifier ids picked per group id
   const [picked, setPicked] = useState<Record<string, string[]>>({});
+  // free-text filter over ingredient names
+  const [query, setQuery] = useState("");
 
+  // Seed from the line's current ingredients on each open, not on every render
+  // (so editing doesn't reset selections when the parent re-renders).
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (item) setPicked({});
-  }, [item]);
+    if (open && !wasOpen.current) {
+      setPicked(seedPicked(groups, initialModifiers));
+      setQuery("");
+    }
+    wasOpen.current = open;
+  }, [open, groups, initialModifiers]);
 
   function toggle(group: ModifierGroupWithModifiers, modifier: Modifier) {
     setPicked((prev) => {
@@ -87,47 +121,77 @@ export function ModifierDialog({
     [groups, picked],
   );
 
-  const unsatisfied = groups.filter(
-    (g) => (picked[g.id] ?? []).length < g.min_selections,
+  // Search only filters what's shown — picks and the running total below always
+  // read the full `selected` set, so a filtered-out ingredient stays selected.
+  const q = query.trim().toLowerCase();
+  const visibleGroups = useMemo(
+    () =>
+      q
+        ? groups
+            .map((g) => ({
+              ...g,
+              modifiers: g.modifiers.filter((m) =>
+                m.name.toLowerCase().includes(q),
+              ),
+            }))
+            .filter((g) => g.modifiers.length > 0)
+        : groups,
+    [groups, q],
   );
-  const valid = item !== null && unsatisfied.length === 0;
-  const total = item ? unitPriceWithModifiers(item.price, selected) : 0;
+
+  // Live diminishing-scale preview: the linear sum of the added ingredients
+  // (S) tapers to `surcharge` (P_total); removals never deduct.
+  const addedCount = selected.filter((m) => m.priceAdjustment > 0).length;
+  const linearExtras = addedIngredientsLinearSum(selected);
+  const surcharge = addedIngredientsSurcharge(selected);
+  const tapered = surcharge < linearExtras; // n ≥ 2 → the scale has kicked in
+  const total = basePrice + surcharge;
 
   function confirm() {
-    if (!item || !valid) return;
-    onConfirm(item, selected);
+    onConfirm(selected);
     onClose();
   }
 
   return (
-    <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        className="max-w-lg"
+        // don't grab focus into the search box on open — keeps the on-screen
+        // keyboard from popping when staff just want to tap ingredient pills
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
-          <DialogTitle>{item?.name}</DialogTitle>
+          <DialogTitle>{itemName}</DialogTitle>
           <DialogDescription>
-            Pick the variations for this item.
+            Add or remove ingredients for this item.
           </DialogDescription>
         </DialogHeader>
 
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search ingredients…"
+            className="h-11 pl-9"
+            aria-label="Search ingredients"
+          />
+        </div>
+
         <div className="flex max-h-[55vh] flex-col gap-5 overflow-y-auto pr-1">
-          {groups.map((g) => {
+          {visibleGroups.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No ingredients match &ldquo;{query.trim()}&rdquo;.
+            </p>
+          )}
+          {visibleGroups.map((g) => {
             const count = (picked[g.id] ?? []).length;
-            const missing = count < g.min_selections;
             return (
               <div key={g.id} className="flex flex-col gap-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="font-semibold">{g.name}</span>
-                  <span
-                    className={cn(
-                      "text-xs",
-                      missing
-                        ? "font-medium text-amber-600"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {missing
-                      ? `Choose at least ${g.min_selections}`
-                      : selectionRule(g)}
+                  <span className="text-xs text-muted-foreground">
+                    {selectionRule(g)}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -142,6 +206,9 @@ export function ModifierDialog({
                       !active &&
                       g.max_selections > 1 &&
                       count >= g.max_selections;
+                    // Positive adjustment = an addition (+, charged on the
+                    // diminishing scale); anything else = a removal (−, free).
+                    const isAdd = m.price_adjustment > 0;
                     return (
                       <button
                         key={m.id}
@@ -150,23 +217,28 @@ export function ModifierDialog({
                         aria-pressed={active}
                         onClick={() => toggle(g, m)}
                         className={cn(
-                          "min-h-11 rounded-full border px-4 py-1.5 text-sm transition-colors disabled:opacity-40",
+                          "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition-colors disabled:opacity-40",
                           active
                             ? "border-primary bg-primary text-primary-foreground"
                             : "text-muted-foreground hover:bg-accent",
                         )}
                       >
-                        {m.name}
-                        {m.price_adjustment !== 0 && (
+                        {isAdd ? (
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                        ) : (
+                          <Minus className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <span>{m.name}</span>
+                        {isAdd && (
                           <span
                             className={cn(
-                              "ml-1.5 text-xs tabular-nums",
+                              "text-xs tabular-nums",
                               active
                                 ? "text-primary-foreground/80"
-                                : "text-muted-foreground",
+                                : "text-muted-foreground/80",
                             )}
                           >
-                            {adjustmentLabel(m.price_adjustment)}
+                            +{formatMoney(m.price_adjustment)}
                           </span>
                         )}
                       </button>
@@ -178,11 +250,38 @@ export function ModifierDialog({
           })}
         </div>
 
-        <DialogFooter className="items-center gap-2 sm:justify-between">
-          <span className="text-lg font-semibold tabular-nums">
-            {formatMoney(total)}
-          </span>
-          <div className="flex gap-2">
+        <DialogFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex min-w-[13rem] flex-col gap-0.5 text-sm">
+            <div className="flex items-center justify-between gap-6 text-muted-foreground">
+              <span>Base</span>
+              <span className="tabular-nums">{formatMoney(basePrice)}</span>
+            </div>
+            {addedCount > 0 && (
+              <div className="flex items-center justify-between gap-6 text-muted-foreground">
+                <span>
+                  Added ({addedCount})
+                  {tapered && (
+                    <span className="ml-1 text-xs text-muted-foreground/70">
+                      diminishing
+                    </span>
+                  )}
+                </span>
+                <span className="tabular-nums">
+                  {tapered && (
+                    <span className="mr-1.5 text-xs text-muted-foreground/60 line-through">
+                      {formatMoney(linearExtras)}
+                    </span>
+                  )}
+                  +{formatMoney(surcharge)}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-6 text-base font-semibold text-foreground">
+              <span>Total</span>
+              <span className="tabular-nums">{formatMoney(total)}</span>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
             <Button
               type="button"
               variant="ghost"
@@ -191,13 +290,8 @@ export function ModifierDialog({
             >
               Cancel
             </Button>
-            <Button
-              type="button"
-              className="h-12 px-6"
-              disabled={!valid}
-              onClick={confirm}
-            >
-              Add to Order
+            <Button type="button" className="h-12 px-6" onClick={confirm}>
+              Save
             </Button>
           </div>
         </DialogFooter>

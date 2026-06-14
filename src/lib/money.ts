@@ -34,16 +34,56 @@ export function toCents(amount: number): number {
 }
 
 /**
- * Price actually charged per unit: base price plus every modifier adjustment,
- * summed in integer cents. This is what order_items.unit_price snapshots, so
- * downstream money flows (totals, splits, stats) never re-derive modifiers.
+ * Extra charge for the ingredients ADDED to a dish, on a diminishing
+ * logarithmic scale. Add-ons range ≈€1–€3 and customers heavily modify
+ * standard pizzas, so the linear sum is tapered as the order grows:
+ *
+ *     P_total = S · log2(n + 1) / n
+ *
+ * where S is the linear sum of the added ingredients and n is how many were
+ * added. n=1 charges the full price, n=2 ≈0.79×, n=3 ≈0.67×, … — the per-item
+ * cost keeps falling. Only true additions (positive adjustment) feed S and n;
+ * removing a standard ingredient is never a deduction, so non-positive
+ * modifiers contribute exactly 0 (the POS "−" action). Order-independent: it
+ * reads only the current set of modifiers. Euros, rounded to the cent.
+ */
+export function addedIngredientsSurcharge(
+  modifiers: Array<{ priceAdjustment: number }>,
+): number {
+  const added = modifiers.filter((m) => m.priceAdjustment > 0);
+  const n = added.length;
+  if (n === 0) return 0;
+  const sumCents = added.reduce((sum, m) => sum + toCents(m.priceAdjustment), 0);
+  const factor = Math.log2(n + 1) / n;
+  return Math.round(sumCents * factor) / 100;
+}
+
+/**
+ * Plain linear sum S of the added ingredients, before the diminishing taper —
+ * lets the POS show the "before → after" of the scale. Euros, cent-exact.
+ */
+export function addedIngredientsLinearSum(
+  modifiers: Array<{ priceAdjustment: number }>,
+): number {
+  return (
+    modifiers
+      .filter((m) => m.priceAdjustment > 0)
+      .reduce((sum, m) => sum + toCents(m.priceAdjustment), 0) / 100
+  );
+}
+
+/**
+ * Price actually charged per unit: base price plus the diminishing surcharge
+ * for added ingredients (removals add nothing). This is what
+ * order_items.unit_price snapshots, so downstream money flows (totals, splits,
+ * stats, receipt) never re-derive modifiers.
  */
 export function unitPriceWithModifiers(
   basePrice: number,
   modifiers: Array<{ priceAdjustment: number }>,
 ): number {
   return (
-    modifiers.reduce((sum, m) => sum + toCents(m.priceAdjustment), toCents(basePrice)) / 100
+    (toCents(basePrice) + toCents(addedIngredientsSurcharge(modifiers))) / 100
   );
 }
 

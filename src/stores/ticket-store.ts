@@ -79,6 +79,9 @@ interface TicketState {
   setQuantity: (lineId: string, quantity: number) => void;
   /** Override a pending line's BASE price for this ticket only */
   setLinePrice: (lineId: string, unitPrice: number) => void;
+  /** Replace a pending line's ingredients (add/remove after it's on the
+   * ticket); the charged price re-derives from the new modifier set */
+  setLineModifiers: (lineId: string, modifiers: SelectedModifier[]) => void;
   /** Drop pending lines AND their draft (after Send to Kitchen) */
   clearLines: () => void;
   clearTicket: () => void;
@@ -234,6 +237,13 @@ export const useTicketStore = create<TicketState>((set) => ({
     set((state) => ({
       lines: state.lines.map((l) =>
         l.lineId === lineId ? { ...l, unitPrice, priceOverridden: true } : l,
+      ),
+    })),
+
+  setLineModifiers: (lineId, modifiers) =>
+    set((state) => ({
+      lines: state.lines.map((l) =>
+        l.lineId === lineId ? { ...l, modifiers } : l,
       ),
     })),
 
