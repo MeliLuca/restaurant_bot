@@ -3,6 +3,7 @@
 import { Users } from "lucide-react";
 import { TEAM_CONVERSATION, conversationOf } from "@/lib/chat-api";
 import type { StaffMember } from "@/lib/staff-api";
+import { useT } from "@/lib/i18n/use-translation";
 import { ts, unreadCount } from "@/stores/chat-store";
 import type { ChatMessage } from "@/lib/database.types";
 import { cn } from "@/lib/utils";
@@ -40,8 +41,9 @@ export function ConversationList({
   selected,
   onSelect,
 }: ConversationListProps) {
+  const t = useT();
   const nameOf = (id: string) =>
-    staff.find((u) => u.id === id)?.name ?? "Staff";
+    staff.find((u) => u.id === id)?.name ?? t("chat.staffFallback");
 
   const lastIn = (conversation: string): ChatMessage | undefined => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -63,7 +65,7 @@ export function ConversationList({
     });
 
   const rows = [
-    { key: TEAM_CONVERSATION, name: "Team", role: "everyone" },
+    { key: TEAM_CONVERSATION, name: t("chat.team"), role: t("chat.everyone") },
     ...contacts,
   ];
 
@@ -109,9 +111,15 @@ export function ConversationList({
               <span className="flex items-center justify-between gap-2">
                 <span className="truncate text-sm text-muted-foreground">
                   {last
-                    ? `${last.sender_id === userId ? "You" : nameOf(last.sender_id)}: ${last.body}`
+                    ? t("chat.messagePreview", {
+                        sender:
+                          last.sender_id === userId
+                            ? t("chat.you")
+                            : nameOf(last.sender_id),
+                        body: last.body,
+                      })
                     : row.key === TEAM_CONVERSATION
-                      ? "Messages for the whole staff"
+                      ? t("chat.teamSubtitle")
                       : row.role}
                 </span>
                 {unread > 0 && (

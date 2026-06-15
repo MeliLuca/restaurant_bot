@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMoney } from "@/lib/constants";
+import { useT } from "@/lib/i18n/use-translation";
 import type { NightSummary } from "@/lib/stats-api";
 
 interface SummaryCardsProps {
@@ -16,42 +17,53 @@ interface SummaryCardsProps {
 }
 
 export function SummaryCards({ summary }: SummaryCardsProps) {
+  const t = useT();
   const cards = [
     {
       icon: Banknote,
-      label: "Revenue (paid)",
+      label: t("stats.revenuePaid"),
       value: formatMoney(summary.paidTotal),
-      detail: `${formatMoney(summary.paidSubtotal)} + ${formatMoney(summary.paidTax)} tax`,
+      detail: t("stats.revenueDetail", {
+        subtotal: formatMoney(summary.paidSubtotal),
+        tax: formatMoney(summary.paidTax),
+      }),
     },
     {
       icon: ReceiptText,
-      label: "Bills closed",
+      label: t("stats.billsClosed"),
       value: String(summary.paidCount),
       detail:
         summary.paidCount > 0
-          ? `${formatMoney(summary.avgBill)} avg per bill`
-          : "No checkouts yet",
+          ? t("stats.avgPerBill", { amount: formatMoney(summary.avgBill) })
+          : t("stats.noCheckouts"),
     },
     {
       icon: CookingPot,
-      label: "Still open",
+      label: t("stats.stillOpen"),
       value: formatMoney(summary.openTotal),
-      detail: `${summary.openCount} open order${summary.openCount === 1 ? "" : "s"}`,
+      detail:
+        summary.openCount === 1
+          ? t("stats.openOrdersOne", { count: summary.openCount })
+          : t("stats.openOrdersMany", { count: summary.openCount }),
     },
     {
       icon: UtensilsCrossed,
-      label: "Items ordered",
+      label: t("stats.itemsOrdered"),
       value: String(summary.itemsOrdered),
       detail:
         summary.cancelledCount > 0
-          ? `${summary.cancelledCount} order${summary.cancelledCount === 1 ? "" : "s"} cancelled`
-          : "Across paid & open orders",
+          ? summary.cancelledCount === 1
+            ? t("stats.ordersCancelledOne", { count: summary.cancelledCount })
+            : t("stats.ordersCancelledMany", { count: summary.cancelledCount })
+          : t("stats.acrossPaidOpen"),
     },
     {
       icon: ShoppingBag,
-      label: "Dine-in / Take-away",
+      label: t("stats.dineInTakeaway"),
       value: formatMoney(summary.dineInPaidTotal),
-      detail: `${formatMoney(summary.takeawayPaidTotal)} take-away`,
+      detail: t("stats.takeawayDetail", {
+        amount: formatMoney(summary.takeawayPaidTotal),
+      }),
     },
   ];
 

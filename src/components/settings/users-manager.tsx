@@ -30,6 +30,7 @@ import {
   type StaffMember,
 } from "@/lib/staff-api";
 import type { Role } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore } from "@/stores/auth-store";
 
 const PIN_RE = /^\d{4}$/;
@@ -41,6 +42,7 @@ interface UsersManagerProps {
 }
 
 export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
+  const t = useT();
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [busy, setBusy] = useState(false);
   const [pinTarget, setPinTarget] = useState<StaffMember | null>(null);
@@ -58,7 +60,7 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
       toast.success(success);
       return true;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Something went wrong");
+      toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
       return false;
     } finally {
       setBusy(false);
@@ -69,12 +71,12 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
     if (
       !staffManagersRemain(staff, roles, { kind: "user", userId: user.id, roleId })
     ) {
-      toast.error("That would leave no active user who can manage staff.");
+      toast.error(t("users.leaveNoStaffManagerShort"));
       return;
     }
     void run(
       () => updateUser(user.id, { role_id: roleId }),
-      `${user.name}'s role updated`,
+      t("users.roleUpdatedUser", { name: user.name }),
     );
   }
 
@@ -88,12 +90,14 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
         isActive,
       })
     ) {
-      toast.error("That would leave no active user who can manage staff.");
+      toast.error(t("users.leaveNoStaffManagerShort"));
       return;
     }
     void run(
       () => updateUser(user.id, { is_active: isActive }),
-      `${user.name} ${isActive ? "activated" : "deactivated"}`,
+      isActive
+        ? t("users.userActivated", { name: user.name })
+        : t("users.userDeactivated", { name: user.name }),
     );
   }
 
@@ -101,12 +105,12 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
     e.preventDefault();
     if (!pinTarget) return;
     if (!PIN_RE.test(pinValue)) {
-      toast.error("PIN must be exactly 4 digits");
+      toast.error(t("users.pinMust4"));
       return;
     }
     const ok = await run(
       () => setUserPin(pinTarget.id, pinValue),
-      `PIN updated for ${pinTarget.name}`,
+      t("users.pinUpdatedFor", { name: pinTarget.name }),
     );
     if (ok) {
       setPinTarget(null);
@@ -117,12 +121,12 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
   async function submitNewUser(e: React.FormEvent) {
     e.preventDefault();
     const name = newName.trim();
-    if (!name) return toast.error("Name is required");
-    if (!newRoleId) return toast.error("Pick a role");
-    if (!PIN_RE.test(newPin)) return toast.error("PIN must be exactly 4 digits");
+    if (!name) return toast.error(t("users.nameRequired"));
+    if (!newRoleId) return toast.error(t("users.pickRole"));
+    if (!PIN_RE.test(newPin)) return toast.error(t("users.pinMust4"));
     const ok = await run(
       () => createUser(name, newRoleId, newPin),
-      `${name} added`,
+      t("users.userAdded", { name }),
     );
     if (ok) {
       setAddOpen(false);
@@ -135,9 +139,9 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Staff</CardTitle>
+        <CardTitle>{t("users.staff")}</CardTitle>
         <Button className="h-12" onClick={() => setAddOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" /> Add user
+          <UserPlus className="mr-2 h-4 w-4" /> {t("users.addUser")}
         </Button>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -151,10 +155,12 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
               <div className="font-medium">
                 {u.name}
                 {u.id === currentUserId && (
-                  <span className="ml-2 text-xs text-muted-foreground">(you)</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({t("users.you")})
+                  </span>
                 )}
               </div>
-              {!u.is_active && <Badge variant="outline">Inactive</Badge>}
+              {!u.is_active && <Badge variant="outline">{t("users.inactive")}</Badge>}
             </div>
             <Select
               value={u.role_id}
@@ -178,7 +184,7 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
               disabled={busy}
               onClick={() => setPinTarget(u)}
             >
-              <KeyRound className="mr-1.5 h-4 w-4" /> PIN
+              <KeyRound className="mr-1.5 h-4 w-4" /> {t("users.pin")}
             </Button>
             <Button
               variant={u.is_active ? "ghost" : "secondary"}
@@ -186,7 +192,7 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
               disabled={busy}
               onClick={() => toggleActive(u)}
             >
-              {u.is_active ? "Deactivate" : "Activate"}
+              {u.is_active ? t("users.deactivate") : t("users.activate")}
             </Button>
           </div>
         ))}
@@ -203,11 +209,13 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
         >
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>New PIN for {pinTarget?.name}</DialogTitle>
+              <DialogTitle>
+                {t("users.newPinFor", { name: pinTarget?.name ?? "" })}
+              </DialogTitle>
             </DialogHeader>
             <form onSubmit={submitPin} className="flex flex-col gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="pin-input">4-digit PIN</Label>
+                <Label htmlFor="pin-input">{t("users.fourDigitPin")}</Label>
                 <Input
                   id="pin-input"
                   className="h-12 text-center text-xl tracking-[0.5em]"
@@ -222,7 +230,7 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
               </div>
               <DialogFooter>
                 <Button type="submit" className="h-12" disabled={busy}>
-                  Save PIN
+                  {t("users.savePin")}
                 </Button>
               </DialogFooter>
             </form>
@@ -233,11 +241,11 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
         <Dialog open={addOpen} onOpenChange={(o) => !o && setAddOpen(false)}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>Add staff member</DialogTitle>
+              <DialogTitle>{t("users.addStaffMember")}</DialogTitle>
             </DialogHeader>
             <form onSubmit={submitNewUser} className="flex flex-col gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="new-user-name">Name</Label>
+                <Label htmlFor="new-user-name">{t("users.name")}</Label>
                 <Input
                   id="new-user-name"
                   className="h-12"
@@ -247,10 +255,10 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Role</Label>
+                <Label>{t("users.role")}</Label>
                 <Select value={newRoleId} onValueChange={setNewRoleId}>
                   <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Pick a role" />
+                    <SelectValue placeholder={t("users.pickRole")} />
                   </SelectTrigger>
                   <SelectContent>
                     {roles.map((r) => (
@@ -262,7 +270,7 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="new-user-pin">4-digit PIN</Label>
+                <Label htmlFor="new-user-pin">{t("users.fourDigitPin")}</Label>
                 <Input
                   id="new-user-pin"
                   className="h-12 text-center text-xl tracking-[0.5em]"
@@ -274,7 +282,7 @@ export function UsersManager({ roles, staff, onChanged }: UsersManagerProps) {
               </div>
               <DialogFooter>
                 <Button type="submit" className="h-12" disabled={busy}>
-                  Create user
+                  {t("users.createUser")}
                 </Button>
               </DialogFooter>
             </form>

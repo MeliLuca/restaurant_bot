@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/constants";
+import { useT, type TFn } from "@/lib/i18n/use-translation";
 import type { StatsOrder } from "@/lib/stats-api";
 
 const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -14,11 +15,11 @@ const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
-function orderLabel(order: StatsOrder): string {
+function orderLabel(order: StatsOrder, t: TFn): string {
   if (order.order_type === "takeaway") {
-    return order.customer_name ?? "Take-away";
+    return order.customer_name ?? t("stats.takeawayFallback");
   }
-  const table = order.tables?.name ?? "Table";
+  const table = order.tables?.name ?? t("stats.tableFallback");
   return order.subtable ? `${table} / ${order.subtable}` : table;
 }
 
@@ -28,6 +29,7 @@ interface BillsListProps {
 
 /** Closed bills (paid + cancelled), newest first, expandable to line items */
 export function BillsList({ orders }: BillsListProps) {
+  const t = useT();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const closed = orders
@@ -42,13 +44,13 @@ export function BillsList({ orders }: BillsListProps) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <ReceiptText className="h-5 w-5" /> Checkout bills
+          <ReceiptText className="h-5 w-5" /> {t("stats.checkoutBills")}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col">
         {closed.length === 0 && (
           <p className="py-4 text-sm text-muted-foreground">
-            No bills closed yet tonight.
+            {t("stats.noBillsClosed")}
           </p>
         )}
         {closed.map((order, i) => {
@@ -76,14 +78,16 @@ export function BillsList({ orders }: BillsListProps) {
                       <ShoppingBag className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
                     <span className="truncate font-medium">
-                      {orderLabel(order)}
+                      {orderLabel(order, t)}
                     </span>
                     {order.status === "cancelled" && (
-                      <Badge variant="destructive">Cancelled</Badge>
+                      <Badge variant="destructive">{t("stats.cancelled")}</Badge>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {itemCount} item{itemCount === 1 ? "" : "s"}
+                    {itemCount === 1
+                      ? t("stats.itemCountOne", { count: itemCount })
+                      : t("stats.itemCountMany", { count: itemCount })}
                   </div>
                 </div>
                 <div className="shrink-0 font-semibold tabular-nums">
@@ -105,7 +109,7 @@ export function BillsList({ orders }: BillsListProps) {
                     >
                       <span className="min-w-0 truncate">
                         <span className="tabular-nums">{line.quantity}×</span>{" "}
-                        {line.menu_items?.name ?? "Deleted item"}
+                        {line.menu_items?.name ?? t("stats.deletedItem")}
                       </span>
                       <span className="shrink-0 tabular-nums">
                         {formatMoney(line.unit_price * line.quantity)}
@@ -114,17 +118,17 @@ export function BillsList({ orders }: BillsListProps) {
                   ))}
                   <Separator className="my-1.5" />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Subtotal</span>
+                    <span>{t("stats.subtotal")}</span>
                     <span className="tabular-nums">
                       {formatMoney(order.subtotal)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Tax</span>
+                    <span>{t("stats.tax")}</span>
                     <span className="tabular-nums">{formatMoney(order.tax)}</span>
                   </div>
                   <div className="flex justify-between font-semibold">
-                    <span>Total</span>
+                    <span>{t("stats.total")}</span>
                     <span className="tabular-nums">
                       {formatMoney(order.total)}
                     </span>

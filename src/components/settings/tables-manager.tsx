@@ -17,6 +17,7 @@ import {
   type TableWithTags,
 } from "@/lib/settings-api";
 import type { TableTag } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
 interface TablesManagerProps {
@@ -30,6 +31,7 @@ async function runAction(
   action: () => Promise<void>,
   success: string,
   onChanged: () => Promise<void>,
+  errorMsg: string,
 ) {
   setBusy(true);
   try {
@@ -37,19 +39,20 @@ async function runAction(
     await onChanged();
     toast.success(success);
   } catch (e) {
-    toast.error(e instanceof Error ? e.message : "Something went wrong");
+    toast.error(e instanceof Error ? e.message : errorMsg);
   } finally {
     setBusy(false);
   }
 }
 
 export function TablesManager({ tables, tags, onChanged }: TablesManagerProps) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [newName, setNewName] = useState("");
   const [newCapacity, setNewCapacity] = useState("4");
 
   const run = (action: () => Promise<void>, success: string) =>
-    runAction(setBusy, action, success, onChanged);
+    runAction(setBusy, action, success, onChanged, t("common.somethingWrong"));
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -57,10 +60,13 @@ export function TablesManager({ tables, tags, onChanged }: TablesManagerProps) {
     const capacity = parseInt(newCapacity, 10);
     if (!name) return;
     if (!Number.isFinite(capacity) || capacity < 1) {
-      toast.error("Capacity must be at least 1");
+      toast.error(t("tablesMgr.capacityMin"));
       return;
     }
-    await run(() => createTable(name, capacity, []), `Table ${name} added`);
+    await run(
+      () => createTable(name, capacity, []),
+      t("tablesMgr.tableAdded", { name }),
+    );
     setNewName("");
     setNewCapacity("4");
   }
@@ -69,32 +75,38 @@ export function TablesManager({ tables, tags, onChanged }: TablesManagerProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Armchair className="h-5 w-5" /> Tables
+          <Armchair className="h-5 w-5" /> {t("tablesMgr.tablesTitle")}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
-        {tables.map((t, i) => (
-          <div key={t.id}>
+        {tables.map((tbl, i) => (
+          <div key={tbl.id}>
             {i > 0 && <Separator className="my-1" />}
             <TableRow
-              table={t}
+              table={tbl}
               tags={tags}
               busy={busy}
               onSave={(fields) =>
-                run(() => updateTable(t.id, fields), `Table ${t.name} updated`)
+                run(
+                  () => updateTable(tbl.id, fields),
+                  t("tablesMgr.tableUpdated", { name: tbl.name }),
+                )
               }
               onToggleTag={(tagId) => {
-                const current = t.table_tags.map((g) => g.id);
+                const current = tbl.table_tags.map((g) => g.id);
                 const next = current.includes(tagId)
                   ? current.filter((x) => x !== tagId)
                   : [...current, tagId];
                 void run(
-                  () => setTableTags(t.id, next),
-                  `Tags for ${t.name} updated`,
+                  () => setTableTags(tbl.id, next),
+                  t("tablesMgr.tagsUpdated", { name: tbl.name }),
                 );
               }}
               onDelete={() =>
-                run(() => deleteTable(t.id), `Table ${t.name} deleted`)
+                run(
+                  () => deleteTable(tbl.id),
+                  t("tablesMgr.tableDeleted", { name: tbl.name }),
+                )
               }
             />
           </div>
@@ -104,9 +116,9 @@ export function TablesManager({ tables, tags, onChanged }: TablesManagerProps) {
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="New table name (e.g. T9)"
+            placeholder={t("tablesMgr.newTablePlaceholder")}
             className="h-12"
-            aria-label="New table name"
+            aria-label={t("tablesMgr.newTableAria")}
           />
           <Input
             value={newCapacity}
@@ -115,14 +127,14 @@ export function TablesManager({ tables, tags, onChanged }: TablesManagerProps) {
             min={1}
             inputMode="numeric"
             className="h-12 w-24"
-            aria-label="New table capacity"
+            aria-label={t("tablesMgr.newCapacityAria")}
           />
           <Button
             type="submit"
             className="h-12"
             disabled={busy || !newName.trim()}
           >
-            <Plus className="mr-1 h-4 w-4" /> Add table
+            <Plus className="mr-1 h-4 w-4" /> {t("tablesMgr.addTable")}
           </Button>
         </form>
       </CardContent>
@@ -145,6 +157,7 @@ function TableRow({
   onToggleTag: (tagId: string) => void;
   onDelete: () => Promise<void>;
 }) {
+  const t = useT();
   const [name, setName] = useState(table.name);
   const [capacity, setCapacity] = useState(String(table.capacity));
 
@@ -172,7 +185,7 @@ function TableRow({
         onChange={(e) => setName(e.target.value)}
         onBlur={commit}
         className="h-11 w-24 font-semibold"
-        aria-label={`Name of table ${table.name}`}
+        aria-label={t("tablesMgr.nameOfTable", { name: table.name })}
         disabled={busy}
       />
       <Input
@@ -183,7 +196,7 @@ function TableRow({
         min={1}
         inputMode="numeric"
         className="h-11 w-20"
-        aria-label={`Capacity of table ${table.name}`}
+        aria-label={t("tablesMgr.capacityOfTable", { name: table.name })}
         disabled={busy}
       />
       <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
@@ -211,7 +224,7 @@ function TableRow({
         variant="ghost"
         size="icon"
         className="h-10 w-10 shrink-0 text-muted-foreground"
-        aria-label={`Delete table ${table.name}`}
+        aria-label={t("tablesMgr.deleteTableAria", { name: table.name })}
         disabled={busy}
         onClick={() => void onDelete()}
       >
@@ -228,20 +241,24 @@ interface TagsManagerProps {
 }
 
 export function TagsManager({ tags, tables, onChanged }: TagsManagerProps) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [newTag, setNewTag] = useState("");
 
   const run = (action: () => Promise<void>, success: string) =>
-    runAction(setBusy, action, success, onChanged);
+    runAction(setBusy, action, success, onChanged, t("common.somethingWrong"));
 
   const usageCount = (id: string) =>
-    tables.filter((t) => t.table_tags.some((g) => g.id === id)).length;
+    tables.filter((tbl) => tbl.table_tags.some((g) => g.id === id)).length;
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     const name = newTag.trim();
     if (!name) return;
-    await run(() => createTableTag(name), `Tag “${name}” created`);
+    await run(
+      () => createTableTag(name),
+      t("tablesMgr.tagCreated", { name }),
+    );
     setNewTag("");
   }
 
@@ -249,18 +266,16 @@ export function TagsManager({ tags, tables, onChanged }: TagsManagerProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Tags className="h-5 w-5" /> Feature tags
+          <Tags className="h-5 w-5" /> {t("tablesMgr.featureTags")}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
-          Tags describe what a table offers (TV screen, wheelchair accessible,
-          child friendly…). Assign them on the tables above; the floor plan can
-          filter by them.
+          {t("tablesMgr.tagsHelp")}
         </p>
         <div className="flex flex-wrap gap-2">
           {tags.length === 0 && (
-            <p className="text-sm text-muted-foreground">No tags yet.</p>
+            <p className="text-sm text-muted-foreground">{t("tablesMgr.noTags")}</p>
           )}
           {tags.map((tag) => (
             <span
@@ -273,11 +288,14 @@ export function TagsManager({ tags, tables, onChanged }: TagsManagerProps) {
               </span>
               <button
                 type="button"
-                aria-label={`Delete tag ${tag.name}`}
+                aria-label={t("tablesMgr.deleteTagAria", { name: tag.name })}
                 disabled={busy}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-50"
                 onClick={() =>
-                  run(() => deleteTableTag(tag.id), `Tag “${tag.name}” deleted`)
+                  run(
+                    () => deleteTableTag(tag.id),
+                    t("tablesMgr.tagDeleted", { name: tag.name }),
+                  )
                 }
               >
                 <X className="h-3.5 w-3.5" />
@@ -289,16 +307,16 @@ export function TagsManager({ tags, tables, onChanged }: TagsManagerProps) {
           <Input
             value={newTag}
             onChange={(e) => setNewTag(e.target.value)}
-            placeholder="New tag (e.g. TV screen)"
+            placeholder={t("tablesMgr.newTagPlaceholder")}
             className="h-12"
-            aria-label="New tag name"
+            aria-label={t("tablesMgr.newTagAria")}
           />
           <Button
             type="submit"
             className="h-12"
             disabled={busy || !newTag.trim()}
           >
-            <Plus className="mr-1 h-4 w-4" /> Add tag
+            <Plus className="mr-1 h-4 w-4" /> {t("tablesMgr.addTag")}
           </Button>
         </form>
       </CardContent>

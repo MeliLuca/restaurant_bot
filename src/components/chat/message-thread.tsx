@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { TEAM_CONVERSATION } from "@/lib/chat-api";
 import type { StaffMember } from "@/lib/staff-api";
 import type { ChatMessage } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
 const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -38,14 +39,15 @@ export function MessageThread({
   onSend,
   onBack,
 }: MessageThreadProps) {
+  const t = useT();
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isTeam = conversation === TEAM_CONVERSATION;
   const nameOf = (id: string) =>
-    staff.find((u) => u.id === id)?.name ?? "Staff";
-  const title = isTeam ? "Team" : nameOf(conversation);
+    staff.find((u) => u.id === id)?.name ?? t("chat.staffFallback");
+  const title = isTeam ? t("chat.team") : nameOf(conversation);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -61,7 +63,7 @@ export function MessageThread({
       await onSend(body);
       setDraft("");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send");
+      toast.error(err instanceof Error ? err.message : t("chat.couldNotSend"));
     } finally {
       setBusy(false);
     }
@@ -76,7 +78,7 @@ export function MessageThread({
           variant="ghost"
           size="icon"
           className="h-10 w-10 sm:hidden"
-          aria-label="Back to conversations"
+          aria-label={t("chat.backToConversations")}
           onClick={onBack}
         >
           <ArrowLeft className="h-5 w-5" />
@@ -85,7 +87,7 @@ export function MessageThread({
         <div className="min-w-0">
           <div className="truncate font-semibold">{title}</div>
           <div className="text-xs text-muted-foreground">
-            {isTeam ? "Visible to all staff" : "Private conversation"}
+            {isTeam ? t("chat.visibleToAll") : t("chat.privateConversation")}
           </div>
         </div>
       </div>
@@ -93,7 +95,7 @@ export function MessageThread({
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
         {messages.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No messages yet — say hi!
+            {t("chat.noMessages")}
           </p>
         )}
         {messages.map((m) => {
@@ -144,16 +146,16 @@ export function MessageThread({
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={`Message ${title}…`}
+          placeholder={t("chat.messagePlaceholder", { name: title })}
           className="h-12"
-          aria-label={`Message ${title}`}
+          aria-label={t("chat.messageAria", { name: title })}
           maxLength={1000}
         />
         <Button
           type="submit"
           className="h-12 px-5"
           disabled={busy || !draft.trim()}
-          aria-label="Send message"
+          aria-label={t("chat.sendMessage")}
         >
           <SendHorizontal className="h-5 w-5" />
         </Button>

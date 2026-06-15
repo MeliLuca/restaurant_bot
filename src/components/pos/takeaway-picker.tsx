@@ -5,6 +5,7 @@ import { ShoppingBag, Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/constants";
 import type { Order } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 
 const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
@@ -25,6 +26,7 @@ export function TakeawayPicker({
   onPickExisting,
   onStartNew,
 }: TakeawayPickerProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -83,15 +85,15 @@ export function TakeawayPicker({
           }
           if (e.key === "Escape") setOpen(false);
         }}
-        placeholder="Customer name…"
+        placeholder={t("pos.customerNamePlaceholder")}
         className="h-12 pl-10 text-base"
-        aria-label="Search or start take-away by customer name"
+        aria-label={t("pos.searchTakeawayAria")}
       />
 
       {open && (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border bg-popover shadow-md">
           {matches.length > 0 && (
-            <ul role="listbox" aria-label="Open take-away orders">
+            <ul role="listbox" aria-label={t("pos.openTakeawayOrdersAria")}>
               {matches.map((o) => (
                 <li key={o.id} role="option" aria-selected={false}>
                   <button
@@ -109,7 +111,9 @@ export function TakeawayPicker({
                           {o.customer_name}
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          opened {TIME_FORMATTER.format(new Date(o.opened_at))}
+                          {t("pos.openedAt", {
+                            time: TIME_FORMATTER.format(new Date(o.opened_at)),
+                          })}
                         </span>
                       </span>
                     </span>
@@ -147,14 +151,14 @@ export function TakeawayPicker({
               }}
               className="flex min-h-12 w-full items-center gap-2 border-t px-4 py-2 text-left font-medium text-primary transition-colors hover:bg-accent"
             >
-              <Plus className="h-4 w-4" /> New take-away for &ldquo;
-              {query.trim()}&rdquo;
+              <Plus className="h-4 w-4" />{" "}
+              {t("pos.newTakeawayFor", { query: query.trim() })}
             </button>
           ) : (
             matches.length === 0 &&
             labelMatches.length === 0 && (
               <p className="px-4 py-3 text-sm text-muted-foreground">
-                No open take-away orders — type a name to start one.
+                {t("pos.noTakeawayType")}
               </p>
             )
           )}

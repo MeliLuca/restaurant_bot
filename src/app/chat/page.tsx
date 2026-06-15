@@ -5,11 +5,13 @@ import { MessageCircle } from "lucide-react";
 import { ConversationList } from "@/components/chat/conversation-list";
 import { MessageThread } from "@/components/chat/message-thread";
 import { TEAM_CONVERSATION, conversationOf } from "@/lib/chat-api";
+import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
 import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
+  const t = useT();
   const user = useAuthStore((s) => s.user);
   const messages = useChatStore((s) => s.messages);
   const reads = useChatStore((s) => s.reads);
@@ -47,7 +49,7 @@ export default function ChatPage() {
       >
         <div className="border-b px-4 py-3">
           <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <MessageCircle className="h-5 w-5" /> Chat
+            <MessageCircle className="h-5 w-5" /> {t("chat.title")}
           </h1>
         </div>
         {ready ? (
@@ -87,7 +89,7 @@ export default function ChatPage() {
           />
         ) : (
           <div className="hidden h-full items-center justify-center text-sm text-muted-foreground sm:flex">
-            Pick a conversation to start chatting.
+            {t("chat.pickConversation")}
           </div>
         )}
       </div>

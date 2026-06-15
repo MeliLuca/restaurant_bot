@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { createReservation } from "@/lib/api";
 import type { RestaurantTable } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 
 function todayISODate(): string {
   const d = new Date();
@@ -41,6 +42,7 @@ export function ReservationDialog({
   onClose,
   onCreated,
 }: ReservationDialogProps) {
+  const t = useT();
   const [customerName, setCustomerName] = useState("");
   const [partySize, setPartySize] = useState("2");
   const [date, setDate] = useState(todayISODate());
@@ -62,27 +64,31 @@ export function ReservationDialog({
     e.preventDefault();
     const size = parseInt(partySize, 10);
     if (!customerName.trim()) {
-      toast.error("Customer name is required");
+      toast.error(t("floor.customerNameRequired"));
       return;
     }
     if (!Number.isFinite(size) || size < 1) {
-      toast.error("Party size must be at least 1");
+      toast.error(t("floor.partySizeMin"));
       return;
     }
     if (!tableId) {
-      toast.error("Pick a table");
+      toast.error(t("floor.pickTableError"));
       return;
     }
     const reservedAt = new Date(`${date}T${time}`);
     if (Number.isNaN(reservedAt.getTime())) {
-      toast.error("Invalid date or time");
+      toast.error(t("floor.invalidDateTime"));
       return;
     }
 
-    const table = tables.find((t) => t.id === tableId);
+    const table = tables.find((tb) => tb.id === tableId);
     if (table && size > table.capacity) {
       toast.error(
-        `Table ${table.name} seats ${table.capacity} — party of ${size} won't fit`,
+        t("floor.tableWontFit", {
+          name: table.name,
+          capacity: table.capacity,
+          size,
+        }),
       );
       return;
     }
@@ -97,11 +103,13 @@ export function ReservationDialog({
         notes: notes.trim() || undefined,
       });
       await onCreated();
-      toast.success(`Reservation for ${customerName.trim()} created`);
+      toast.success(
+        t("floor.reservationCreated", { name: customerName.trim() }),
+      );
       reset();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save");
+      toast.error(err instanceof Error ? err.message : t("floor.couldNotSave"));
     } finally {
       setBusy(false);
     }
@@ -111,25 +119,25 @@ export function ReservationDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New reservation</DialogTitle>
+          <DialogTitle>{t("floor.newReservation")}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="res-name">Customer name</Label>
+            <Label htmlFor="res-name">{t("floor.customerName")}</Label>
             <Input
               id="res-name"
               className="h-12"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="e.g. Rossi"
+              placeholder={t("floor.customerNamePlaceholder")}
               autoFocus
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="res-party">Party size</Label>
+              <Label htmlFor="res-party">{t("floor.partySize")}</Label>
               <Input
                 id="res-party"
                 className="h-12"
@@ -141,15 +149,18 @@ export function ReservationDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label>Table</Label>
+              <Label>{t("floor.table")}</Label>
               <Select value={tableId} onValueChange={setTableId}>
                 <SelectTrigger className="h-12">
-                  <SelectValue placeholder="Pick a table" />
+                  <SelectValue placeholder={t("floor.pickTable")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {tables.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name} · seats {t.capacity}
+                  {tables.map((tb) => (
+                    <SelectItem key={tb.id} value={tb.id}>
+                      {t("floor.tableSeatsOption", {
+                        name: tb.name,
+                        count: tb.capacity,
+                      })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -159,7 +170,7 @@ export function ReservationDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="res-date">Date</Label>
+              <Label htmlFor="res-date">{t("floor.date")}</Label>
               <Input
                 id="res-date"
                 className="h-12"
@@ -169,7 +180,7 @@ export function ReservationDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="res-time">Time</Label>
+              <Label htmlFor="res-time">{t("floor.time")}</Label>
               <Input
                 id="res-time"
                 className="h-12"
@@ -181,13 +192,13 @@ export function ReservationDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="res-notes">Notes (optional)</Label>
+            <Label htmlFor="res-notes">{t("floor.notesOptional")}</Label>
             <Input
               id="res-notes"
               className="h-12"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Allergies, occasion, seating preference…"
+              placeholder={t("floor.notesPlaceholder")}
             />
           </div>
 
@@ -199,10 +210,10 @@ export function ReservationDialog({
               onClick={onClose}
               disabled={busy}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" className="h-12 px-6" disabled={busy}>
-              {busy ? "Saving…" : "Create reservation"}
+              {busy ? t("common.saving") : t("floor.createReservation")}
             </Button>
           </DialogFooter>
         </form>

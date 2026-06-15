@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatMoney } from "@/lib/constants";
 import type { Category } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import type { CategoryStat, ItemStat } from "@/lib/stats-api";
 
 interface TopItemsProps {
@@ -14,6 +15,7 @@ interface TopItemsProps {
 }
 
 export function TopItems({ items, categories, categoryNames }: TopItemsProps) {
+  const t = useT();
   const maxQuantity = items[0]?.quantity ?? 0;
   const maxRevenue = categories[0]?.revenue ?? 0;
 
@@ -22,13 +24,13 @@ export function TopItems({ items, categories, categoryNames }: TopItemsProps) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Trophy className="h-5 w-5" /> Items ordered
+            <Trophy className="h-5 w-5" /> {t("stats.itemsOrdered")}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {items.length === 0 && (
             <p className="py-4 text-sm text-muted-foreground">
-              Nothing ordered yet.
+              {t("stats.nothingOrdered")}
             </p>
           )}
           {items.map((item, rank) => (
@@ -64,12 +66,12 @@ export function TopItems({ items, categories, categoryNames }: TopItemsProps) {
 
       <Card className="h-fit">
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Sales by category</CardTitle>
+          <CardTitle className="text-lg">{t("stats.salesByCategory")}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {categories.length === 0 && (
             <p className="py-4 text-sm text-muted-foreground">
-              No sales yet.
+              {t("stats.noSales")}
             </p>
           )}
           {categories.map((c) => (
@@ -77,10 +79,13 @@ export function TopItems({ items, categories, categoryNames }: TopItemsProps) {
               <div className="flex items-baseline justify-between gap-2 text-sm">
                 <span className="truncate font-medium">
                   {(c.categoryId && categoryNames.get(c.categoryId)?.name) ??
-                    "Uncategorized"}
+                    t("stats.uncategorized")}
                 </span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {c.quantity} items · {formatMoney(c.revenue)}
+                  {t("stats.categoryDetail", {
+                    count: c.quantity,
+                    revenue: formatMoney(c.revenue),
+                  })}
                 </span>
               </div>
               <div className="mt-1 h-1.5 rounded-full bg-muted">

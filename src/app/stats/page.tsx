@@ -25,6 +25,7 @@ import {
   type StatsOrder,
 } from "@/lib/stats-api";
 import type { Category } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { usePermission } from "@/stores/auth-store";
 
 const DAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -40,6 +41,7 @@ function shiftServiceDay(dayStart: Date, days: number): Date {
 }
 
 export default function StatsPage() {
+  const t = useT();
   const canViewStats = usePermission("view_stats");
 
   const [dayStart, setDayStart] = useState(() => currentServiceDayStart());
@@ -62,11 +64,11 @@ export default function StatsPage() {
       setCategories(c);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load stats");
+      setError(e instanceof Error ? e.message : t("stats.failedLoadStats"));
     } finally {
       setLoading(false);
     }
-  }, [dayStart]);
+  }, [dayStart, t]);
 
   useEffect(() => {
     void load();
@@ -81,7 +83,7 @@ export default function StatsPage() {
   );
 
   function downloadCsv() {
-    const csv = buildNightCsv(dayStart, summary, items, categoryNames);
+    const csv = buildNightCsv(dayStart, summary, items, categoryNames, t);
     const y = dayStart.getFullYear();
     const m = String(dayStart.getMonth() + 1).padStart(2, "0");
     const d = String(dayStart.getDate()).padStart(2, "0");
@@ -99,10 +101,9 @@ export default function StatsPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <TriangleAlert className="h-10 w-10 text-amber-500" />
-        <h1 className="text-xl font-semibold">No stats access</h1>
+        <h1 className="text-xl font-semibold">{t("stats.noAccessTitle")}</h1>
         <p className="max-w-md text-sm text-muted-foreground">
-          Your role doesn&apos;t include the &ldquo;View stats&rdquo;
-          permission. Ask a manager if you need it.
+          {t("stats.noAccessBody")}
         </p>
       </div>
     );
@@ -112,9 +113,9 @@ export default function StatsPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <TriangleAlert className="h-10 w-10 text-amber-500" />
-        <h1 className="text-xl font-semibold">Can&apos;t reach the database</h1>
+        <h1 className="text-xl font-semibold">{t("floor.cantReachDb")}</h1>
         <p className="max-w-md text-sm text-muted-foreground">{error}</p>
-        <Button onClick={() => load()}>Retry</Button>
+        <Button onClick={() => load()}>{t("common.retry")}</Button>
       </div>
     );
   }
@@ -124,11 +125,12 @@ export default function StatsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div>
           <h1 className="text-2xl font-semibold">
-            {isTonight ? "Tonight" : DAY_FORMATTER.format(dayStart)}
+            {isTonight ? t("stats.tonight") : DAY_FORMATTER.format(dayStart)}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Service from {DAY_FORMATTER.format(dayStart)} 6:00 AM to next day
-            6:00 AM
+            {t("stats.serviceWindow", {
+              date: DAY_FORMATTER.format(dayStart),
+            })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -136,7 +138,7 @@ export default function StatsPage() {
             variant="outline"
             size="icon"
             className="h-11 w-11"
-            aria-label="Previous night"
+            aria-label={t("stats.previousNight")}
             onClick={() => setDayStart((d) => shiftServiceDay(d, -1))}
           >
             <ChevronLeft className="h-5 w-5" />
@@ -145,7 +147,7 @@ export default function StatsPage() {
             variant="outline"
             size="icon"
             className="h-11 w-11"
-            aria-label="Next night"
+            aria-label={t("stats.nextNight")}
             disabled={isTonight}
             onClick={() => setDayStart((d) => shiftServiceDay(d, 1))}
           >
@@ -157,7 +159,7 @@ export default function StatsPage() {
             onClick={() => load()}
             disabled={loading}
           >
-            <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+            <RefreshCw className="mr-2 h-4 w-4" /> {t("stats.refresh")}
           </Button>
           <Button
             variant="outline"
@@ -165,7 +167,7 @@ export default function StatsPage() {
             onClick={() => window.print()}
             disabled={loading}
           >
-            <Printer className="mr-2 h-4 w-4" /> Print / PDF
+            <Printer className="mr-2 h-4 w-4" /> {t("stats.printPdf")}
           </Button>
           <Button
             variant="outline"
@@ -173,7 +175,7 @@ export default function StatsPage() {
             onClick={downloadCsv}
             disabled={loading}
           >
-            <Download className="mr-2 h-4 w-4" /> CSV
+            <Download className="mr-2 h-4 w-4" /> {t("stats.csv")}
           </Button>
         </div>
       </div>
@@ -191,10 +193,10 @@ export default function StatsPage() {
           <Tabs defaultValue="items">
             <TabsList>
               <TabsTrigger value="items" className="min-h-9 px-4">
-                Items & categories
+                {t("stats.itemsCategories")}
               </TabsTrigger>
               <TabsTrigger value="bills" className="min-h-9 px-4">
-                Checkout bills
+                {t("stats.checkoutBills")}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="items">

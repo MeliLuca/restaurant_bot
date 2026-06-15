@@ -15,9 +15,11 @@ import {
   type TableWithTags,
 } from "@/lib/settings-api";
 import type { TableTag } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { usePermission } from "@/stores/auth-store";
 
 export default function TablesSettingsPage() {
+  const t = useT();
   const canManage = usePermission("manage_floor");
   const [tables, setTables] = useState<TableWithTags[]>([]);
   const [tags, setTags] = useState<TableTag[]>([]);
@@ -38,11 +40,11 @@ export default function TablesSettingsPage() {
       setTags(g);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load tables");
+      setError(e instanceof Error ? e.message : t("settings.failedLoadTables"));
     } finally {
       setLoading(false);
     }
-  }, [canManage]);
+  }, [canManage, t]);
 
   useEffect(() => {
     void refresh();
@@ -50,21 +52,20 @@ export default function TablesSettingsPage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
       <SettingsNav />
 
       {!canManage ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
-            Floor layout configuration requires the &ldquo;Manage floor
-            layout&rdquo; permission.
+            {t("settings.floorRequiresPerm")}
           </CardContent>
         </Card>
       ) : error ? (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
           <TriangleAlert className="h-8 w-8 text-amber-500" />
           <p className="text-sm text-muted-foreground">{error}</p>
-          <Button onClick={() => refresh()}>Retry</Button>
+          <Button onClick={() => refresh()}>{t("common.retry")}</Button>
         </div>
       ) : loading ? (
         <div className="h-64 animate-pulse rounded-xl bg-muted" />

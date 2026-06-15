@@ -19,6 +19,7 @@ import {
   nextDeliveryNumber,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/use-translation";
 import { useTicketStore } from "@/stores/ticket-store";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -35,6 +36,7 @@ export function NewDeliveryDialog({
   onCreated,
 }: NewDeliveryDialogProps) {
   const router = useRouter();
+  const t = useT();
   const setTakeaway = useTicketStore((s) => s.setTakeaway);
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [number, setNumber] = useState<number | null>(null);
@@ -53,9 +55,11 @@ export function NewDeliveryDialog({
         setLabels(l);
       })
       .catch((e) =>
-        toast.error(e instanceof Error ? e.message : "Could not load delivery"),
+        toast.error(
+          e instanceof Error ? e.message : t("floor.couldNotLoadDelivery"),
+        ),
       );
-  }, [open]);
+  }, [open, t]);
 
   async function create() {
     const trimmed = name.trim();
@@ -68,7 +72,9 @@ export function NewDeliveryDialog({
       onClose();
       router.push("/pos");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not start delivery");
+      toast.error(
+        e instanceof Error ? e.message : t("floor.couldNotStartDelivery"),
+      );
     } finally {
       setBusy(false);
     }
@@ -79,7 +85,7 @@ export function NewDeliveryDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
-            <Bike className="h-6 w-6" /> New delivery
+            <Bike className="h-6 w-6" /> {t("floor.newDelivery")}
             {number !== null && (
               <span className="rounded-full bg-primary px-2.5 py-0.5 text-base font-semibold text-primary-foreground tabular-nums">
                 #{number}
@@ -87,7 +93,7 @@ export function NewDeliveryDialog({
             )}
           </DialogTitle>
           <DialogDescription>
-            Tonight&apos;s order number is assigned automatically.
+            {t("floor.deliveryNumberAuto")}
           </DialogDescription>
         </DialogHeader>
 
@@ -102,9 +108,9 @@ export function NewDeliveryDialog({
                 void create();
               }
             }}
-            placeholder="Name / label…"
+            placeholder={t("floor.nameLabelPlaceholder")}
             className="h-12 text-base"
-            aria-label="Delivery name label"
+            aria-label={t("floor.deliveryNameAria")}
           />
 
           {labels.length > 0 && (
@@ -133,7 +139,7 @@ export function NewDeliveryDialog({
             disabled={busy || !name.trim()}
             onClick={() => void create()}
           >
-            <Plus className="mr-2 h-5 w-5" /> Start delivery order
+            <Plus className="mr-2 h-5 w-5" /> {t("floor.startDeliveryOrder")}
           </Button>
         </div>
       </DialogContent>

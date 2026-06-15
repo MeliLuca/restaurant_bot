@@ -56,6 +56,7 @@ import type {
   Modifier,
   Printer,
 } from "@/lib/database.types";
+import { useT, type TFn } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
 interface MenuManagerProps {
@@ -75,6 +76,7 @@ export function MenuManager({
   printers,
   onChanged,
 }: MenuManagerProps) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -89,7 +91,7 @@ export function MenuManager({
       await onChanged();
       toast.success(success);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Something went wrong");
+      toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
     } finally {
       setBusy(false);
     }
@@ -113,7 +115,7 @@ export function MenuManager({
     if (!name) return;
     await run(
       () => createCategory(name, categories.length + 1),
-      `Category “${name}” created`,
+      t("menu.categoryCreated", { name }),
     );
     setNewCategory("");
   }
@@ -123,7 +125,7 @@ export function MenuManager({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <UtensilsCrossed className="h-5 w-5" /> Menu
+            <UtensilsCrossed className="h-5 w-5" /> {t("menu.menuTitle")}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -141,18 +143,18 @@ export function MenuManager({
                       disabled={busy}
                       onClick={() => openCreate(c.id)}
                     >
-                      <Plus className="mr-1 h-4 w-4" /> Add item
+                      <Plus className="mr-1 h-4 w-4" /> {t("menu.addItem")}
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-10 w-10 text-muted-foreground"
-                      aria-label={`Delete category ${c.name}`}
+                      aria-label={t("menu.deleteCategoryAria", { name: c.name })}
                       disabled={busy}
                       onClick={() =>
                         run(
                           () => deleteCategory(c.id),
-                          `Category “${c.name}” deleted`,
+                          t("menu.categoryDeleted", { name: c.name }),
                         )
                       }
                     >
@@ -163,7 +165,7 @@ export function MenuManager({
 
                 {categoryItems.length === 0 && (
                   <p className="py-2 text-sm text-muted-foreground">
-                    No items yet.
+                    {t("menu.noItems")}
                   </p>
                 )}
                 {categoryItems.map((item, idx) => (
@@ -175,7 +177,7 @@ export function MenuManager({
                         <div className="truncate text-xs text-muted-foreground">
                           {item.ingredients.length > 0
                             ? item.ingredients.map((g) => g.name).join(" · ")
-                            : "No ingredients listed"}
+                            : t("menu.noIngredientsListed")}
                         </div>
                       </div>
                       <span className="shrink-0 text-sm font-semibold tabular-nums">
@@ -184,14 +186,16 @@ export function MenuManager({
                       <button
                         type="button"
                         disabled={busy}
-                        title="Toggle whether this item is on the menu"
+                        title={t("menu.toggleOnMenuHint")}
                         onClick={() =>
                           run(
                             () =>
                               updateMenuItem(item.id, {
                                 is_available: !item.is_available,
                               }),
-                            `${item.name} ${item.is_available ? "taken off" : "back on"} the menu`,
+                            item.is_available
+                              ? t("menu.itemTakenOff", { name: item.name })
+                              : t("menu.itemBackOn", { name: item.name }),
                           )
                         }
                         className={cn(
@@ -201,13 +205,13 @@ export function MenuManager({
                             : "border-foreground/20 bg-muted text-muted-foreground",
                         )}
                       >
-                        {item.is_available ? "On menu" : "Off menu"}
+                        {item.is_available ? t("menu.onMenu") : t("menu.offMenu")}
                       </button>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-10 w-10 shrink-0"
-                        aria-label={`Edit ${item.name}`}
+                        aria-label={t("menu.editItemAria", { name: item.name })}
                         disabled={busy}
                         onClick={() => openEdit(item)}
                       >
@@ -217,12 +221,12 @@ export function MenuManager({
                         variant="ghost"
                         size="icon"
                         className="h-10 w-10 shrink-0 text-muted-foreground"
-                        aria-label={`Delete ${item.name}`}
+                        aria-label={t("menu.deleteItemAria", { name: item.name })}
                         disabled={busy}
                         onClick={() =>
                           run(
                             () => deleteMenuItem(item.id),
-                            `${item.name} deleted`,
+                            t("menu.nameDeleted", { name: item.name }),
                           )
                         }
                       >
@@ -239,16 +243,16 @@ export function MenuManager({
             <Input
               value={newCategory}
               onChange={(e) => setNewCategory(e.target.value)}
-              placeholder="New category name (e.g. Sides)"
+              placeholder={t("menu.newCategoryPlaceholder")}
               className="h-12"
-              aria-label="New category name"
+              aria-label={t("menu.newCategoryAria")}
             />
             <Button
               type="submit"
               className="h-12"
               disabled={busy || !newCategory.trim()}
             >
-              <Plus className="mr-1 h-4 w-4" /> Add category
+              <Plus className="mr-1 h-4 w-4" /> {t("menu.addCategory")}
             </Button>
           </form>
         </CardContent>
@@ -296,6 +300,7 @@ function IngredientsCard({
   busy: boolean;
   run: (action: () => Promise<void>, success: string) => Promise<void>;
 }) {
+  const t = useT();
   const [newIngredient, setNewIngredient] = useState("");
 
   const usageCount = (id: string) =>
@@ -305,7 +310,7 @@ function IngredientsCard({
     e.preventDefault();
     const name = newIngredient.trim();
     if (!name) return;
-    await run(() => createIngredient(name), `Ingredient “${name}” added`);
+    await run(() => createIngredient(name), t("menu.ingredientAdded", { name }));
     setNewIngredient("");
   }
 
@@ -313,14 +318,14 @@ function IngredientsCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Carrot className="h-5 w-5" /> Ingredients
+          <Carrot className="h-5 w-5" /> {t("menu.ingredientsTitle")}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2">
           {ingredients.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No ingredients yet — add some, then attach them to menu items.
+              {t("menu.noIngredientsYet")}
             </p>
           )}
           {ingredients.map((g) => (
@@ -334,11 +339,14 @@ function IngredientsCard({
               </span>
               <button
                 type="button"
-                aria-label={`Delete ingredient ${g.name}`}
+                aria-label={t("menu.deleteIngredientAria", { name: g.name })}
                 disabled={busy}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-50"
                 onClick={() =>
-                  run(() => deleteIngredient(g.id), `${g.name} deleted`)
+                  run(
+                    () => deleteIngredient(g.id),
+                    t("menu.nameDeleted", { name: g.name }),
+                  )
                 }
               >
                 <X className="h-3.5 w-3.5" />
@@ -350,16 +358,16 @@ function IngredientsCard({
           <Input
             value={newIngredient}
             onChange={(e) => setNewIngredient(e.target.value)}
-            placeholder="New ingredient (e.g. Mozzarella)"
+            placeholder={t("menu.newIngredientPlaceholder")}
             className="h-12"
-            aria-label="New ingredient name"
+            aria-label={t("menu.newIngredientAria")}
           />
           <Button
             type="submit"
             className="h-12"
             disabled={busy || !newIngredient.trim()}
           >
-            <Plus className="mr-1 h-4 w-4" /> Add
+            <Plus className="mr-1 h-4 w-4" /> {t("common.add")}
           </Button>
         </form>
       </CardContent>
@@ -393,6 +401,7 @@ function MenuItemDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const t = useT();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -428,15 +437,15 @@ function MenuItemDialog({
     const trimmed = name.trim();
     const parsedPrice = parseFloat(price);
     if (!trimmed) {
-      toast.error("Item name is required");
+      toast.error(t("menu.itemNameRequired"));
       return;
     }
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
-      toast.error("Enter a valid price");
+      toast.error(t("menu.validPrice"));
       return;
     }
     if (!categoryId) {
-      toast.error("Pick a category");
+      toast.error(t("menu.pickCategory"));
       return;
     }
 
@@ -469,10 +478,10 @@ function MenuItemDialog({
       await setMenuItemIngredients(itemId, ingredientIds);
       await setMenuItemModifierGroups(itemId, groupIds);
       await onSaved();
-      toast.success(`${trimmed} saved`);
+      toast.success(t("menu.nameSaved", { name: trimmed }));
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save");
+      toast.error(err instanceof Error ? err.message : t("floor.couldNotSave"));
     } finally {
       setBusy(false);
     }
@@ -482,25 +491,27 @@ function MenuItemDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{item ? `Edit ${item.name}` : "New menu item"}</DialogTitle>
+          <DialogTitle>
+            {item ? t("menu.editItemTitle", { name: item.name }) : t("menu.newItem")}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="item-name">Name</Label>
+            <Label htmlFor="item-name">{t("menu.name")}</Label>
             <Input
               id="item-name"
               className="h-12"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Margherita Pizza"
+              placeholder={t("menu.namePlaceholderItem")}
               autoFocus
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="item-price">Price</Label>
+              <Label htmlFor="item-price">{t("menu.price")}</Label>
               <Input
                 id="item-price"
                 className="h-12"
@@ -514,10 +525,10 @@ function MenuItemDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label>Category</Label>
+              <Label>{t("menu.category")}</Label>
               <Select value={categoryId} onValueChange={setCategoryId}>
                 <SelectTrigger className="h-12">
-                  <SelectValue placeholder="Pick a category" />
+                  <SelectValue placeholder={t("menu.pickCategory")} />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((c) => (
@@ -531,18 +542,21 @@ function MenuItemDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label>Prints to</Label>
+            <Label>{t("menu.printsTo")}</Label>
             <Select value={printerId} onValueChange={setPrinterId}>
               <SelectTrigger className="h-12">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_PRINTER}>
-                  Receipt only — no production slip
+                  {t("menu.noPrinterOption")}
                 </SelectItem>
                 {printers.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.name} ({p.printer_type})
+                    {t("menu.printerOption", {
+                      name: p.name,
+                      type: p.printer_type,
+                    })}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -550,11 +564,11 @@ function MenuItemDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label>Ingredients</Label>
+            <Label>{t("menu.ingredientsLabel")}</Label>
             <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto">
               {ingredients.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No ingredients defined yet — add them below the menu.
+                  {t("menu.noIngredientsDefinedYet")}
                 </p>
               )}
               {ingredients.map((g) => {
@@ -580,11 +594,11 @@ function MenuItemDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label>Variations</Label>
+            <Label>{t("menu.variations")}</Label>
             <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto">
               {modifierGroups.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No modifier groups defined yet — add them below the menu.
+                  {t("menu.noModifierGroupsYet2")}
                 </p>
               )}
               {modifierGroups.map((g) => {
@@ -627,10 +641,14 @@ function MenuItemDialog({
               onClick={onClose}
               disabled={busy}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" className="h-12 px-6" disabled={busy}>
-              {busy ? "Saving…" : item ? "Save changes" : "Create item"}
+              {busy
+                ? t("common.saving")
+                : item
+                  ? t("printers.saveChanges")
+                  : t("menu.createItem")}
             </Button>
           </DialogFooter>
         </form>
@@ -639,15 +657,17 @@ function MenuItemDialog({
   );
 }
 
-function adjustmentLabel(amount: number): string {
-  if (amount === 0) return "free";
+function adjustmentLabel(amount: number, t: TFn): string {
+  if (amount === 0) return t("menu.free");
   return `${amount > 0 ? "+" : "−"}${formatMoney(Math.abs(amount))}`;
 }
 
-function ruleLabel(min: number, max: number): string {
-  if (min === max) return min === 1 ? "choose 1" : `choose ${min}`;
-  if (min === 0) return max === 1 ? "optional" : `up to ${max}`;
-  return `choose ${min}–${max}`;
+function ruleLabel(min: number, max: number, t: TFn): string {
+  if (min === max)
+    return min === 1 ? t("pos.ruleChoose1") : t("pos.ruleChooseN", { count: min });
+  if (min === 0)
+    return max === 1 ? t("pos.ruleOptional") : t("pos.ruleUpToN", { count: max });
+  return t("pos.ruleChooseRange", { min, max });
 }
 
 /**
@@ -668,6 +688,7 @@ function ModifierGroupsCard({
   run: (action: () => Promise<void>, success: string) => Promise<void>;
   onChanged: () => Promise<void>;
 }) {
+  const t = useT();
   const [groupDialog, setGroupDialog] = useState<{
     open: boolean;
     group: ModifierGroupWithModifiers | null;
@@ -686,13 +707,13 @@ function ModifierGroupsCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <SlidersHorizontal className="h-5 w-5" /> Modifier groups
+          <SlidersHorizontal className="h-5 w-5" /> {t("menu.modifierGroups")}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         {groups.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No modifier groups yet — add one, then attach it to menu items.
+            {t("menu.noModifierGroupsYet")}
           </p>
         )}
         {groups.map((g) => {
@@ -703,10 +724,12 @@ function ModifierGroupsCard({
                 <div className="min-w-0">
                   <span className="font-semibold">{g.name}</span>
                   <span className="ml-2 text-xs text-muted-foreground">
-                    {ruleLabel(g.min_selections, g.max_selections)} ·{" "}
+                    {ruleLabel(g.min_selections, g.max_selections, t)} ·{" "}
                     {used === 0
-                      ? "unused"
-                      : `${used} item${used === 1 ? "" : "s"}`}
+                      ? t("menu.unused")
+                      : used === 1
+                        ? t("stats.itemCountOne", { count: used })
+                        : t("stats.itemCountMany", { count: used })}
                   </span>
                 </div>
                 <div className="flex shrink-0 gap-1">
@@ -724,13 +747,13 @@ function ModifierGroupsCard({
                       })
                     }
                   >
-                    <Plus className="mr-1 h-4 w-4" /> Add option
+                    <Plus className="mr-1 h-4 w-4" /> {t("menu.addOption")}
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-10 w-10"
-                    aria-label={`Edit group ${g.name}`}
+                    aria-label={t("menu.editGroupAria", { name: g.name })}
                     disabled={busy}
                     onClick={() => setGroupDialog({ open: true, group: g })}
                   >
@@ -740,12 +763,12 @@ function ModifierGroupsCard({
                     variant="ghost"
                     size="icon"
                     className="h-10 w-10 text-muted-foreground"
-                    aria-label={`Delete group ${g.name}`}
+                    aria-label={t("menu.deleteGroupAria", { name: g.name })}
                     disabled={busy}
                     onClick={() =>
                       run(
                         () => deleteModifierGroup(g.id),
-                        `Group “${g.name}” deleted`,
+                        t("menu.groupDeleted", { name: g.name }),
                       )
                     }
                   >
@@ -756,7 +779,7 @@ function ModifierGroupsCard({
 
               {g.modifiers.length === 0 ? (
                 <p className="py-2 text-sm text-muted-foreground">
-                  No options yet.
+                  {t("menu.noOptionsYet")}
                 </p>
               ) : (
                 g.modifiers.map((m, idx) => (
@@ -772,13 +795,13 @@ function ModifierGroupsCard({
                             : "font-medium",
                         )}
                       >
-                        {adjustmentLabel(m.price_adjustment)}
+                        {adjustmentLabel(m.price_adjustment, t)}
                       </span>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-10 w-10 shrink-0"
-                        aria-label={`Edit option ${m.name}`}
+                        aria-label={t("menu.editOptionAria", { name: m.name })}
                         disabled={busy}
                         onClick={() =>
                           setOptionDialog({
@@ -795,12 +818,12 @@ function ModifierGroupsCard({
                         variant="ghost"
                         size="icon"
                         className="h-10 w-10 shrink-0 text-muted-foreground"
-                        aria-label={`Delete option ${m.name}`}
+                        aria-label={t("menu.deleteOptionAria", { name: m.name })}
                         disabled={busy}
                         onClick={() =>
                           run(
                             () => deleteModifier(m.id),
-                            `${m.name} deleted`,
+                            t("menu.nameDeleted", { name: m.name }),
                           )
                         }
                       >
@@ -820,7 +843,7 @@ function ModifierGroupsCard({
           disabled={busy}
           onClick={() => setGroupDialog({ open: true, group: null })}
         >
-          <Plus className="mr-1 h-4 w-4" /> Add group
+          <Plus className="mr-1 h-4 w-4" /> {t("menu.addGroup")}
         </Button>
       </CardContent>
 
@@ -863,6 +886,7 @@ function ModifierGroupDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const t = useT();
   const [name, setName] = useState("");
   const [min, setMin] = useState("0");
   const [max, setMax] = useState("1");
@@ -881,19 +905,19 @@ function ModifierGroupDialog({
     const minN = parseInt(min, 10);
     const maxN = parseInt(max, 10);
     if (!trimmed) {
-      toast.error("Group name is required");
+      toast.error(t("menu.groupNameRequired"));
       return;
     }
     if (!Number.isInteger(minN) || minN < 0) {
-      toast.error("Minimum must be 0 or more");
+      toast.error(t("menu.minMustBe0"));
       return;
     }
     if (!Number.isInteger(maxN) || maxN < 1) {
-      toast.error("Maximum must be 1 or more");
+      toast.error(t("menu.maxMustBe1"));
       return;
     }
     if (maxN < minN) {
-      toast.error("Maximum can't be less than the minimum");
+      toast.error(t("menu.maxLessThanMin"));
       return;
     }
     setBusy(true);
@@ -913,10 +937,10 @@ function ModifierGroupDialog({
         });
       }
       await onSaved();
-      toast.success(`Group “${trimmed}” saved`);
+      toast.success(t("menu.groupSaved", { name: trimmed }));
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save");
+      toast.error(err instanceof Error ? err.message : t("floor.couldNotSave"));
     } finally {
       setBusy(false);
     }
@@ -927,26 +951,28 @@ function ModifierGroupDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {group ? `Edit ${group.name}` : "New modifier group"}
+            {group
+              ? t("menu.editGroupTitle", { name: group.name })
+              : t("menu.newGroup")}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="group-name">Name</Label>
+            <Label htmlFor="group-name">{t("menu.name")}</Label>
             <Input
               id="group-name"
               className="h-12"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Aggiunte"
+              placeholder={t("menu.groupNamePlaceholder")}
               autoFocus
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="group-min">Min selections</Label>
+              <Label htmlFor="group-min">{t("menu.minSelections")}</Label>
               <Input
                 id="group-min"
                 className="h-12"
@@ -959,7 +985,7 @@ function ModifierGroupDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="group-max">Max selections</Label>
+              <Label htmlFor="group-max">{t("menu.maxSelections")}</Label>
               <Input
                 id="group-max"
                 className="h-12"
@@ -972,10 +998,7 @@ function ModifierGroupDialog({
               />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            e.g. min 1 / max 1 forces one choice (dough); min 0 / max 10 allows
-            several optional add-ons.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("menu.minMaxHelp")}</p>
 
           <DialogFooter>
             <Button
@@ -985,10 +1008,14 @@ function ModifierGroupDialog({
               onClick={onClose}
               disabled={busy}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" className="h-12 px-6" disabled={busy}>
-              {busy ? "Saving…" : group ? "Save changes" : "Create group"}
+              {busy
+                ? t("common.saving")
+                : group
+                  ? t("printers.saveChanges")
+                  : t("menu.createGroup")}
             </Button>
           </DialogFooter>
         </form>
@@ -1012,6 +1039,7 @@ function ModifierOptionDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const t = useT();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("0.00");
   const [busy, setBusy] = useState(false);
@@ -1027,11 +1055,11 @@ function ModifierOptionDialog({
     const trimmed = name.trim();
     const parsed = parseFloat(price);
     if (!trimmed) {
-      toast.error("Option name is required");
+      toast.error(t("menu.optionNameRequired"));
       return;
     }
     if (!Number.isFinite(parsed)) {
-      toast.error("Enter a valid price adjustment (0 for free)");
+      toast.error(t("menu.validPriceAdjustment"));
       return;
     }
     setBusy(true);
@@ -1050,10 +1078,10 @@ function ModifierOptionDialog({
         });
       }
       await onSaved();
-      toast.success(`${trimmed} saved`);
+      toast.success(t("menu.nameSaved", { name: trimmed }));
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save");
+      toast.error(err instanceof Error ? err.message : t("floor.couldNotSave"));
     } finally {
       setBusy(false);
     }
@@ -1064,24 +1092,26 @@ function ModifierOptionDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {option ? `Edit ${option.name}` : "New option"}
+            {option
+              ? t("menu.editOptionTitle", { name: option.name })
+              : t("menu.newOption")}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="option-name">Name</Label>
+            <Label htmlFor="option-name">{t("menu.name")}</Label>
             <Input
               id="option-name"
               className="h-12"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Bufala"
+              placeholder={t("menu.optionNamePlaceholder")}
               autoFocus
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="option-price">Price adjustment</Label>
+            <Label htmlFor="option-price">{t("menu.priceAdjustment")}</Label>
             <Input
               id="option-price"
               className="h-12"
@@ -1093,7 +1123,7 @@ function ModifierOptionDialog({
               placeholder="0.00"
             />
             <p className="text-xs text-muted-foreground">
-              Use 0 for a free choice, or a negative number for a discount.
+              {t("menu.priceAdjustmentHelp")}
             </p>
           </div>
 
@@ -1105,10 +1135,14 @@ function ModifierOptionDialog({
               onClick={onClose}
               disabled={busy}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" className="h-12 px-6" disabled={busy}>
-              {busy ? "Saving…" : option ? "Save changes" : "Create option"}
+              {busy
+                ? t("common.saving")
+                : option
+                  ? t("printers.saveChanges")
+                  : t("menu.createOption")}
             </Button>
           </DialogFooter>
         </form>

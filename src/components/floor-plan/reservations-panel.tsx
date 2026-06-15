@@ -20,6 +20,7 @@ import {
   updateTableStatus,
 } from "@/lib/api";
 import type { Reservation, RestaurantTable } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { usePermission } from "@/stores/auth-store";
 
 const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -38,6 +39,7 @@ export function ReservationsPanel({
   tables,
   onChanged,
 }: ReservationsPanelProps) {
+  const t = useT();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sortAsc, setSortAsc] = useState(true);
@@ -51,9 +53,14 @@ export function ReservationsPanel({
       await setReservationStatus(r.id, "seated");
       await updateTableStatus(r.table_id, "occupied");
       await onChanged();
-      toast.success(`${r.customer_name} seated at ${tableName(r.table_id)}`);
+      toast.success(
+        t("floor.seatedAt", {
+          name: r.customer_name,
+          table: tableName(r.table_id),
+        }),
+      );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not seat party");
+      toast.error(e instanceof Error ? e.message : t("floor.couldNotSeat"));
     } finally {
       setBusyId(null);
     }
@@ -64,9 +71,9 @@ export function ReservationsPanel({
     try {
       await setReservationStatus(r.id, "cancelled");
       await onChanged();
-      toast.success(`Reservation for ${r.customer_name} cancelled`);
+      toast.success(t("floor.reservationCancelled", { name: r.customer_name }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not cancel");
+      toast.error(e instanceof Error ? e.message : t("floor.couldNotCancel"));
     } finally {
       setBusyId(null);
     }
@@ -94,7 +101,7 @@ export function ReservationsPanel({
     <Card className="h-fit">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <CalendarClock className="h-5 w-5" /> Today&apos;s reservations
+          <CalendarClock className="h-5 w-5" /> {t("floor.todaysReservations")}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
@@ -104,15 +111,17 @@ export function ReservationsPanel({
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Name or party size…"
+              placeholder={t("floor.nameOrPartySize")}
               className="h-11 pl-9"
-              aria-label="Search reservations by name or party size"
+              aria-label={t("floor.searchReservationsAria")}
             />
           </div>
           <Button
             variant="outline"
             className="h-11 shrink-0"
-            aria-label={`Sort by time, currently ${sortAsc ? "earliest" : "latest"} first`}
+            aria-label={t("floor.sortByTimeAria", {
+              order: sortAsc ? t("floor.earliestLower") : t("floor.latestLower"),
+            })}
             onClick={() => setSortAsc((s) => !s)}
           >
             {sortAsc ? (
@@ -120,15 +129,15 @@ export function ReservationsPanel({
             ) : (
               <ArrowDownWideNarrow className="mr-1.5 h-4 w-4" />
             )}
-            {sortAsc ? "Earliest" : "Latest"}
+            {sortAsc ? t("floor.earliest") : t("floor.latest")}
           </Button>
         </div>
 
         {active.length === 0 && (
           <p className="py-4 text-sm text-muted-foreground">
             {query.trim()
-              ? `No reservations match “${query.trim()}”.`
-              : "No reservations for today yet."}
+              ? t("floor.noReservationsMatch", { query: query.trim() })
+              : t("floor.noReservationsToday")}
           </p>
         )}
         {active.map((r, i) => (
@@ -141,14 +150,17 @@ export function ReservationsPanel({
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{r.customer_name}</div>
                 <div className="text-xs text-muted-foreground">
-                  Party of {r.party_size} · Table {tableName(r.table_id)}
+                  {t("floor.partyOf", {
+                    count: r.party_size,
+                    table: tableName(r.table_id),
+                  })}
                   {r.notes ? ` · ${r.notes}` : ""}
                 </div>
               </div>
               {r.status === "seated" ? (
-                <Badge variant="secondary">Seated</Badge>
+                <Badge variant="secondary">{t("floor.seated")}</Badge>
               ) : !canManage ? (
-                <Badge variant="outline">Booked</Badge>
+                <Badge variant="outline">{t("floor.booked")}</Badge>
               ) : (
                 <div className="flex shrink-0 gap-1">
                   <Button
@@ -157,13 +169,15 @@ export function ReservationsPanel({
                     disabled={busyId === r.id}
                     onClick={() => seat(r)}
                   >
-                    <Armchair className="mr-1 h-4 w-4" /> Seat
+                    <Armchair className="mr-1 h-4 w-4" /> {t("floor.seat")}
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     className="h-10 w-10 p-0"
-                    aria-label={`Cancel reservation for ${r.customer_name}`}
+                    aria-label={t("floor.cancelReservationAria", {
+                      name: r.customer_name,
+                    })}
                     disabled={busyId === r.id}
                     onClick={() => cancel(r)}
                   >

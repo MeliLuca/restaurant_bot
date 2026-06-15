@@ -25,6 +25,8 @@ import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
 import { resetDeliveryCounter } from "@/lib/api";
 import { useFloorData } from "@/hooks/use-floor-data";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
+import type { TranslationKey } from "@/lib/i18n/dictionaries";
+import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 import { usePermission } from "@/stores/auth-store";
 import { useTicketStore } from "@/stores/ticket-store";
@@ -37,14 +39,15 @@ const LEGEND: TableDisplayStatus[] = [
 ];
 
 // Status quick-filters (by stored status; "occupied" covers ordered tables too).
-const STATUS_FILTERS: { value: TableStatus; label: string }[] = [
-  { value: "available", label: "Available" },
-  { value: "occupied", label: "Occupied" },
-  { value: "dirty", label: "Dirty" },
+const STATUS_FILTERS: { value: TableStatus; labelKey: TranslationKey }[] = [
+  { value: "available", labelKey: "floor.status.available" },
+  { value: "occupied", labelKey: "floor.status.occupied" },
+  { value: "dirty", labelKey: "floor.status.dirty" },
 ];
 
 export default function FloorPlanPage() {
   const router = useRouter();
+  const t = useT();
   const setTicketTable = useTicketStore((s) => s.setTable);
   const setSubtable = useTicketStore((s) => s.setSubtable);
   const { tables, reservations, takeaways, openOrders, loading, error, refresh } =
@@ -111,9 +114,9 @@ export default function FloorPlanPage() {
     try {
       await resetDeliveryCounter();
       await refresh();
-      toast.success("Delivery counter reset — next order is #1");
+      toast.success(t("floor.counterReset"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Reset failed");
+      toast.error(e instanceof Error ? e.message : t("floor.resetFailed"));
     }
   }
 
@@ -121,9 +124,9 @@ export default function FloorPlanPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <TriangleAlert className="h-10 w-10 text-amber-500" />
-        <h1 className="text-xl font-semibold">Can&apos;t reach the database</h1>
+        <h1 className="text-xl font-semibold">{t("floor.cantReachDb")}</h1>
         <p className="max-w-md text-sm text-muted-foreground">{error}</p>
-        <Button onClick={() => refresh()}>Retry</Button>
+        <Button onClick={() => refresh()}>{t("common.retry")}</Button>
       </div>
     );
   }
@@ -131,7 +134,7 @@ export default function FloorPlanPage() {
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
       <div className="flex flex-wrap items-center gap-6">
-        <h1 className="text-2xl font-semibold">Floor Plan</h1>
+        <h1 className="text-2xl font-semibold">{t("floor.title")}</h1>
         <div className="hidden items-center gap-4 sm:flex">
           {LEGEND.map((s) => (
             <span
@@ -139,7 +142,7 @@ export default function FloorPlanPage() {
               className="flex items-center gap-1.5 text-sm text-muted-foreground"
             >
               <span className={`h-3 w-3 rounded-full ${STATUS_CONFIG[s].dot}`} />
-              {STATUS_CONFIG[s].label}
+              {t(STATUS_CONFIG[s].labelKey)}
             </span>
           ))}
         </div>
@@ -148,10 +151,10 @@ export default function FloorPlanPage() {
       <Tabs defaultValue="tables" className="flex min-h-0 flex-1 flex-col">
         <TabsList className="h-12 w-fit shrink-0">
           <TabsTrigger value="tables" className="h-10 px-6 text-base">
-            Tables
+            {t("floor.tablesTab")}
           </TabsTrigger>
           <TabsTrigger value="delivery" className="h-10 px-6 text-base">
-            Delivery
+            {t("floor.deliveryTab")}
             {takeaways.length > 0 && (
               <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
                 {takeaways.length}
@@ -173,9 +176,9 @@ export default function FloorPlanPage() {
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search tables…"
+                    placeholder={t("floor.searchTables")}
                     className="h-11 w-44 pl-9"
-                    aria-label="Search tables by name"
+                    aria-label={t("floor.searchTablesAria")}
                   />
                 </div>
                 {STATUS_FILTERS.map((f) => {
@@ -195,7 +198,7 @@ export default function FloorPlanPage() {
                           : "text-muted-foreground hover:bg-accent",
                       )}
                     >
-                      {f.label}
+                      {t(f.labelKey)}
                     </button>
                   );
                 })}
@@ -207,7 +210,7 @@ export default function FloorPlanPage() {
                   onClick={() => setReservationsExpanded((e) => !e)}
                 >
                   <CalendarClock className="mr-2 h-4 w-4" />
-                  Today&apos;s reservations
+                  {t("floor.todaysReservations")}
                   {activeReservations > 0 && ` (${activeReservations})`}
                   <ChevronDown
                     className={cn(
@@ -221,7 +224,7 @@ export default function FloorPlanPage() {
                     className="ml-auto h-11"
                     onClick={() => setReservationOpen(true)}
                   >
-                    <CalendarPlus className="mr-2 h-4 w-4" /> New reservation
+                    <CalendarPlus className="mr-2 h-4 w-4" /> {t("floor.newReservation")}
                   </Button>
                 )}
               </div>
@@ -263,7 +266,7 @@ export default function FloorPlanPage() {
                   </div>
                 ) : visibleTables.length === 0 ? (
                   <p className="py-6 text-sm text-muted-foreground">
-                    No tables match the current search and filters.
+                    {t("floor.noTablesMatch")}
                   </p>
                 ) : (
                   <div className="flex flex-wrap content-start gap-4">
@@ -304,14 +307,14 @@ export default function FloorPlanPage() {
                   className="h-12"
                   onClick={() => setDeliveryOpen(true)}
                 >
-                  <Bike className="mr-2 h-5 w-5" /> New delivery order
+                  <Bike className="mr-2 h-5 w-5" /> {t("floor.newDeliveryOrder")}
                 </Button>
                 <Button
                   variant="outline"
                   className="h-12"
                   onClick={() => void handleResetCounter()}
                 >
-                  <RotateCcw className="mr-2 h-4 w-4" /> Reset counter
+                  <RotateCcw className="mr-2 h-4 w-4" /> {t("floor.resetCounter")}
                 </Button>
               </div>
             )}

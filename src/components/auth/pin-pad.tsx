@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n/use-translation";
 
 export const PIN_LENGTH = 4;
 
@@ -13,6 +14,7 @@ interface PinPadProps {
 }
 
 export function PinPad({ onComplete, disabled }: PinPadProps) {
+  const t = useT();
   const [digits, setDigits] = useState("");
   const [checking, setChecking] = useState(false);
   const [shake, setShake] = useState(false);
@@ -37,7 +39,7 @@ export function PinPad({ onComplete, disabled }: PinPadProps) {
     <div className="flex flex-col items-center gap-5">
       <div
         className={cn("flex gap-3 transition-transform", shake && "animate-pulse")}
-        aria-label="PIN digits entered"
+        aria-label={t("auth.pinDigits")}
       >
         {Array.from({ length: PIN_LENGTH }).map((_, i) => (
           <span
@@ -73,7 +75,7 @@ export function PinPad({ onComplete, disabled }: PinPadProps) {
         </button>
         <button
           type="button"
-          aria-label="Delete digit"
+          aria-label={t("auth.deleteDigit")}
           disabled={checking || disabled}
           onClick={() => setDigits((d) => d.slice(0, -1))}
           className="flex h-16 w-16 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent active:scale-95 disabled:opacity-50"

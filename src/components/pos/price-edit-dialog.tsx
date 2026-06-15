@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/lib/i18n/use-translation";
 
 export interface PriceEditTarget {
   /** "pending" = unsent ticket line, "sent" = order_items row on the bill */
@@ -33,6 +34,7 @@ export function PriceEditDialog({
   onClose,
   onSubmit,
 }: PriceEditDialogProps) {
+  const t = useT();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -58,13 +60,13 @@ export function PriceEditDialog({
     <Dialog open={target !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Adjust price — {target?.name}</DialogTitle>
-          <DialogDescription>
-            Applies to this ticket only — the menu price is unchanged.
-          </DialogDescription>
+          <DialogTitle>
+            {t("pos.adjustPrice", { name: target?.name ?? "" })}
+          </DialogTitle>
+          <DialogDescription>{t("pos.appliesThisTicket")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="override-price">Unit price</Label>
+          <Label htmlFor="override-price">{t("pos.unitPrice")}</Label>
           <Input
             id="override-price"
             type="number"
@@ -85,10 +87,10 @@ export function PriceEditDialog({
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" className="h-12" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button className="h-12" disabled={busy || !valid} onClick={apply}>
-            Apply
+            {t("pos.apply")}
           </Button>
         </div>
       </DialogContent>

@@ -29,6 +29,7 @@ import {
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import { calcTotals, splitCents, toCents } from "@/lib/money";
+import { useT, type TFn } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -44,8 +45,8 @@ interface SplitBillDialogProps {
   onOrderClosed: (tableClosed: boolean) => void;
 }
 
-function itemDisplayName(item: OpenOrder["items"][number]): string {
-  const base = item.menu_items?.name ?? "Item";
+function itemDisplayName(item: OpenOrder["items"][number], t: TFn): string {
+  const base = item.menu_items?.name ?? t("floor.itemFallback");
   return item.fraction_of ? `${base} (1/${item.fraction_of})` : base;
 }
 
@@ -57,6 +58,7 @@ export function SplitBillDialog({
   onPaymentsChanged,
   onOrderClosed,
 }: SplitBillDialogProps) {
+  const t = useT();
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [people, setPeople] = useState(2);
@@ -115,7 +117,10 @@ export function SplitBillDialog({
       onOrderClosed(result.tableClosed);
     } else {
       toast.success(
-        `${formatMoney(result.paidAmount)} paid — ${formatMoney(result.remainingCents / 100)} to go`,
+        t("pos.paidToGo", {
+          paid: formatMoney(result.paidAmount),
+          remaining: formatMoney(result.remainingCents / 100),
+        }),
       );
     }
   }
@@ -126,7 +131,7 @@ export function SplitBillDialog({
       const result = await payEvenShare(order.id, sharesLeft, userId);
       await afterPayment(result);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Payment failed");
+      toast.error(e instanceof Error ? e.message : t("pos.paymentFailed"));
     } finally {
       setBusy(false);
     }
@@ -150,19 +155,21 @@ export function SplitBillDialog({
         toast.warning(
           print.reason instanceof Error
             ? print.reason.message
-            : "Partial receipt failed to print",
+            : t("pos.partialReceiptFailed"),
         );
       } else {
         const offline = print.value.filter((j) => !j.ok);
         if (offline.length > 0) {
           toast.warning(
-            `Printer offline: ${offline.map((j) => j.printerName).join(", ")}`,
+            t("pos.printerOffline", {
+              printers: offline.map((j) => j.printerName).join(", "),
+            }),
           );
         }
       }
       await afterPayment(result);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Payment failed");
+      toast.error(e instanceof Error ? e.message : t("pos.paymentFailed"));
     } finally {
       setBusy(false);
     }
@@ -179,9 +186,9 @@ export function SplitBillDialog({
         return next;
       });
       await onPaymentsChanged();
-      toast.success(`Item split into ${parts} parts`);
+      toast.success(t("pos.itemSplit", { count: parts }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not split item");
+      toast.error(e instanceof Error ? e.message : t("pos.couldNotSplit"));
     } finally {
       setBusy(false);
     }
@@ -191,15 +198,14 @@ export function SplitBillDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Split bill — {targetLabel}</DialogTitle>
-          <DialogDescription>
-            Take partial payments — even shares or specific items. The order
-            closes itself when the balance reaches zero.
-          </DialogDescription>
+          <DialogTitle>{t("pos.splitBill", { label: targetLabel })}</DialogTitle>
+          <DialogDescription>{t("pos.splitBillDesc")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-baseline justify-between rounded-md bg-muted px-3 py-2">
-          <span className="text-sm text-muted-foreground">Balance due</span>
+          <span className="text-sm text-muted-foreground">
+            {t("pos.balanceDue")}
+          </span>
           <span className="text-xl font-semibold tabular-nums">
             {formatMoney(remainingCents / 100)}
           </span>
@@ -208,22 +214,22 @@ export function SplitBillDialog({
         <Tabs defaultValue="even" className="flex min-h-0 flex-1 flex-col">
           <TabsList className="grid h-12 w-full grid-cols-2">
             <TabsTrigger value="even" className="h-10">
-              <Users className="mr-2 h-4 w-4" /> Alla romana
+              <Users className="mr-2 h-4 w-4" /> {t("pos.allaRomana")}
             </TabsTrigger>
             <TabsTrigger value="items" className="h-10">
-              <Banknote className="mr-2 h-4 w-4" /> By item
+              <Banknote className="mr-2 h-4 w-4" /> {t("pos.byItem")}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="even" className="flex flex-col gap-4 pt-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">People</span>
+              <span className="text-sm font-medium">{t("pos.people")}</span>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="icon"
                   className="h-10 w-10"
-                  aria-label="Fewer people"
+                  aria-label={t("pos.fewerPeople")}
                   disabled={busy || people <= Math.max(2, evenPaid + 1)}
                   onClick={() => setPeople((p) => p - 1)}
                 >
@@ -236,7 +242,7 @@ export function SplitBillDialog({
                   variant="outline"
                   size="icon"
                   className="h-10 w-10"
-                  aria-label="More people"
+                  aria-label={t("pos.morePeople")}
                   disabled={busy}
                   onClick={() => setPeople((p) => p + 1)}
                 >
@@ -246,7 +252,10 @@ export function SplitBillDialog({
             </div>
             {evenPaid > 0 && (
               <p className="text-sm text-muted-foreground">
-                {evenPaid} of {Math.max(people, evenPaid)} shares already paid.
+                {t("pos.sharesPaid", {
+                  paid: evenPaid,
+                  total: Math.max(people, evenPaid),
+                })}
               </p>
             )}
             <Button
@@ -255,11 +264,13 @@ export function SplitBillDialog({
               disabled={busy || remainingCents <= 0}
               onClick={handleEvenShare}
             >
-              Charge 1 of {sharesLeft} · {formatMoney(nextShareCents / 100)}
+              {t("pos.chargeShare", {
+                count: sharesLeft,
+                amount: formatMoney(nextShareCents / 100),
+              })}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Each tap charges the remaining balance divided by the people
-              still to pay; the last share settles the exact remainder.
+              {t("pos.evenShareHelp")}
             </p>
           </TabsContent>
 
@@ -301,7 +312,7 @@ export function SplitBillDialog({
                           </span>
                           <span className="min-w-0 flex-1 truncate">
                             {i.quantity > 1 ? `${i.quantity}× ` : ""}
-                            {itemDisplayName(i)}
+                            {itemDisplayName(i, t)}
                           </span>
                           <span className="tabular-nums">
                             {formatMoney(i.unit_price * i.quantity)}
@@ -312,7 +323,9 @@ export function SplitBillDialog({
                             variant="outline"
                             size="icon"
                             className="h-12 w-12 shrink-0"
-                            aria-label={`Split ${itemDisplayName(i)} between people`}
+                            aria-label={t("pos.splitItemAria", {
+                            name: itemDisplayName(i, t),
+                          })}
                             disabled={busy}
                             onClick={() =>
                               setSplittingItemId((cur) =>
@@ -327,7 +340,7 @@ export function SplitBillDialog({
                       {splittingItemId === i.id && (
                         <div className="flex items-center gap-2 rounded-md border bg-muted/50 p-2">
                           <span className="px-1 text-xs text-muted-foreground">
-                            Divide by
+                            {t("pos.divideBy")}
                           </span>
                           {[2, 3, 4, 5, 6].map((parts) => (
                             <Button
@@ -353,9 +366,14 @@ export function SplitBillDialog({
               disabled={busy || selectedItems.length === 0}
               onClick={handlePaySelected}
             >
-              Pay {selectedItems.length} item
-              {selectedItems.length === 1 ? "" : "s"} ·{" "}
-              {formatMoney(selectionCents / 100)}
+              {selectedItems.length === 1
+                ? t("pos.payOneItem", {
+                    amount: formatMoney(selectionCents / 100),
+                  })
+                : t("pos.payManyItems", {
+                    count: selectedItems.length,
+                    amount: formatMoney(selectionCents / 100),
+                  })}
             </Button>
           </TabsContent>
         </Tabs>
@@ -370,7 +388,9 @@ export function SplitBillDialog({
                   className="flex justify-between text-muted-foreground"
                 >
                   <span>
-                    {p.kind === "even" ? "Alla romana share" : "Items payment"}
+                    {p.kind === "even"
+                      ? t("pos.allaRomanaShare")
+                      : t("pos.itemsPayment")}
                   </span>
                   <span className="tabular-nums">{formatMoney(p.amount)}</span>
                 </div>

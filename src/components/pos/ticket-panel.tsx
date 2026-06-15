@@ -58,6 +58,7 @@ import {
   type TicketLine,
   type TicketMode,
 } from "@/stores/ticket-store";
+import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore, usePermission } from "@/stores/auth-store";
 import { ModifierDialog } from "./modifier-dialog";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
@@ -135,6 +136,7 @@ export function TicketPanel({
     clearLines,
     clearTicket,
   } = useTicketStore();
+  const t = useT();
   const canCheckout = usePermission("checkout_orders");
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [busy, setBusy] = useState(false);
@@ -191,14 +193,16 @@ export function TicketPanel({
   function warnOnPrintFailure(jobs: PromiseSettledResult<PrintJobResult[]>) {
     if (jobs.status === "rejected") {
       toast.warning(
-        jobs.reason instanceof Error ? jobs.reason.message : "Printing failed",
+        jobs.reason instanceof Error ? jobs.reason.message : t("pos.printingFailed"),
       );
       return;
     }
     const failed = jobs.value.filter((j) => !j.ok);
     if (failed.length > 0) {
       toast.warning(
-        `Printer offline: ${failed.map((f) => f.printerName).join(", ")}`,
+        t("pos.printerOffline", {
+          printers: failed.map((f) => f.printerName).join(", "),
+        }),
       );
     }
   }
@@ -231,10 +235,10 @@ export function TicketPanel({
       const round = await sendPendingLines();
       clearLines();
       await onOrderChanged();
-      toast.success(`Order sent to kitchen for ${targetLabel}`);
+      toast.success(t("pos.orderSent", { label: targetLabel ?? "" }));
       await printRound(round);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not send order");
+      toast.error(e instanceof Error ? e.message : t("pos.couldNotSend"));
     } finally {
       setBusy(false);
     }
@@ -253,7 +257,7 @@ export function TicketPanel({
         clearLines();
       }
       if (!orderId) {
-        toast.error("Nothing to check out");
+        toast.error(t("pos.nothingToCheckout"));
         return;
       }
       const tableClosed = await checkoutOrder(
@@ -271,8 +275,8 @@ export function TicketPanel({
       } else {
         toast.success(
           mode === "takeaway"
-            ? `Take-away for ${closedLabel} paid`
-            : `${closedLabel} paid — other splits still open`,
+            ? t("pos.takeawayPaid", { label: closedLabel ?? "" })
+            : t("pos.splitPaidOthersOpen", { label: closedLabel ?? "" }),
         );
       }
       // last-second items still reach the kitchen, then the bill prints
@@ -280,7 +284,7 @@ export function TicketPanel({
       const [receipt] = await Promise.allSettled([printReceipt(orderId)]);
       warnOnPrintFailure(receipt);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Checkout failed");
+      toast.error(e instanceof Error ? e.message : t("pos.checkoutFailed"));
     } finally {
       setBusy(false);
     }
@@ -292,9 +296,9 @@ export function TicketPanel({
     try {
       await setSentItemQuantity(openOrder.order.id, orderItemId, quantity);
       await onOrderChanged();
-      if (quantity <= 0) toast.success("Item removed from order");
+      if (quantity <= 0) toast.success(t("pos.itemRemoved"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not update order");
+      toast.error(e instanceof Error ? e.message : t("pos.couldNotUpdateOrder"));
     } finally {
       setBusy(false);
     }
@@ -311,9 +315,11 @@ export function TicketPanel({
     try {
       await setSentItemPrice(openOrder.order.id, target.id, unitPrice);
       await onOrderChanged();
-      toast.success(`${target.name} now ${formatMoney(unitPrice)}`);
+      toast.success(
+        t("pos.priceNow", { name: target.name, price: formatMoney(unitPrice) }),
+      );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not update price");
+      toast.error(e instanceof Error ? e.message : t("pos.couldNotUpdatePrice"));
     } finally {
       setBusy(false);
     }
@@ -329,7 +335,7 @@ export function TicketPanel({
       ]);
       warnOnPrintFailure(jobs);
       if (jobs.status === "fulfilled" && jobs.value.every((j) => j.ok)) {
-        toast.success("Pre-receipt printed");
+        toast.success(t("pos.preReceiptPrinted"));
       }
     } finally {
       setBusy(false);
@@ -351,9 +357,13 @@ export function TicketPanel({
       setTakeaway(orderId, trimmed);
       await onOrderChanged();
       setSavedLabels(await fetchDeliveryLabels());
-      toast.success(`Take-away #${deliveryNumber} started for ${trimmed}`);
+      toast.success(
+        t("pos.takeawayStarted", { number: deliveryNumber, name: trimmed }),
+      );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not start take-away");
+      toast.error(
+        e instanceof Error ? e.message : t("pos.couldNotStartTakeaway"),
+      );
     } finally {
       setBusy(false);
     }
@@ -370,8 +380,8 @@ export function TicketPanel({
     } else {
       toast.success(
         mode === "takeaway"
-          ? `Take-away for ${closedLabel} fully paid`
-          : `${closedLabel} fully paid — other splits still open`,
+          ? t("pos.takeawayFullyPaid", { label: closedLabel ?? "" })
+          : t("pos.splitFullyPaidOthersOpen", { label: closedLabel ?? "" }),
       );
     }
   }
@@ -385,11 +395,11 @@ export function TicketPanel({
       await onOrderChanged();
       toast.success(
         status === "dirty"
-          ? `Table ${cleanup.tableName} flagged for cleaning`
-          : `Table ${cleanup.tableName} is free`,
+          ? t("pos.tableFlaggedCleaning", { name: cleanup.tableName })
+          : t("pos.tableIsFree", { name: cleanup.tableName }),
       );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Update failed");
+      toast.error(e instanceof Error ? e.message : t("common.updateFailed"));
     } finally {
       setBusy(false);
       setCleanup(null);
@@ -402,10 +412,10 @@ export function TicketPanel({
         <Tabs value={mode} onValueChange={(m) => setMode(m as TicketMode)}>
           <TabsList className="grid h-12 w-full grid-cols-2">
             <TabsTrigger value="table" className="h-10 text-base">
-              Dine-in
+              {t("pos.dineIn")}
             </TabsTrigger>
             <TabsTrigger value="takeaway" className="h-10 text-base">
-              Take-away
+              {t("pos.takeaway")}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -415,17 +425,20 @@ export function TicketPanel({
             <Select
               value={tableId ?? ""}
               onValueChange={(id) => {
-                const t = tables.find((x) => x.id === id);
-                if (t) setTable(t.id, t.name);
+                const tbl = tables.find((x) => x.id === id);
+                if (tbl) setTable(tbl.id, tbl.name);
               }}
             >
               <SelectTrigger className="h-12 text-base">
-                <SelectValue placeholder="Select a table" />
+                <SelectValue placeholder={t("pos.selectTable")} />
               </SelectTrigger>
               <SelectContent>
-                {tables.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    Table {t.name} · seats {t.capacity}
+                {tables.map((tbl) => (
+                  <SelectItem key={tbl.id} value={tbl.id}>
+                    {t("pos.tableOption", {
+                      name: tbl.name,
+                      count: tbl.capacity,
+                    })}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -450,14 +463,16 @@ export function TicketPanel({
             <div className="min-w-0 flex-1">
               <span className="block truncate font-medium">{takeawayName}</span>
               <span className="block text-xs text-muted-foreground">
-                {takeawayOrderId ? "open take-away order" : "new take-away"}
+                {takeawayOrderId
+                  ? t("pos.openTakeawayOrder")
+                  : t("pos.newTakeawayLabel")}
               </span>
             </div>
             <Button
               variant="ghost"
               size="icon"
               className="h-10 w-10"
-              aria-label="Clear take-away customer"
+              aria-label={t("pos.clearTakeawayAria")}
               onClick={clearTicket}
             >
               <X className="h-4 w-4" />
@@ -477,20 +492,20 @@ export function TicketPanel({
         {!hasTarget && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {mode === "table"
-              ? "Pick a table to start a ticket."
-              : "Find an open take-away or type a customer name to start one."}
+              ? t("pos.pickTableToStart")
+              : t("pos.findOpenTakeaway")}
           </p>
         )}
 
         {openOrder && openOrder.items.length > 0 && (
           <div className="mb-4">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Sent to kitchen — tap to amend
+              {t("pos.sentToKitchen")}
             </h3>
             <div className="flex flex-col gap-1.5">
               {openOrder.items.map((i) => {
                 const name =
-                  (i.menu_items?.name ?? "Item") +
+                  (i.menu_items?.name ?? t("floor.itemFallback")) +
                   (i.fraction_of ? ` (1/${i.fraction_of})` : "");
                 const modifierRows = (i.order_item_modifiers ?? []).map(
                   (m) => ({
@@ -510,7 +525,7 @@ export function TicketPanel({
                           {name}
                         </span>
                         <span className="text-xs font-medium uppercase">
-                          Paid
+                          {t("pos.paid")}
                         </span>
                         <span className="w-14 text-right tabular-nums line-through">
                           {formatMoney(i.unit_price * i.quantity)}
@@ -531,7 +546,7 @@ export function TicketPanel({
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
-                        aria-label={`Decrease sent ${name}`}
+                        aria-label={t("pos.decreaseSent", { name })}
                         disabled={busy}
                         onClick={() => amendSentItem(i.id, i.quantity - 1)}
                       >
@@ -544,7 +559,7 @@ export function TicketPanel({
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
-                        aria-label={`Increase sent ${name}`}
+                        aria-label={t("pos.increaseSent", { name })}
                         disabled={busy}
                         onClick={() => amendSentItem(i.id, i.quantity + 1)}
                       >
@@ -558,7 +573,7 @@ export function TicketPanel({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      aria-label={`Adjust price of ${name}`}
+                      aria-label={t("pos.adjustPriceOf", { name })}
                       disabled={busy}
                       onClick={() =>
                         setPriceEdit({
@@ -575,7 +590,7 @@ export function TicketPanel({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      aria-label={`Remove sent ${name}`}
+                      aria-label={t("pos.removeSent", { name })}
                       disabled={busy}
                       onClick={() => amendSentItem(i.id, 0)}
                     >
@@ -593,9 +608,7 @@ export function TicketPanel({
 
         {hasTarget && lines.length === 0 && (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            {openOrder
-              ? "Tap menu items to add another round."
-              : "Tap menu items to build the order."}
+            {openOrder ? t("pos.tapAnotherRound") : t("pos.tapToBuild")}
           </p>
         )}
 
@@ -606,10 +619,11 @@ export function TicketPanel({
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{l.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {formatMoney(lineUnitPrice(l))} each
+                    {t("pos.each", { amount: formatMoney(lineUnitPrice(l)) })}
                     {l.priceOverridden && (
                       <span className="ml-1 font-medium text-amber-600">
-                        · adjusted
+                        {" "}
+                        {t("pos.adjusted")}
                       </span>
                     )}
                   </div>
@@ -618,7 +632,7 @@ export function TicketPanel({
                   variant="ghost"
                   size="icon"
                   className="h-10 w-10 text-muted-foreground"
-                  aria-label={`Adjust price of ${l.name}`}
+                  aria-label={t("pos.adjustPriceOf", { name: l.name })}
                   onClick={() =>
                     setPriceEdit({
                       kind: "pending",
@@ -635,7 +649,7 @@ export function TicketPanel({
                     variant="outline"
                     size="icon"
                     className="h-10 w-10"
-                    aria-label={`Decrease ${l.name}`}
+                    aria-label={t("pos.decrease", { name: l.name })}
                     onClick={() => setQuantity(l.lineId, l.quantity - 1)}
                   >
                     <Minus className="h-4 w-4" />
@@ -647,7 +661,7 @@ export function TicketPanel({
                     variant="outline"
                     size="icon"
                     className="h-10 w-10"
-                    aria-label={`Increase ${l.name}`}
+                    aria-label={t("pos.increase", { name: l.name })}
                     onClick={() => setQuantity(l.lineId, l.quantity + 1)}
                   >
                     <Plus className="h-4 w-4" />
@@ -660,7 +674,7 @@ export function TicketPanel({
                   variant="ghost"
                   size="icon"
                   className="h-10 w-10 text-muted-foreground"
-                  aria-label={`Remove ${l.name}`}
+                  aria-label={t("pos.remove", { name: l.name })}
                   onClick={() => removeItem(l.lineId)}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -680,7 +694,9 @@ export function TicketPanel({
                   className="ml-5 mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                 >
                   <Plus className="h-3 w-3" />
-                  {l.modifiers.length ? "Edit ingredients" : "Add ingredients"}
+                  {l.modifiers.length
+                    ? t("pos.editIngredients")
+                    : t("pos.addIngredients")}
                 </button>
               )}
             </div>
@@ -691,30 +707,31 @@ export function TicketPanel({
       <div className="border-t p-4">
         <div className="mb-4 flex flex-col gap-1.5 text-sm">
           <div className="flex justify-between text-muted-foreground">
-            <span>Subtotal</span>
+            <span>{t("pos.subtotal")}</span>
             <span className="tabular-nums">{formatMoney(totals.subtotal)}</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
-            <span>Tax (8%)</span>
+            <span>{t("pos.tax")}</span>
             <span className="tabular-nums">{formatMoney(totals.tax)}</span>
           </div>
           <div className="flex justify-between text-lg font-semibold">
-            <span>Total</span>
+            <span>{t("pos.total")}</span>
             <span className="tabular-nums">{formatMoney(totals.total)}</span>
           </div>
           {paidCents > 0 && (
             <>
               <div className="flex justify-between text-muted-foreground">
                 <span>
-                  Paid ({payments.length} payment
-                  {payments.length === 1 ? "" : "s"})
+                  {payments.length === 1
+                    ? t("pos.paidPaymentsOne")
+                    : t("pos.paidPaymentsMany", { count: payments.length })}
                 </span>
                 <span className="tabular-nums">
                   -{formatMoney(paidCents / 100)}
                 </span>
               </div>
               <div className="flex justify-between text-lg font-semibold">
-                <span>Balance due</span>
+                <span>{t("pos.balanceDue")}</span>
                 <span className="tabular-nums">
                   {formatMoney(balanceCents / 100)}
                 </span>
@@ -730,7 +747,7 @@ export function TicketPanel({
             disabled={busy || !hasTarget || lines.length === 0}
             onClick={handleSend}
           >
-            <ChefHat className="mr-2 h-5 w-5" /> Send to Kitchen
+            <ChefHat className="mr-2 h-5 w-5" /> {t("pos.sendToKitchenBtn")}
           </Button>
           {openOrder && (
             <div className="flex gap-2">
@@ -741,7 +758,7 @@ export function TicketPanel({
                 disabled={busy}
                 onClick={handlePreReceipt}
               >
-                <ReceiptText className="mr-2 h-4 w-4" /> Pre-Receipt
+                <ReceiptText className="mr-2 h-4 w-4" /> {t("pos.preReceiptBtn")}
               </Button>
               {canCheckout && (
                 <Button
@@ -751,7 +768,7 @@ export function TicketPanel({
                   disabled={busy}
                   onClick={() => setSplitOpen(true)}
                 >
-                  <Split className="mr-2 h-4 w-4" /> Split Bill
+                  <Split className="mr-2 h-4 w-4" /> {t("pos.splitBillBtn")}
                 </Button>
               )}
             </div>
@@ -764,8 +781,8 @@ export function TicketPanel({
               disabled={busy || !hasTarget || (!openOrder && lines.length === 0)}
               onClick={handleCheckout}
             >
-              <CreditCard className="mr-2 h-5 w-5" /> Checkout ·{" "}
-              {formatMoney(balanceCents / 100)}
+              <CreditCard className="mr-2 h-5 w-5" />{" "}
+              {t("pos.checkoutBtn", { amount: formatMoney(balanceCents / 100) })}
             </Button>
           )}
         </div>
@@ -802,10 +819,10 @@ export function TicketPanel({
       <Dialog open={!!cleanup} onOpenChange={(o) => !o && setCleanup(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Table {cleanup?.tableName} paid</DialogTitle>
-            <DialogDescription>
-              How do you want to leave this table?
-            </DialogDescription>
+            <DialogTitle>
+              {t("pos.tablePaid", { name: cleanup?.tableName ?? "" })}
+            </DialogTitle>
+            <DialogDescription>{t("pos.howLeaveTable")}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <Button
@@ -815,7 +832,7 @@ export function TicketPanel({
               disabled={busy}
               onClick={() => applyCleanup("dirty")}
             >
-              <Trash2 className="mr-2 h-5 w-5" /> Mark dirty
+              <Trash2 className="mr-2 h-5 w-5" /> {t("pos.markDirty")}
             </Button>
             <Button
               size="lg"
@@ -823,7 +840,7 @@ export function TicketPanel({
               disabled={busy}
               onClick={() => applyCleanup("available")}
             >
-              <Check className="mr-2 h-5 w-5" /> Mark available
+              <Check className="mr-2 h-5 w-5" /> {t("pos.markAvailable")}
             </Button>
           </div>
         </DialogContent>

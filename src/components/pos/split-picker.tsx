@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Order } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
 interface SplitPickerProps {
@@ -22,6 +23,7 @@ export function SplitPicker({
   subtable,
   onSelect,
 }: SplitPickerProps) {
+  const t = useT();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
 
@@ -57,7 +59,7 @@ export function SplitPicker({
         className={chipClass(subtable === null)}
         onClick={() => onSelect(null)}
       >
-        Whole table
+        {t("pos.wholeTable")}
       </button>
       {labels.map((s) => (
         <button
@@ -81,23 +83,23 @@ export function SplitPicker({
               }
               if (e.key === "Escape") setAdding(false);
             }}
-            placeholder="1, 2, Gino…"
+            placeholder={t("pos.newSplitPlaceholder")}
             className="h-10 w-28"
             autoFocus
-            aria-label="New split name"
+            aria-label={t("pos.newSplitNameAria")}
           />
           <Button type="button" size="sm" className="h-10" onClick={addSplit}>
-            Add
+            {t("common.add")}
           </Button>
         </div>
       ) : (
         <button
           type="button"
           className={chipClass(false)}
-          aria-label="Add split"
+          aria-label={t("pos.addSplitAria")}
           onClick={() => setAdding(true)}
         >
-          <Plus className="mr-1 h-4 w-4" /> Split
+          <Plus className="mr-1 h-4 w-4" /> {t("pos.split")}
         </button>
       )}
     </div>

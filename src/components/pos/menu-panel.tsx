@@ -3,6 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatMoney } from "@/lib/constants";
 import type { Category, MenuItem } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 
 interface MenuPanelProps {
   categories: Category[];
@@ -11,11 +12,10 @@ interface MenuPanelProps {
 }
 
 export function MenuPanel({ categories, items, onAdd }: MenuPanelProps) {
+  const t = useT();
   if (categories.length === 0) {
     return (
-      <p className="p-6 text-muted-foreground">
-        No menu categories yet — add some in the database.
-      </p>
+      <p className="p-6 text-muted-foreground">{t("pos.noCategories")}</p>
     );
   }
 

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatMoney } from "@/lib/constants";
 import type { Order } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
 
@@ -21,6 +22,7 @@ interface TakeawayPanelProps {
 
 export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
   const router = useRouter();
+  const t = useT();
   const setTakeaway = useTicketStore((s) => s.setTakeaway);
   const canTakeOrders = usePermission("take_orders");
 
@@ -33,13 +35,13 @@ export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
     <Card className="h-fit">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <ShoppingBag className="h-5 w-5" /> Open take-aways
+          <ShoppingBag className="h-5 w-5" /> {t("floor.openTakeaways")}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         {takeaways.length === 0 && (
           <p className="py-4 text-sm text-muted-foreground">
-            No open take-away orders.
+            {t("floor.noOpenTakeaways")}
           </p>
         )}
         {takeaways.map((o, i) => (
@@ -59,7 +61,7 @@ export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
                   <span className="truncate font-medium">{o.customer_name}</span>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {formatMoney(o.total)} · open
+                  {formatMoney(o.total)} · {t("floor.openLower")}
                 </div>
               </div>
               {canTakeOrders && (
@@ -68,7 +70,7 @@ export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
                   className="h-10 shrink-0"
                   onClick={() => openInPos(o)}
                 >
-                  <ReceiptText className="mr-1 h-4 w-4" /> Open in POS
+                  <ReceiptText className="mr-1 h-4 w-4" /> {t("floor.openInPos")}
                 </Button>
               )}
             </div>

@@ -20,6 +20,7 @@ import {
 import type { ModifierGroupWithModifiers } from "@/lib/api";
 import type { Modifier } from "@/lib/database.types";
 import type { SelectedModifier } from "@/stores/ticket-store";
+import { useT, type TFn } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
 interface ModifierDialogProps {
@@ -36,11 +37,13 @@ interface ModifierDialogProps {
   onConfirm: (modifiers: SelectedModifier[]) => void;
 }
 
-function selectionRule(group: ModifierGroupWithModifiers): string {
+function selectionRule(group: ModifierGroupWithModifiers, t: TFn): string {
   const { min_selections: min, max_selections: max } = group;
-  if (min === max) return min === 1 ? "choose 1" : `choose ${min}`;
-  if (min === 0) return max === 1 ? "optional" : `up to ${max}`;
-  return `choose ${min}–${max}`;
+  if (min === max)
+    return min === 1 ? t("pos.ruleChoose1") : t("pos.ruleChooseN", { count: min });
+  if (min === 0)
+    return max === 1 ? t("pos.ruleOptional") : t("pos.ruleUpToN", { count: max });
+  return t("pos.ruleChooseRange", { min, max });
 }
 
 /** Map the line's existing modifiers back to picked ids, per group. */
@@ -73,6 +76,7 @@ export function ModifierDialog({
   onClose,
   onConfirm,
 }: ModifierDialogProps) {
+  const t = useT();
   // modifier ids picked per group id
   const [picked, setPicked] = useState<Record<string, string[]>>({});
   // free-text filter over ingredient names
@@ -162,9 +166,7 @@ export function ModifierDialog({
       >
         <DialogHeader>
           <DialogTitle>{itemName}</DialogTitle>
-          <DialogDescription>
-            Add or remove ingredients for this item.
-          </DialogDescription>
+          <DialogDescription>{t("pos.addRemoveIngredients")}</DialogDescription>
         </DialogHeader>
 
         <div className="relative">
@@ -172,16 +174,16 @@ export function ModifierDialog({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search ingredients…"
+            placeholder={t("pos.searchIngredients")}
             className="h-11 pl-9"
-            aria-label="Search ingredients"
+            aria-label={t("pos.searchIngredientsAria")}
           />
         </div>
 
         <div className="flex max-h-[55vh] flex-col gap-5 overflow-y-auto pr-1">
           {visibleGroups.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No ingredients match &ldquo;{query.trim()}&rdquo;.
+              {t("pos.noIngredientsMatch", { query: query.trim() })}
             </p>
           )}
           {visibleGroups.map((g) => {
@@ -191,13 +193,13 @@ export function ModifierDialog({
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="font-semibold">{g.name}</span>
                   <span className="text-xs text-muted-foreground">
-                    {selectionRule(g)}
+                    {selectionRule(g, t)}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {g.modifiers.length === 0 && (
                     <p className="text-sm text-muted-foreground">
-                      No options in this group yet.
+                      {t("pos.noOptionsInGroup")}
                     </p>
                   )}
                   {g.modifiers.map((m) => {
@@ -253,16 +255,16 @@ export function ModifierDialog({
         <DialogFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex min-w-[13rem] flex-col gap-0.5 text-sm">
             <div className="flex items-center justify-between gap-6 text-muted-foreground">
-              <span>Base</span>
+              <span>{t("pos.base")}</span>
               <span className="tabular-nums">{formatMoney(basePrice)}</span>
             </div>
             {addedCount > 0 && (
               <div className="flex items-center justify-between gap-6 text-muted-foreground">
                 <span>
-                  Added ({addedCount})
+                  {t("pos.added", { count: addedCount })}
                   {tapered && (
                     <span className="ml-1 text-xs text-muted-foreground/70">
-                      diminishing
+                      {t("pos.diminishing")}
                     </span>
                   )}
                 </span>
@@ -277,7 +279,7 @@ export function ModifierDialog({
               </div>
             )}
             <div className="flex items-center justify-between gap-6 text-base font-semibold text-foreground">
-              <span>Total</span>
+              <span>{t("pos.total")}</span>
               <span className="tabular-nums">{formatMoney(total)}</span>
             </div>
           </div>
@@ -288,10 +290,10 @@ export function ModifierDialog({
               className="h-12"
               onClick={onClose}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="button" className="h-12 px-6" onClick={confirm}>
-              Save
+              {t("common.save")}
             </Button>
           </div>
         </DialogFooter>

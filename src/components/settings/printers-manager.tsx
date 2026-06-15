@@ -37,12 +37,14 @@ import type {
   PrinterType,
   RestaurantSettings,
 } from "@/lib/database.types";
+import type { TranslationKey } from "@/lib/i18n/dictionaries";
+import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
-const PRINTER_TYPES: { value: PrinterType; hint: string }[] = [
-  { value: "CASSA", hint: "full customer receipt with prices" },
-  { value: "CUCINA", hint: "kitchen slip, large text, no prices" },
-  { value: "BAR", hint: "bar slip, large text, no prices" },
+const PRINTER_TYPES: { value: PrinterType; hintKey: TranslationKey }[] = [
+  { value: "CASSA", hintKey: "printers.hintCassa" },
+  { value: "CUCINA", hintKey: "printers.hintCucina" },
+  { value: "BAR", hintKey: "printers.hintBar" },
 ];
 
 interface PrintersManagerProps {
@@ -56,6 +58,7 @@ export function PrintersManager({
   settings,
   onChanged,
 }: PrintersManagerProps) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null);
@@ -67,7 +70,7 @@ export function PrintersManager({
       await onChanged();
       toast.success(success);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Something went wrong");
+      toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
     } finally {
       setBusy(false);
     }
@@ -77,10 +80,16 @@ export function PrintersManager({
     setBusy(true);
     try {
       const [job] = await printTest(printer.id);
-      if (job?.ok) toast.success(`Test ticket sent to ${printer.name}`);
-      else toast.error(`${printer.name} unreachable: ${job?.error ?? "unknown error"}`);
+      if (job?.ok) toast.success(t("printers.testSent", { name: printer.name }));
+      else
+        toast.error(
+          t("printers.unreachable", {
+            name: printer.name,
+            error: job?.error ?? t("printers.unknownError"),
+          }),
+        );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Test print failed");
+      toast.error(e instanceof Error ? e.message : t("printers.testPrintFailed"));
     } finally {
       setBusy(false);
     }
@@ -92,7 +101,7 @@ export function PrintersManager({
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-2 text-lg">
             <span className="flex items-center gap-2">
-              <PrinterIcon className="h-5 w-5" /> Network printers
+              <PrinterIcon className="h-5 w-5" /> {t("printers.networkPrinters")}
             </span>
             <Button
               size="sm"
@@ -104,15 +113,14 @@ export function PrintersManager({
                 setDialogOpen(true);
               }}
             >
-              <Plus className="mr-1 h-4 w-4" /> Add printer
+              <Plus className="mr-1 h-4 w-4" /> {t("printers.addPrinter")}
             </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col">
           {printers.length === 0 && (
             <p className="py-2 text-sm text-muted-foreground">
-              No printers yet — add the till and production printers by their
-              static LAN address.
+              {t("printers.noPrinters")}
             </p>
           )}
           {printers.map((p, idx) => (
@@ -131,11 +139,13 @@ export function PrintersManager({
                 <button
                   type="button"
                   disabled={busy}
-                  title="Toggle whether tickets are sent to this printer"
+                  title={t("printers.toggleSendHint")}
                   onClick={() =>
                     run(
                       () => updatePrinter(p.id, { is_active: !p.is_active }),
-                      `${p.name} ${p.is_active ? "deactivated" : "activated"}`,
+                      p.is_active
+                        ? t("printers.deactivated", { name: p.name })
+                        : t("printers.activated", { name: p.name }),
                     )
                   }
                   className={cn(
@@ -145,7 +155,7 @@ export function PrintersManager({
                       : "border-foreground/20 bg-muted text-muted-foreground",
                   )}
                 >
-                  {p.is_active ? "Active" : "Off"}
+                  {p.is_active ? t("printers.active") : t("printers.off")}
                 </button>
                 <Button
                   size="sm"
@@ -154,13 +164,13 @@ export function PrintersManager({
                   disabled={busy}
                   onClick={() => handleTestPrint(p)}
                 >
-                  Test print
+                  {t("printers.testPrint")}
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-10 w-10 shrink-0"
-                  aria-label={`Edit ${p.name}`}
+                  aria-label={t("printers.editAria", { name: p.name })}
                   disabled={busy}
                   onClick={() => {
                     setEditingPrinter(p);
@@ -173,12 +183,12 @@ export function PrintersManager({
                   variant="ghost"
                   size="icon"
                   className="h-10 w-10 shrink-0 text-muted-foreground"
-                  aria-label={`Delete ${p.name}`}
+                  aria-label={t("printers.deleteAria", { name: p.name })}
                   disabled={busy}
                   onClick={() =>
                     run(
                       () => deletePrinter(p.id),
-                      `${p.name} deleted — its items are now receipt-only`,
+                      t("printers.deleted", { name: p.name }),
                     )
                   }
                 >
@@ -213,6 +223,7 @@ function ReceiptIdentityCard({
   settings: RestaurantSettings;
   onChanged: () => Promise<void>;
 }) {
+  const t = useT();
   const [form, setForm] = useState({
     business_name: settings.business_name,
     address: settings.address,
@@ -232,28 +243,32 @@ function ReceiptIdentityCard({
     try {
       await updateRestaurantSettings(form);
       await onChanged();
-      toast.success("Receipt details saved");
+      toast.success(t("printers.receiptDetailsSaved"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save");
+      toast.error(err instanceof Error ? err.message : t("floor.couldNotSave"));
     } finally {
       setBusy(false);
     }
   }
 
-  const fields: { key: keyof typeof form; label: string; placeholder: string }[] = [
-    { key: "business_name", label: "Business name", placeholder: "Trattoria da…" },
-    { key: "address", label: "Address", placeholder: "Via Roma 12, Milano" },
-    { key: "vat_number", label: "P.IVA", placeholder: "IT01234567890" },
-    { key: "phone", label: "Phone", placeholder: "+39 …" },
-    { key: "receipt_greeting", label: "Greeting", placeholder: "Grazie e a presto!" },
-    { key: "legal_footer", label: "Legal footer", placeholder: "Documento commerciale…" },
+  const fields: {
+    key: keyof typeof form;
+    labelKey: TranslationKey;
+    placeholder: string;
+  }[] = [
+    { key: "business_name", labelKey: "printers.businessName", placeholder: "Trattoria da…" },
+    { key: "address", labelKey: "printers.address", placeholder: "Via Roma 12, Milano" },
+    { key: "vat_number", labelKey: "printers.vatNumber", placeholder: "IT01234567890" },
+    { key: "phone", labelKey: "printers.phone", placeholder: "+39 …" },
+    { key: "receipt_greeting", labelKey: "printers.greeting", placeholder: "Grazie e a presto!" },
+    { key: "legal_footer", labelKey: "printers.legalFooter", placeholder: "Documento commerciale…" },
   ];
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Receipt className="h-5 w-5" /> Receipt details
+          <Receipt className="h-5 w-5" /> {t("printers.receiptDetails")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -261,7 +276,7 @@ function ReceiptIdentityCard({
           <div className="grid gap-4 sm:grid-cols-2">
             {fields.map((f) => (
               <div key={f.key} className="grid gap-2">
-                <Label htmlFor={`rs-${f.key}`}>{f.label}</Label>
+                <Label htmlFor={`rs-${f.key}`}>{t(f.labelKey)}</Label>
                 <Input
                   id={`rs-${f.key}`}
                   className="h-12"
@@ -273,7 +288,7 @@ function ReceiptIdentityCard({
             ))}
           </div>
           <Button type="submit" className="h-12 self-end px-6" disabled={busy}>
-            {busy ? "Saving…" : "Save receipt details"}
+            {busy ? t("common.saving") : t("printers.saveReceiptDetails")}
           </Button>
         </form>
       </CardContent>
@@ -298,6 +313,7 @@ function PrinterDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const t = useT();
   const [name, setName] = useState("");
   const [localIp, setLocalIp] = useState("");
   const [port, setPort] = useState("9100");
@@ -333,19 +349,19 @@ function PrinterDialog({
     const parsedPort = parseInt(port, 10);
     const parsedFeed = parseInt(extraFeedLines, 10);
     if (!trimmedName) {
-      toast.error("Printer name is required");
+      toast.error(t("printers.printerNameRequired"));
       return;
     }
     if (!IP_PATTERN.test(trimmedIp)) {
-      toast.error("Enter a valid IPv4 address (e.g. 192.168.1.200)");
+      toast.error(t("printers.validIpv4"));
       return;
     }
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-      toast.error("Port must be between 1 and 65535");
+      toast.error(t("printers.portRange"));
       return;
     }
     if (!Number.isInteger(parsedFeed) || parsedFeed < 0 || parsedFeed > 10) {
-      toast.error("Blank lines must be between 0 and 10");
+      toast.error(t("printers.blankLinesRange"));
       return;
     }
 
@@ -368,10 +384,10 @@ function PrinterDialog({
       if (printer) await updatePrinter(printer.id, fields);
       else await createPrinter(fields);
       await onSaved();
-      toast.success(`${trimmedName} saved`);
+      toast.success(t("printers.printerSaved", { name: trimmedName }));
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save");
+      toast.error(err instanceof Error ? err.message : t("floor.couldNotSave"));
     } finally {
       setBusy(false);
     }
@@ -382,26 +398,28 @@ function PrinterDialog({
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {printer ? `Edit ${printer.name}` : "New printer"}
+            {printer
+              ? t("printers.editPrinter", { name: printer.name })
+              : t("printers.newPrinter")}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="printer-name">Name</Label>
+            <Label htmlFor="printer-name">{t("printers.name")}</Label>
             <Input
               id="printer-name"
               className="h-12"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Cucina"
+              placeholder={t("printers.namePlaceholder")}
               autoFocus
             />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-2 grid gap-2">
-              <Label htmlFor="printer-ip">Local IP</Label>
+              <Label htmlFor="printer-ip">{t("printers.localIp")}</Label>
               <Input
                 id="printer-ip"
                 className="h-12"
@@ -412,7 +430,7 @@ function PrinterDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="printer-port">Port</Label>
+              <Label htmlFor="printer-port">{t("printers.port")}</Label>
               <Input
                 id="printer-port"
                 className="h-12"
@@ -427,7 +445,7 @@ function PrinterDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Ticket type</Label>
+              <Label>{t("printers.ticketType")}</Label>
               <Select
                 value={printerType}
                 onValueChange={(v) => setPrinterType(v as PrinterType)}
@@ -436,16 +454,19 @@ function PrinterDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {PRINTER_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.value} — {t.hint}
+                  {PRINTER_TYPES.map((pt) => (
+                    <SelectItem key={pt.value} value={pt.value}>
+                      {t("printers.ticketOption", {
+                        type: pt.value,
+                        hint: t(pt.hintKey),
+                      })}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Paper width</Label>
+              <Label>{t("printers.paperWidth")}</Label>
               <Select
                 value={paperSize}
                 onValueChange={(v) => setPaperSize(v as PaperSize)}
@@ -454,68 +475,68 @@ function PrinterDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="80mm">80mm (48 columns)</SelectItem>
-                  <SelectItem value="58mm">58mm (32 columns)</SelectItem>
+                  <SelectItem value="80mm">{t("printers.paper80")}</SelectItem>
+                  <SelectItem value="58mm">{t("printers.paper58")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="grid gap-2">
-            <Label>Print options</Label>
+            <Label>{t("printers.printOptions")}</Label>
             <div className="flex flex-col gap-1 rounded-lg border p-3">
               <OptionCheckbox
                 id="opt-prices"
-                label="Print prices on this printer"
+                label={t("printers.optPrices")}
                 checked={printPrices}
                 onChange={setPrintPrices}
                 disabled={printerType !== "CASSA"}
-                disabledHint="Production slips never print prices"
+                disabledHint={t("printers.optPricesHint")}
               />
               <OptionCheckbox
                 id="opt-total"
-                label="Print grand total"
+                label={t("printers.optTotal")}
                 checked={printGrandTotal}
                 onChange={setPrintGrandTotal}
                 disabled={printerType !== "CASSA"}
-                disabledHint="Production slips never print totals"
+                disabledHint={t("printers.optTotalHint")}
               />
               <OptionCheckbox
                 id="opt-legal"
-                label="Print legal invoice footer"
+                label={t("printers.optLegal")}
                 checked={printLegalFooter}
                 onChange={setPrintLegalFooter}
                 disabled={printerType !== "CASSA"}
-                disabledHint="Only the receipt carries legal text"
+                disabledHint={t("printers.optLegalHint")}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="printer-header">Extra header text</Label>
+              <Label htmlFor="printer-header">{t("printers.extraHeader")}</Label>
               <Input
                 id="printer-header"
                 className="h-12"
                 value={headerText}
                 onChange={(e) => setHeaderText(e.target.value)}
-                placeholder="printed at the top"
+                placeholder={t("printers.phHeader")}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="printer-footer">Extra footer text</Label>
+              <Label htmlFor="printer-footer">{t("printers.extraFooter")}</Label>
               <Input
                 id="printer-footer"
                 className="h-12"
                 value={footerText}
                 onChange={(e) => setFooterText(e.target.value)}
-                placeholder="printed at the bottom"
+                placeholder={t("printers.phFooter")}
               />
             </div>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="printer-feed">Blank lines before cut (0–10)</Label>
+            <Label htmlFor="printer-feed">{t("printers.blankLinesLabel")}</Label>
             <Input
               id="printer-feed"
               className="h-12 w-32"
@@ -535,10 +556,14 @@ function PrinterDialog({
               onClick={onClose}
               disabled={busy}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" className="h-12 px-6" disabled={busy}>
-              {busy ? "Saving…" : printer ? "Save changes" : "Add printer"}
+              {busy
+                ? t("common.saving")
+                : printer
+                  ? t("printers.saveChanges")
+                  : t("printers.addPrinter")}
             </Button>
           </DialogFooter>
         </form>

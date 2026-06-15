@@ -15,6 +15,7 @@ import {
   type StaffMember,
 } from "@/lib/staff-api";
 import type { Role } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
 interface RolesManagerProps {
@@ -24,6 +25,7 @@ interface RolesManagerProps {
 }
 
 export function RolesManager({ roles, staff, onChanged }: RolesManagerProps) {
+  const t = useT();
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -34,7 +36,7 @@ export function RolesManager({ roles, staff, onChanged }: RolesManagerProps) {
       await onChanged();
       toast.success(success);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Something went wrong");
+      toast.error(e instanceof Error ? e.message : t("roles.somethingWrong"));
     } finally {
       setBusy(false);
     }
@@ -55,37 +57,38 @@ export function RolesManager({ roles, staff, onChanged }: RolesManagerProps) {
         permissions: next,
       })
     ) {
-      toast.error(
-        "That would leave no active user who can manage staff — someone must keep this permission.",
-      );
+      toast.error(t("roles.leaveNoStaffManager"));
       return;
     }
     void run(
       () => updateRolePermissions(role.id, next),
-      `${role.name} updated`,
+      t("roles.roleUpdated", { name: role.name }),
     );
   }
 
   function handleDelete(role: Role) {
     if (staff.some((u) => u.role_id === role.id)) {
-      toast.error(`Reassign the users in “${role.name}” first`);
+      toast.error(t("roles.reassignUsersFirst", { name: role.name }));
       return;
     }
-    void run(() => deleteRole(role.id), `Role “${role.name}” deleted`);
+    void run(
+      () => deleteRole(role.id),
+      t("roles.roleDeleted", { name: role.name }),
+    );
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     const name = newName.trim();
     if (!name) return;
-    await run(() => createRole(name), `Role “${name}” created`);
+    await run(() => createRole(name), t("roles.roleCreated", { name }));
     setNewName("");
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Roles &amp; permissions</CardTitle>
+        <CardTitle>{t("roles.rolesPermissions")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         {roles.map((role) => {
@@ -96,14 +99,16 @@ export function RolesManager({ roles, staff, onChanged }: RolesManagerProps) {
                 <div>
                   <span className="font-semibold">{role.name}</span>
                   <span className="ml-2 text-xs text-muted-foreground">
-                    {userCount} user{userCount === 1 ? "" : "s"}
+                    {userCount === 1
+                      ? t("roles.userCountOne", { count: userCount })
+                      : t("roles.userCountMany", { count: userCount })}
                   </span>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-10 w-10 text-muted-foreground"
-                  aria-label={`Delete role ${role.name}`}
+                  aria-label={t("roles.deleteRoleAria", { name: role.name })}
                   disabled={busy}
                   onClick={() => handleDelete(role)}
                 >
@@ -118,7 +123,7 @@ export function RolesManager({ roles, staff, onChanged }: RolesManagerProps) {
                       key={p.key}
                       type="button"
                       disabled={busy}
-                      title={p.description}
+                      title={t(`perm.${p.key}.description`)}
                       onClick={() => togglePermission(role, p.key)}
                       className={cn(
                         "flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors disabled:opacity-50",
@@ -128,7 +133,7 @@ export function RolesManager({ roles, staff, onChanged }: RolesManagerProps) {
                       )}
                     >
                       {active && <Check className="h-3.5 w-3.5" />}
-                      {p.label}
+                      {t(`perm.${p.key}.label`)}
                     </button>
                   );
                 })}
@@ -141,16 +146,16 @@ export function RolesManager({ roles, staff, onChanged }: RolesManagerProps) {
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="New role name (e.g. Busser)"
+            placeholder={t("roles.newRolePlaceholder")}
             className="h-12"
-            aria-label="New role name"
+            aria-label={t("roles.newRoleAria")}
           />
           <Button
             type="submit"
             className="h-12"
             disabled={busy || !newName.trim()}
           >
-            <Plus className="mr-1 h-4 w-4" /> Add role
+            <Plus className="mr-1 h-4 w-4" /> {t("roles.addRole")}
           </Button>
         </form>
       </CardContent>

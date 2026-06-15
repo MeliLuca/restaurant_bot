@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
 import { STATUS_CONFIG } from "./status";
@@ -36,6 +37,7 @@ export function TableActionsDialog({
   onChanged,
 }: TableActionsDialogProps) {
   const router = useRouter();
+  const t = useT();
   const setTicketTable = useTicketStore((s) => s.setTable);
   const setSubtable = useTicketStore((s) => s.setSubtable);
   const canManageTables = usePermission("manage_tables");
@@ -69,7 +71,7 @@ export function TableActionsDialog({
       toast.success(message);
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Update failed");
+      toast.error(e instanceof Error ? e.message : t("common.updateFailed"));
     } finally {
       setBusy(false);
     }
@@ -88,22 +90,23 @@ export function TableActionsDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-2xl">
-            Table {table.name}
+            {t("floor.tableTitle", { name: table.name })}
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.badge}`}
             >
-              {status.label}
+              {t(status.labelKey)}
             </span>
           </DialogTitle>
           <DialogDescription className="flex items-center gap-1">
-            <Users className="h-4 w-4" /> Seats {table.capacity}
+            <Users className="h-4 w-4" />{" "}
+            {t("floor.seats", { count: table.capacity })}
           </DialogDescription>
         </DialogHeader>
 
         {orders.length > 0 && (
           <div className="flex flex-col gap-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Open orders
+              {t("floor.openOrders")}
             </h3>
             {orders.map((o, idx) => (
               <div key={o.id}>
@@ -124,7 +127,7 @@ export function TableActionsDialog({
                           key={i.id}
                           className="text-xs text-muted-foreground"
                         >
-                          {i.quantity} × {i.menu_items?.name ?? "Item"}
+                          {i.quantity} × {i.menu_items?.name ?? t("floor.itemFallback")}
                         </span>
                       ))}
                     </div>
@@ -136,7 +139,7 @@ export function TableActionsDialog({
                       className="h-10 shrink-0"
                       onClick={() => openInPos(o.subtable)}
                     >
-                      <ReceiptText className="mr-1 h-4 w-4" /> Open
+                      <ReceiptText className="mr-1 h-4 w-4" /> {t("common.open")}
                     </Button>
                   )}
                 </div>
@@ -149,7 +152,7 @@ export function TableActionsDialog({
         <div className="flex flex-col gap-3">
           {noActions && (
             <p className="py-2 text-sm text-muted-foreground">
-              Your role doesn&apos;t allow any actions on this table.
+              {t("floor.noActionsAllowed")}
             </p>
           )}
 
@@ -161,10 +164,13 @@ export function TableActionsDialog({
                   className="h-14 text-base"
                   disabled={busy}
                   onClick={() =>
-                    changeStatus("occupied", `Table ${table.name} seated`)
+                    changeStatus(
+                      "occupied",
+                      t("floor.tableSeated", { name: table.name }),
+                    )
                   }
                 >
-                  <Armchair className="mr-2 h-5 w-5" /> Seat guests
+                  <Armchair className="mr-2 h-5 w-5" /> {t("floor.seatGuests")}
                 </Button>
               )}
               {canTakeOrders && (
@@ -175,7 +181,7 @@ export function TableActionsDialog({
                   disabled={busy}
                   onClick={() => openInPos()}
                 >
-                  <ReceiptText className="mr-2 h-5 w-5" /> Start order in POS
+                  <ReceiptText className="mr-2 h-5 w-5" /> {t("floor.startOrderInPos")}
                 </Button>
               )}
             </>
@@ -190,7 +196,7 @@ export function TableActionsDialog({
                   disabled={busy}
                   onClick={() => openInPos()}
                 >
-                  <ReceiptText className="mr-2 h-5 w-5" /> Open ticket in POS
+                  <ReceiptText className="mr-2 h-5 w-5" /> {t("floor.openTicketInPos")}
                 </Button>
               )}
               {canManageTables && (
@@ -200,10 +206,13 @@ export function TableActionsDialog({
                   className="h-14 text-base"
                   disabled={busy}
                   onClick={() =>
-                    changeStatus("dirty", `Table ${table.name} marked dirty`)
+                    changeStatus(
+                      "dirty",
+                      t("floor.tableMarkedDirty", { name: table.name }),
+                    )
                   }
                 >
-                  <Trash2 className="mr-2 h-5 w-5" /> Clear table (mark dirty)
+                  <Trash2 className="mr-2 h-5 w-5" /> {t("floor.clearTableDirty")}
                 </Button>
               )}
             </>
@@ -215,10 +224,13 @@ export function TableActionsDialog({
               className="h-14 text-base"
               disabled={busy}
               onClick={() =>
-                changeStatus("available", `Table ${table.name} is clean`)
+                changeStatus(
+                  "available",
+                  t("floor.tableIsClean", { name: table.name }),
+                )
               }
             >
-              <Sparkles className="mr-2 h-5 w-5" /> Mark as clean
+              <Sparkles className="mr-2 h-5 w-5" /> {t("floor.markAsClean")}
             </Button>
           )}
         </div>

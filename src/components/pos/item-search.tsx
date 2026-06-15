@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/constants";
 import type { Category, MenuItem } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 
 const MAX_RESULTS = 8;
 
@@ -17,6 +18,7 @@ interface ItemSearchProps {
 }
 
 export function ItemSearch({ items, categories, onAdd }: ItemSearchProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,17 +62,17 @@ export function ItemSearch({ items, categories, onAdd }: ItemSearchProps) {
             setOpen(false);
           }
         }}
-        placeholder="Search menu items…"
+        placeholder={t("pos.searchMenuItems")}
         className="h-12 pl-10 pr-10 text-base"
         role="combobox"
         aria-expanded={open && query.trim().length > 0}
-        aria-label="Search menu items"
+        aria-label={t("pos.searchMenuItemsAria")}
       />
       {query && (
         <Button
           variant="ghost"
           size="icon"
-          aria-label="Clear search"
+          aria-label={t("pos.clearSearch")}
           className="absolute right-1 top-1/2 h-10 w-10 -translate-y-1/2 text-muted-foreground"
           onClick={() => {
             setQuery("");
@@ -85,10 +87,10 @@ export function ItemSearch({ items, categories, onAdd }: ItemSearchProps) {
         <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border bg-popover shadow-md">
           {matches.length === 0 ? (
             <p className="px-4 py-3 text-sm text-muted-foreground">
-              No items match &ldquo;{query.trim()}&rdquo;
+              {t("pos.noItemsMatch", { query: query.trim() })}
             </p>
           ) : (
-            <ul role="listbox" aria-label="Matching menu items">
+            <ul role="listbox" aria-label={t("pos.matchingMenuItems")}>
               {matches.map((i) => (
                 <li key={i.id} role="option" aria-selected={false}>
                   <button

@@ -12,9 +12,11 @@ import {
   type MenuItemWithIngredients,
 } from "@/lib/settings-api";
 import type { Ingredient } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { usePermission } from "@/stores/auth-store";
 
 export default function AvailabilitySettingsPage() {
+  const t = useT();
   const canManage = usePermission("manage_availability");
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [items, setItems] = useState<MenuItemWithIngredients[]>([]);
@@ -36,12 +38,12 @@ export default function AvailabilitySettingsPage() {
       setError(null);
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : "Failed to load availability",
+        e instanceof Error ? e.message : t("settings.failedLoadAvailability"),
       );
     } finally {
       setLoading(false);
     }
-  }, [canManage]);
+  }, [canManage, t]);
 
   useEffect(() => {
     void refresh();
@@ -49,21 +51,20 @@ export default function AvailabilitySettingsPage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
       <SettingsNav />
 
       {!canManage ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
-            Tonight&apos;s availability requires the &ldquo;Manage
-            availability&rdquo; permission.
+            {t("settings.availabilityRequiresPerm")}
           </CardContent>
         </Card>
       ) : error ? (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
           <TriangleAlert className="h-8 w-8 text-amber-500" />
           <p className="text-sm text-muted-foreground">{error}</p>
-          <Button onClick={() => refresh()}>Retry</Button>
+          <Button onClick={() => refresh()}>{t("common.retry")}</Button>
         </div>
       ) : loading ? (
         <div className="h-64 animate-pulse rounded-xl bg-muted" />

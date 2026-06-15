@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, UserRound, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n/use-translation";
 import { fetchStaff, verifyPin, type StaffMember } from "@/lib/staff-api";
 import { useAuthStore } from "@/stores/auth-store";
 import { PinPad } from "./pin-pad";
 
 export function LockScreen() {
+  const t = useT();
   const signIn = useAuthStore((s) => s.signIn);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [selected, setSelected] = useState<StaffMember | null>(null);
@@ -19,17 +21,17 @@ export function LockScreen() {
     fetchStaff()
       .then((s) => setStaff(s.filter((u) => u.is_active)))
       .catch((e) =>
-        setError(e instanceof Error ? e.message : "Failed to load staff"),
+        setError(e instanceof Error ? e.message : t("auth.loadStaffFailed")),
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   async function handlePin(pin: string): Promise<boolean> {
     if (!selected) return false;
     try {
       const ok = await verifyPin(selected.id, pin);
       if (!ok) {
-        toast.error("Wrong PIN, try again");
+        toast.error(t("auth.wrongPin"));
         return false;
       }
       signIn({
@@ -38,10 +40,10 @@ export function LockScreen() {
         roleName: selected.roles?.name ?? "—",
         permissions: selected.roles?.permissions ?? [],
       });
-      toast.success(`Welcome, ${selected.name}`);
+      toast.success(t("auth.welcome", { name: selected.name }));
       return true;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Sign-in failed");
+      toast.error(e instanceof Error ? e.message : t("auth.signInFailed"));
       return false;
     }
   }
@@ -50,7 +52,7 @@ export function LockScreen() {
     <div className="flex h-dvh flex-col items-center justify-center gap-8 bg-background p-6">
       <div className="flex items-center gap-3">
         <UtensilsCrossed className="h-10 w-10 text-primary" />
-        <span className="text-3xl font-semibold">Trattoria</span>
+        <span className="text-3xl font-semibold">{t("nav.brand")}</span>
       </div>
 
       {error && (
@@ -59,7 +61,7 @@ export function LockScreen() {
 
       {!selected ? (
         <>
-          <p className="text-muted-foreground">Who&apos;s working?</p>
+          <p className="text-muted-foreground">{t("auth.whosWorking")}</p>
           <div className="grid max-w-2xl grid-cols-2 gap-4 sm:grid-cols-3">
             {loading &&
               Array.from({ length: 3 }).map((_, i) => (
@@ -89,7 +91,7 @@ export function LockScreen() {
           <div className="flex flex-col items-center gap-1">
             <span className="text-xl font-semibold">{selected.name}</span>
             <span className="text-sm text-muted-foreground">
-              Enter your 4-digit PIN
+              {t("auth.enterPin")}
             </span>
           </div>
           <PinPad onComplete={handlePin} />
@@ -98,7 +100,7 @@ export function LockScreen() {
             className="h-12"
             onClick={() => setSelected(null)}
           >
-            <ArrowLeft className="mr-2 h-4 w-4" /> Different user
+            <ArrowLeft className="mr-2 h-4 w-4" /> {t("auth.differentUser")}
           </Button>
         </>
       )}

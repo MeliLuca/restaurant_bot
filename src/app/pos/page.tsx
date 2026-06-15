@@ -25,10 +25,12 @@ import type {
   Order,
   RestaurantTable,
 } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
 
 export default function PosPage() {
+  const t = useT();
   const mode = useTicketStore((s) => s.mode);
   const tableId = useTicketStore((s) => s.tableId);
   const subtable = useTicketStore((s) => s.subtable);
@@ -63,11 +65,11 @@ export default function PosPage() {
       setModifierGroups(mg);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load menu");
+      setError(e instanceof Error ? e.message : t("pos.failedLoadMenu"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const refreshOrder = useCallback(async () => {
     try {
@@ -82,9 +84,9 @@ export default function PosPage() {
       }
       setOpenTakeaways(await fetchOpenTakeaways());
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load order");
+      toast.error(e instanceof Error ? e.message : t("pos.failedLoadOrder"));
     }
-  }, [mode, tableId, subtable, takeawayOrderId]);
+  }, [mode, tableId, subtable, takeawayOrderId, t]);
 
   useEffect(() => {
     void loadStatic();
@@ -99,8 +101,8 @@ export default function PosPage() {
     if (!hasTarget) {
       toast.error(
         mode === "table"
-          ? "Select a table first"
-          : "Pick or start a take-away first",
+          ? t("pos.selectTableFirst")
+          : t("pos.pickTakeawayFirst"),
       );
       return false;
     }
@@ -114,10 +116,9 @@ export default function PosPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <TriangleAlert className="h-10 w-10 text-amber-500" />
-        <h1 className="text-xl font-semibold">No POS access</h1>
+        <h1 className="text-xl font-semibold">{t("pos.noAccessTitle")}</h1>
         <p className="max-w-md text-sm text-muted-foreground">
-          Your role doesn&apos;t include the &ldquo;Take orders&rdquo;
-          permission. Ask a manager if you need it.
+          {t("pos.noAccessBody")}
         </p>
       </div>
     );
@@ -127,9 +128,9 @@ export default function PosPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <TriangleAlert className="h-10 w-10 text-amber-500" />
-        <h1 className="text-xl font-semibold">Can&apos;t reach the database</h1>
+        <h1 className="text-xl font-semibold">{t("floor.cantReachDb")}</h1>
         <p className="max-w-md text-sm text-muted-foreground">{error}</p>
-        <Button onClick={() => loadStatic()}>Retry</Button>
+        <Button onClick={() => loadStatic()}>{t("common.retry")}</Button>
       </div>
     );
   }
