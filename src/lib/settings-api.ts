@@ -116,13 +116,25 @@ export async function setTableTags(
 // Ingredients & the 86 board
 // ---------------------------------------------------------------------------
 
+// PostgREST caps a select at 1000 rows; menus and pantries can be larger, so
+// page through with .range() until a short page signals the end.
+const FETCH_PAGE = 1000;
+
 export async function fetchIngredients(): Promise<Ingredient[]> {
-  const { data, error } = await getSupabase()
-    .from("ingredients")
-    .select("*")
-    .order("name");
-  if (error) throw new Error(error.message);
-  return data;
+  const sb = getSupabase();
+  const rows: Ingredient[] = [];
+  for (let from = 0; ; from += FETCH_PAGE) {
+    const { data, error } = await sb
+      .from("ingredients")
+      .select("*")
+      .order("name")
+      .order("id")
+      .range(from, from + FETCH_PAGE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...data);
+    if (data.length < FETCH_PAGE) break;
+  }
+  return rows;
 }
 
 export async function createIngredient(name: string): Promise<void> {
@@ -164,17 +176,26 @@ export type MenuItemWithIngredients = MenuItem & {
 export async function fetchMenuItemsWithIngredients(): Promise<
   MenuItemWithIngredients[]
 > {
-  const { data, error } = await getSupabase()
-    .from("menu_items")
-    .select("*, ingredients(*), menu_item_modifier_groups(group_id)")
-    .order("sort_order");
-  if (error) throw new Error(error.message);
-  const rows = data as unknown as Array<
+  const sb = getSupabase();
+  const rows: Array<
     MenuItem & {
       ingredients: Ingredient[];
       menu_item_modifier_groups: { group_id: string }[];
     }
-  >;
+  > = [];
+  for (let from = 0; ; from += FETCH_PAGE) {
+    // sort_order repeats across categories, so tie-break on id to keep the
+    // pagination windows stable
+    const { data, error } = await sb
+      .from("menu_items")
+      .select("*, ingredients(*), menu_item_modifier_groups(group_id)")
+      .order("sort_order")
+      .order("id")
+      .range(from, from + FETCH_PAGE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...(data as unknown as typeof rows));
+    if (data.length < FETCH_PAGE) break;
+  }
   return rows.map(({ menu_item_modifier_groups, ...item }) => ({
     ...item,
     modifierGroupIds: menu_item_modifier_groups.map((g) => g.group_id),

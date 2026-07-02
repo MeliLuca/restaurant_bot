@@ -620,6 +620,23 @@ export const it = {
     priceAdjustmentHelp:
       "Usa 0 per una scelta gratuita, o un numero negativo per uno sconto.",
     createOption: "Crea opzione",
+    searchPlaceholder: "Cerca per nome o ingrediente…",
+    clearSearchAria: "Cancella ricerca",
+    allCategories: "Tutte",
+    resultsOne: "1 voce trovata",
+    resultsMany: "{count} voci trovate",
+    noResults: "Nessuna voce trovata. Prova un altro termine o un'altra categoria.",
+    showMore: "Mostra altre {count}",
+    categoryItemsOne: "1 voce",
+    categoryItemsMany: "{count} voci",
+    offMenuCount: "{count} fuori menù",
+    filterIngredientsPlaceholder: "Filtra ingredienti…",
+    moreIngredients: "…e altri {count} — affina il filtro",
+    tabItems: "Voci di menù",
+    tabLibrary: "Ingredienti e varianti",
+    searchHint:
+      "Cerca una voce per nome o ingrediente, oppure scegli una categoria qui sopra.",
+    categoriesTitle: "Categorie",
   },
   perm: {
     manage_tables: {
@@ -1264,6 +1281,23 @@ export const en: typeof it = {
     priceAdjustmentHelp:
       "Use 0 for a free choice, or a negative number for a discount.",
     createOption: "Create option",
+    searchPlaceholder: "Search by item name or ingredient…",
+    clearSearchAria: "Clear search",
+    allCategories: "All",
+    resultsOne: "1 item found",
+    resultsMany: "{count} items found",
+    noResults: "No items found. Try a different term or category.",
+    showMore: "Show {count} more",
+    categoryItemsOne: "1 item",
+    categoryItemsMany: "{count} items",
+    offMenuCount: "{count} off menu",
+    filterIngredientsPlaceholder: "Filter ingredients…",
+    moreIngredients: "…and {count} more — refine the filter",
+    tabItems: "Menu items",
+    tabLibrary: "Ingredients & variations",
+    searchHint:
+      "Search for an item by name or ingredient, or pick a category above.",
+    categoriesTitle: "Categories",
   },
   perm: {
     manage_tables: {

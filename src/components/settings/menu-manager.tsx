@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Carrot,
+  LayoutGrid,
   Pencil,
   Plus,
+  Search,
   SlidersHorizontal,
   Trash2,
   UtensilsCrossed,
@@ -68,6 +70,17 @@ interface MenuManagerProps {
   onChanged: () => Promise<void>;
 }
 
+/** How many result rows to render before asking for a "show more" click. */
+const PAGE_SIZE = 50;
+
+/** Accent-insensitive lowercase for search matching (Menù → menu). */
+function normalize(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 export function MenuManager({
   categories,
   items,
@@ -78,11 +91,15 @@ export function MenuManager({
 }: MenuManagerProps) {
   const t = useT();
   const [busy, setBusy] = useState(false);
-  const [newCategory, setNewCategory] = useState("");
+  const [tab, setTab] = useState<"items" | "library">("items");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] =
     useState<MenuItemWithIngredients | null>(null);
   const [dialogCategoryId, setDialogCategoryId] = useState("");
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const deferredQuery = useDeferredValue(query);
 
   async function run(action: () => Promise<void>, success: string) {
     setBusy(true);
@@ -109,169 +126,235 @@ export function MenuManager({
     setDialogOpen(true);
   }
 
-  async function handleAddCategory(e: React.FormEvent) {
-    e.preventDefault();
-    const name = newCategory.trim();
-    if (!name) return;
-    await run(
-      () => createCategory(name, categories.length + 1),
-      t("menu.categoryCreated", { name }),
-    );
-    setNewCategory("");
-  }
+  // Pre-normalised name + ingredients per item, so keystrokes only scan strings
+  const searchIndex = useMemo(
+    () =>
+      items.map((item) => ({
+        item,
+        haystack: normalize(
+          [item.name, ...item.ingredients.map((g) => g.name)].join(" "),
+        ),
+      })),
+    [items],
+  );
+
+  const categoryRank = useMemo(
+    () => new Map(categories.map((c, i) => [c.id, i])),
+    [categories],
+  );
+
+  const categoryStats = useMemo(() => {
+    const stats = new Map<string, { total: number; off: number }>();
+    for (const item of items) {
+      const s = stats.get(item.category_id) ?? { total: 0, off: 0 };
+      s.total += 1;
+      if (!item.is_available) s.off += 1;
+      stats.set(item.category_id, s);
+    }
+    return stats;
+  }, [items]);
+
+  const words = useMemo(
+    () => normalize(deferredQuery.trim()).split(/\s+/).filter(Boolean),
+    [deferredQuery],
+  );
+
+  const results = useMemo(() => {
+    let rows = searchIndex;
+    if (categoryFilter !== "all")
+      rows = rows.filter((r) => r.item.category_id === categoryFilter);
+    if (words.length > 0)
+      rows = rows.filter((r) => words.every((w) => r.haystack.includes(w)));
+    return rows
+      .map((r) => r.item)
+      .sort(
+        (a, b) =>
+          (categoryRank.get(a.category_id) ?? 0) -
+            (categoryRank.get(b.category_id) ?? 0) ||
+          a.sort_order - b.sort_order ||
+          a.name.localeCompare(b.name),
+      );
+  }, [searchIndex, categoryFilter, words, categoryRank]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [deferredQuery, categoryFilter]);
+
+  const browsing = words.length > 0 || categoryFilter !== "all";
+  const visible = results.slice(0, visibleCount);
+  const categoryName = (id: string) =>
+    categories.find((c) => c.id === id)?.name ?? "";
 
   return (
     <>
+      <div className="flex flex-wrap gap-2">
+        <TabPill
+          active={tab === "items"}
+          label={t("menu.tabItems")}
+          onClick={() => setTab("items")}
+        />
+        <TabPill
+          active={tab === "library"}
+          label={t("menu.tabLibrary")}
+          onClick={() => setTab("library")}
+        />
+      </div>
+
+      {tab === "items" && (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <UtensilsCrossed className="h-5 w-5" /> {t("menu.menuTitle")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          {categories.map((c) => {
-            const categoryItems = items.filter((i) => i.category_id === c.id);
-            return (
-              <div key={c.id} className="rounded-lg border p-4">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="font-semibold">{c.name}</span>
-                  <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-10"
-                      disabled={busy}
-                      onClick={() => openCreate(c.id)}
-                    >
-                      <Plus className="mr-1 h-4 w-4" /> {t("menu.addItem")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-10 w-10 text-muted-foreground"
-                      aria-label={t("menu.deleteCategoryAria", { name: c.name })}
-                      disabled={busy}
-                      onClick={() =>
-                        run(
-                          () => deleteCategory(c.id),
-                          t("menu.categoryDeleted", { name: c.name }),
-                        )
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {categoryItems.length === 0 && (
-                  <p className="py-2 text-sm text-muted-foreground">
-                    {t("menu.noItems")}
-                  </p>
-                )}
-                {categoryItems.map((item, idx) => (
-                  <div key={item.id}>
-                    {idx > 0 && <Separator className="my-1" />}
-                    <div className="flex items-center gap-3 py-1.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{item.name}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {item.ingredients.length > 0
-                            ? item.ingredients.map((g) => g.name).join(" · ")
-                            : t("menu.noIngredientsListed")}
-                        </div>
-                      </div>
-                      <span className="shrink-0 text-sm font-semibold tabular-nums">
-                        {formatMoney(item.price)}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        title={t("menu.toggleOnMenuHint")}
-                        onClick={() =>
-                          run(
-                            () =>
-                              updateMenuItem(item.id, {
-                                is_available: !item.is_available,
-                              }),
-                            item.is_available
-                              ? t("menu.itemTakenOff", { name: item.name })
-                              : t("menu.itemBackOn", { name: item.name }),
-                          )
-                        }
-                        className={cn(
-                          "shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
-                          item.is_available
-                            ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
-                            : "border-foreground/20 bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {item.is_available ? t("menu.onMenu") : t("menu.offMenu")}
-                      </button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 shrink-0"
-                        aria-label={t("menu.editItemAria", { name: item.name })}
-                        disabled={busy}
-                        onClick={() => openEdit(item)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 shrink-0 text-muted-foreground"
-                        aria-label={t("menu.deleteItemAria", { name: item.name })}
-                        disabled={busy}
-                        onClick={() =>
-                          run(
-                            () => deleteMenuItem(item.id),
-                            t("menu.nameDeleted", { name: item.name }),
-                          )
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-
-          <form onSubmit={handleAddCategory} className="flex gap-2">
-            <Input
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              placeholder={t("menu.newCategoryPlaceholder")}
-              className="h-12"
-              aria-label={t("menu.newCategoryAria")}
-            />
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <UtensilsCrossed className="h-5 w-5" /> {t("menu.menuTitle")}
+            </CardTitle>
             <Button
-              type="submit"
-              className="h-12"
-              disabled={busy || !newCategory.trim()}
+              className="h-10"
+              disabled={busy || categories.length === 0}
+              onClick={() =>
+                openCreate(
+                  categoryFilter !== "all"
+                    ? categoryFilter
+                    : (categories[0]?.id ?? ""),
+                )
+              }
             >
-              <Plus className="mr-1 h-4 w-4" /> {t("menu.addCategory")}
+              <Plus className="mr-1 h-4 w-4" /> {t("menu.newItem")}
             </Button>
-          </form>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("menu.searchPlaceholder")}
+              className="h-12 pl-9 pr-10"
+              autoFocus
+              aria-label={t("menu.searchPlaceholder")}
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label={t("menu.clearSearchAria")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setQuery("")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <CategoryChip
+              active={categoryFilter === "all"}
+              label={t("menu.allCategories")}
+              count={items.length}
+              onClick={() => setCategoryFilter("all")}
+            />
+            {categories.map((c) => (
+              <CategoryChip
+                key={c.id}
+                active={categoryFilter === c.id}
+                label={c.name}
+                count={categoryStats.get(c.id)?.total ?? 0}
+                onClick={() =>
+                  setCategoryFilter((cur) => (cur === c.id ? "all" : c.id))
+                }
+              />
+            ))}
+          </div>
+
+          {browsing ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {results.length === 1
+                  ? t("menu.resultsOne")
+                  : t("menu.resultsMany", { count: results.length })}
+              </p>
+              {results.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  {t("menu.noResults")}
+                </p>
+              )}
+              <div>
+                {visible.map((item, idx) => {
+                  const showHeader =
+                    categoryFilter === "all" &&
+                    (idx === 0 ||
+                      visible[idx - 1].category_id !== item.category_id);
+                  return (
+                    <div key={item.id}>
+                      {showHeader && (
+                        <div
+                          className={cn(
+                            "pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+                            idx === 0 && "pt-0",
+                          )}
+                        >
+                          {categoryName(item.category_id)}
+                        </div>
+                      )}
+                      {!showHeader && idx > 0 && <Separator className="my-1" />}
+                      <ItemRow
+                        item={item}
+                        busy={busy}
+                        run={run}
+                        onEdit={openEdit}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              {results.length > visibleCount && (
+                <Button
+                  variant="outline"
+                  className="h-12"
+                  onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                >
+                  {t("menu.showMore", {
+                    count: Math.min(PAGE_SIZE, results.length - visibleCount),
+                  })}
+                </Button>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <Search className="h-6 w-6 text-muted-foreground/50" />
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {t("menu.searchHint")}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
+      )}
 
-      <IngredientsCard
-        ingredients={ingredients}
-        items={items}
-        busy={busy}
-        run={run}
-      />
+      {tab === "library" && (
+        <>
+          <CategoriesCard
+            categories={categories}
+            stats={categoryStats}
+            busy={busy}
+            run={run}
+          />
 
-      <ModifierGroupsCard
-        groups={modifierGroups}
-        items={items}
-        busy={busy}
-        run={run}
-        onChanged={onChanged}
-      />
+          <IngredientsCard
+            ingredients={ingredients}
+            items={items}
+            busy={busy}
+            run={run}
+          />
+
+          <ModifierGroupsCard
+            groups={modifierGroups}
+            items={items}
+            busy={busy}
+            run={run}
+            onChanged={onChanged}
+          />
+        </>
+      )}
 
       <MenuItemDialog
         open={dialogOpen}
@@ -289,6 +372,238 @@ export function MenuManager({
   );
 }
 
+function TabPill({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        "flex h-11 items-center rounded-full border px-4 text-sm font-medium transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-accent",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function CategoriesCard({
+  categories,
+  stats,
+  busy,
+  run,
+}: {
+  categories: Category[];
+  stats: Map<string, { total: number; off: number }>;
+  busy: boolean;
+  run: (action: () => Promise<void>, success: string) => Promise<void>;
+}) {
+  const t = useT();
+  const [newCategory, setNewCategory] = useState("");
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newCategory.trim();
+    if (!name) return;
+    await run(
+      () => createCategory(name, categories.length + 1),
+      t("menu.categoryCreated", { name }),
+    );
+    setNewCategory("");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <LayoutGrid className="h-5 w-5" /> {t("menu.categoriesTitle")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div>
+          {categories.map((c, idx) => {
+            const s = stats.get(c.id) ?? { total: 0, off: 0 };
+            return (
+              <div key={c.id}>
+                {idx > 0 && <Separator className="my-1" />}
+                <div className="flex items-center gap-3 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{c.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {s.total === 1
+                        ? t("menu.categoryItemsOne")
+                        : t("menu.categoryItemsMany", { count: s.total })}
+                      {s.off > 0 &&
+                        ` · ${t("menu.offMenuCount", { count: s.off })}`}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 shrink-0 text-muted-foreground"
+                    aria-label={t("menu.deleteCategoryAria", { name: c.name })}
+                    disabled={busy}
+                    onClick={() =>
+                      run(
+                        () => deleteCategory(c.id),
+                        t("menu.categoryDeleted", { name: c.name }),
+                      )
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <form onSubmit={handleAdd} className="flex gap-2">
+          <Input
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            placeholder={t("menu.newCategoryPlaceholder")}
+            className="h-12"
+            aria-label={t("menu.newCategoryAria")}
+          />
+          <Button
+            type="submit"
+            className="h-12"
+            disabled={busy || !newCategory.trim()}
+          >
+            <Plus className="mr-1 h-4 w-4" /> {t("menu.addCategory")}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CategoryChip({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "shrink-0 rounded-full border px-3 py-1.5 text-sm transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-accent",
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          "ml-1.5 text-xs",
+          active ? "text-primary-foreground/80" : "text-muted-foreground",
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function ItemRow({
+  item,
+  busy,
+  run,
+  onEdit,
+}: {
+  item: MenuItemWithIngredients;
+  busy: boolean;
+  run: (action: () => Promise<void>, success: string) => Promise<void>;
+  onEdit: (item: MenuItemWithIngredients) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium">{item.name}</div>
+        <div className="truncate text-xs text-muted-foreground">
+          {item.ingredients.length > 0
+            ? item.ingredients.map((g) => g.name).join(" · ")
+            : t("menu.noIngredientsListed")}
+        </div>
+      </div>
+      <span className="shrink-0 text-sm font-semibold tabular-nums">
+        {formatMoney(item.price)}
+      </span>
+      <button
+        type="button"
+        disabled={busy}
+        title={t("menu.toggleOnMenuHint")}
+        onClick={() =>
+          run(
+            () =>
+              updateMenuItem(item.id, {
+                is_available: !item.is_available,
+              }),
+            item.is_available
+              ? t("menu.itemTakenOff", { name: item.name })
+              : t("menu.itemBackOn", { name: item.name }),
+          )
+        }
+        className={cn(
+          "shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
+          item.is_available
+            ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
+            : "border-foreground/20 bg-muted text-muted-foreground",
+        )}
+      >
+        {item.is_available ? t("menu.onMenu") : t("menu.offMenu")}
+      </button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-10 w-10 shrink-0"
+        aria-label={t("menu.editItemAria", { name: item.name })}
+        disabled={busy}
+        onClick={() => onEdit(item)}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-10 w-10 shrink-0 text-muted-foreground"
+        aria-label={t("menu.deleteItemAria", { name: item.name })}
+        disabled={busy}
+        onClick={() =>
+          run(
+            () => deleteMenuItem(item.id),
+            t("menu.nameDeleted", { name: item.name }),
+          )
+        }
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 function IngredientsCard({
   ingredients,
   items,
@@ -302,9 +617,24 @@ function IngredientsCard({
 }) {
   const t = useT();
   const [newIngredient, setNewIngredient] = useState("");
+  const [filter, setFilter] = useState("");
 
-  const usageCount = (id: string) =>
-    items.filter((i) => i.ingredients.some((g) => g.id === id)).length;
+  const usage = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const item of items)
+      for (const g of item.ingredients) m.set(g.id, (m.get(g.id) ?? 0) + 1);
+    return m;
+  }, [items]);
+
+  const filtered = useMemo(() => {
+    const f = normalize(filter.trim());
+    return f
+      ? ingredients.filter((g) => normalize(g.name).includes(f))
+      : ingredients;
+  }, [ingredients, filter]);
+
+  const MAX_CHIPS = 80;
+  const shown = filtered.slice(0, MAX_CHIPS);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -322,20 +652,29 @@ function IngredientsCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {ingredients.length > MAX_CHIPS && (
+          <Input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={t("menu.filterIngredientsPlaceholder")}
+            className="h-12"
+            aria-label={t("menu.filterIngredientsPlaceholder")}
+          />
+        )}
         <div className="flex flex-wrap gap-2">
           {ingredients.length === 0 && (
             <p className="text-sm text-muted-foreground">
               {t("menu.noIngredientsYet")}
             </p>
           )}
-          {ingredients.map((g) => (
+          {shown.map((g) => (
             <span
               key={g.id}
               className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm"
             >
               {g.name}
               <span className="text-xs text-muted-foreground">
-                {usageCount(g.id)}
+                {usage.get(g.id) ?? 0}
               </span>
               <button
                 type="button"
@@ -353,6 +692,13 @@ function IngredientsCard({
               </button>
             </span>
           ))}
+          {filtered.length > MAX_CHIPS && (
+            <span className="self-center text-xs text-muted-foreground">
+              {t("menu.moreIngredients", {
+                count: filtered.length - MAX_CHIPS,
+              })}
+            </span>
+          )}
         </div>
         <form onSubmit={handleAdd} className="flex gap-2">
           <Input
@@ -408,6 +754,7 @@ function MenuItemDialog({
   const [ingredientIds, setIngredientIds] = useState<string[]>([]);
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [printerId, setPrinterId] = useState(NO_PRINTER);
+  const [ingredientFilter, setIngredientFilter] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -418,7 +765,20 @@ function MenuItemDialog({
     setIngredientIds(item ? item.ingredients.map((g) => g.id) : []);
     setGroupIds(item ? [...item.modifierGroupIds] : []);
     setPrinterId(item?.target_printer_id ?? NO_PRINTER);
+    setIngredientFilter("");
   }, [open, item, defaultCategoryId]);
+
+  // Selected chips always stay visible; the filter only narrows the rest
+  const MAX_UNSELECTED = 40;
+  const pickerIngredients = useMemo(() => {
+    const f = normalize(ingredientFilter.trim());
+    const selectedSet = new Set(ingredientIds);
+    const selected = ingredients.filter((g) => selectedSet.has(g.id));
+    const unselected = ingredients.filter(
+      (g) => !selectedSet.has(g.id) && (!f || normalize(g.name).includes(f)),
+    );
+    return { selected, unselected };
+  }, [ingredients, ingredientIds, ingredientFilter]);
 
   function toggleIngredient(id: string) {
     setIngredientIds((ids) =>
@@ -565,13 +925,25 @@ function MenuItemDialog({
 
           <div className="grid gap-2">
             <Label>{t("menu.ingredientsLabel")}</Label>
+            {ingredients.length > MAX_UNSELECTED && (
+              <Input
+                value={ingredientFilter}
+                onChange={(e) => setIngredientFilter(e.target.value)}
+                placeholder={t("menu.filterIngredientsPlaceholder")}
+                className="h-12"
+                aria-label={t("menu.filterIngredientsPlaceholder")}
+              />
+            )}
             <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto">
               {ingredients.length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   {t("menu.noIngredientsDefinedYet")}
                 </p>
               )}
-              {ingredients.map((g) => {
+              {[
+                ...pickerIngredients.selected,
+                ...pickerIngredients.unselected.slice(0, MAX_UNSELECTED),
+              ].map((g) => {
                 const active = ingredientIds.includes(g.id);
                 return (
                   <button
@@ -590,6 +962,13 @@ function MenuItemDialog({
                   </button>
                 );
               })}
+              {pickerIngredients.unselected.length > MAX_UNSELECTED && (
+                <span className="self-center text-xs text-muted-foreground">
+                  {t("menu.moreIngredients", {
+                    count: pickerIngredients.unselected.length - MAX_UNSELECTED,
+                  })}
+                </span>
+              )}
             </div>
           </div>
 
