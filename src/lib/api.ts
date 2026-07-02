@@ -92,6 +92,30 @@ export async function setReservationStatus(
 // POS / menu
 // ---------------------------------------------------------------------------
 
+/** PostgREST caps any select at 1000 rows per response. */
+const PAGE_SIZE = 1000;
+
+/**
+ * Drain a select past the PostgREST row cap: request successive .range()
+ * pages until a short page. The query's ordering must be fully deterministic
+ * (include a unique tie-break column) or rows can repeat/vanish across pages.
+ */
+async function fetchAllRows<Row>(
+  page: (from: number, to: number) => PromiseLike<{
+    data: Row[] | null;
+    error: { message: string } | null;
+  }>,
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return rows;
+  }
+}
+
 export async function fetchCategories(): Promise<Category[]> {
   const { data, error } = await getSupabase()
     .from("categories")
@@ -103,12 +127,16 @@ export async function fetchCategories(): Promise<Category[]> {
 
 /** Items orderable right now: available AND no out-of-stock ingredient (86'd) */
 export async function fetchMenuItems(): Promise<MenuItem[]> {
-  const { data, error } = await getSupabase()
-    .from("menu_items")
-    .select("*, ingredients(is_available)")
-    .eq("is_available", true)
-    .order("sort_order");
-  if (error) throw new Error(error.message);
+  // sort_order repeats across categories, so id is the unique tie-break
+  const data = await fetchAllRows((from, to) =>
+    getSupabase()
+      .from("menu_items")
+      .select("*, ingredients(is_available)")
+      .eq("is_available", true)
+      .order("sort_order")
+      .order("id")
+      .range(from, to),
+  );
   return (data as unknown as (MenuItem & { ingredients: { is_available: boolean }[] })[])
     .filter((item) => item.ingredients.every((i) => i.is_available))
     .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id }) => ({
@@ -134,10 +162,15 @@ export type ModifierGroupWithModifiers = ModifierGroup & {
 export async function fetchMenuModifierGroups(): Promise<
   Record<string, ModifierGroupWithModifiers[]>
 > {
-  const { data, error } = await getSupabase()
-    .from("menu_item_modifier_groups")
-    .select("menu_item_id, modifier_groups(*, modifiers(*))");
-  if (error) throw new Error(error.message);
+  // one row per item↔group link, so this scales with the menu itself
+  const data = await fetchAllRows((from, to) =>
+    getSupabase()
+      .from("menu_item_modifier_groups")
+      .select("menu_item_id, modifier_groups(*, modifiers(*))")
+      .order("menu_item_id")
+      .order("group_id")
+      .range(from, to),
+  );
 
   const rows = data as unknown as Array<{
     menu_item_id: string;
@@ -497,11 +530,10 @@ export async function resetDeliveryCounter(): Promise<void> {
 
 /** Names previously used on delivery orders, offered as quick-picks. */
 export async function fetchDeliveryLabels(): Promise<string[]> {
-  const { data, error } = await getSupabase()
-    .from("delivery_labels")
-    .select("name")
-    .order("name");
-  if (error) throw new Error(error.message);
+  // grows without bound over time; name is unique so it orders deterministically
+  const data = await fetchAllRows((from, to) =>
+    getSupabase().from("delivery_labels").select("name").order("name").range(from, to),
+  );
   return data.map((l) => l.name);
 }
 
