@@ -228,6 +228,8 @@ export interface Database {
           notes: string | null;
           paid_by_payment_id: string | null;
           fraction_of: number | null;
+          /** Kitchen display bump time; null = still to prepare */
+          ready_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -239,6 +241,7 @@ export interface Database {
           notes?: string | null;
           paid_by_payment_id?: string | null;
           fraction_of?: number | null;
+          ready_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -250,6 +253,7 @@ export interface Database {
           notes?: string | null;
           paid_by_payment_id?: string | null;
           fraction_of?: number | null;
+          ready_at?: string | null;
           created_at?: string;
         };
         Relationships: [
