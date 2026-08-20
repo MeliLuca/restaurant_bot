@@ -541,7 +541,14 @@ function ItemRow({
   return (
     <div className="flex items-center gap-3 py-1.5">
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{item.name}</div>
+        <div className="flex items-center gap-2">
+          {item.codice && (
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground tabular-nums">
+              {item.codice}
+            </span>
+          )}
+          <span className="truncate font-medium">{item.name}</span>
+        </div>
         <div className="truncate text-xs text-muted-foreground">
           {item.ingredients.length > 0
             ? item.ingredients.map((g) => g.name).join(" · ")
@@ -750,6 +757,7 @@ function MenuItemDialog({
   const t = useT();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [codice, setCodice] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [ingredientIds, setIngredientIds] = useState<string[]>([]);
   const [groupIds, setGroupIds] = useState<string[]>([]);
@@ -761,6 +769,7 @@ function MenuItemDialog({
     if (!open) return;
     setName(item?.name ?? "");
     setPrice(item ? item.price.toFixed(2) : "");
+    setCodice(item?.codice ?? "");
     setCategoryId(item?.category_id ?? defaultCategoryId);
     setIngredientIds(item ? item.ingredients.map((g) => g.id) : []);
     setGroupIds(item ? [...item.modifierGroupIds] : []);
@@ -810,6 +819,7 @@ function MenuItemDialog({
     }
 
     const targetPrinterId = printerId === NO_PRINTER ? null : printerId;
+    const trimmedCodice = codice.trim() || null;
     setBusy(true);
     try {
       let itemId = item?.id;
@@ -819,6 +829,7 @@ function MenuItemDialog({
           price: parsedPrice,
           category_id: categoryId,
           target_printer_id: targetPrinterId,
+          codice: trimmedCodice,
         });
       } else {
         const maxSort = Math.max(
@@ -833,6 +844,7 @@ function MenuItemDialog({
           price: parsedPrice,
           sortOrder: maxSort + 1,
           targetPrinterId,
+          codice: trimmedCodice,
         });
       }
       await setMenuItemIngredients(itemId, ingredientIds);
@@ -899,6 +911,18 @@ function MenuItemDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="item-codice">{t("menu.code")}</Label>
+            <Input
+              id="item-codice"
+              className="h-12"
+              value={codice}
+              onChange={(e) => setCodice(e.target.value)}
+              placeholder={t("menu.codePlaceholder")}
+              inputMode="numeric"
+            />
           </div>
 
           <div className="grid gap-2">

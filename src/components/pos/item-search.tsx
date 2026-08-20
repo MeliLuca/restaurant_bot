@@ -32,7 +32,11 @@ export function ItemSearch({ items, categories, onAdd }: ItemSearchProps) {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return items
-      .filter((i) => i.name.toLowerCase().includes(q))
+      .filter(
+        (i) =>
+          i.name.toLowerCase().includes(q) ||
+          (i.codice?.toLowerCase().includes(q) ?? false),
+      )
       .slice(0, MAX_RESULTS);
   }, [items, query]);
 

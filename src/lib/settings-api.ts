@@ -227,6 +227,7 @@ export async function createMenuItem(item: {
   price: number;
   sortOrder: number;
   targetPrinterId: string | null;
+  codice: string | null;
 }): Promise<string> {
   const { data, error } = await getSupabase()
     .from("menu_items")
@@ -236,6 +237,7 @@ export async function createMenuItem(item: {
       price: item.price,
       sort_order: item.sortOrder,
       target_printer_id: item.targetPrinterId,
+      codice: item.codice,
     })
     .select("id")
     .single();
@@ -251,6 +253,7 @@ export async function updateMenuItem(
     category_id?: string;
     is_available?: boolean;
     target_printer_id?: string | null;
+    codice?: string | null;
   },
 ): Promise<void> {
   const { error } = await getSupabase()

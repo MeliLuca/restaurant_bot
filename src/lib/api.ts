@@ -111,7 +111,7 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
   if (error) throw new Error(error.message);
   return (data as unknown as (MenuItem & { ingredients: { is_available: boolean }[] })[])
     .filter((item) => item.ingredients.every((i) => i.is_available))
-    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id }) => ({
+    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice }) => ({
       id,
       category_id,
       name,
@@ -119,6 +119,7 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
       is_available,
       sort_order,
       target_printer_id,
+      codice,
     }));
 }
 

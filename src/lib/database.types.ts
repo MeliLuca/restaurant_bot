@@ -104,6 +104,7 @@ export interface Database {
           is_available: boolean;
           sort_order: number;
           target_printer_id: string | null;
+          codice: string | null;
         };
         Insert: {
           id?: string;
@@ -113,6 +114,7 @@ export interface Database {
           is_available?: boolean;
           sort_order?: number;
           target_printer_id?: string | null;
+          codice?: string | null;
         };
         Update: {
           id?: string;
@@ -122,6 +124,7 @@ export interface Database {
           is_available?: boolean;
           sort_order?: number;
           target_printer_id?: string | null;
+          codice?: string | null;
         };
         Relationships: [
           {
