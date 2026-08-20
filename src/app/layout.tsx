@@ -16,6 +16,11 @@ const geistSans = localFont({
 export const metadata: Metadata = {
   title: "Trattoria RMS",
   description: "Restaurant management — floor plan, reservations, and POS",
+  // Home-screen install on Android terminals. Over plain LAN HTTP, Chrome's
+  // "Add to Home screen" gives a named shortcut (standalone install needs
+  // HTTPS — deliberately out of scope).
+  manifest: "/manifest.webmanifest",
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
 };
 
 export const viewport: Viewport = {
@@ -24,6 +29,7 @@ export const viewport: Viewport = {
   // tablets: prevent accidental pinch-zoom while tapping quickly
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#18181b",
 };
 
 export default function RootLayout({
@@ -39,7 +45,8 @@ export default function RootLayout({
           <ChatListener />
           <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
             <Sidebar />
-            <main className="flex-1 overflow-y-auto print:overflow-visible">
+            {/* pb-14 clears the phone bottom nav rendered by <Sidebar> */}
+            <main className="flex-1 overflow-y-auto pb-14 print:overflow-visible sm:pb-0">
               {children}
             </main>
           </div>

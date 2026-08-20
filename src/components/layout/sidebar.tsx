@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  ChefHat,
   LayoutGrid,
   LogOut,
   MessageCircle,
   ReceiptText,
   Settings,
+  TrendingUp,
   UserRound,
   UtensilsCrossed,
 } from "lucide-react";
@@ -27,8 +29,10 @@ const NAV_ITEMS: {
 }[] = [
   { href: "/floor-plan", labelKey: "nav.floorPlan", icon: LayoutGrid },
   { href: "/pos", labelKey: "nav.pos", icon: ReceiptText, permission: "take_orders" },
+  { href: "/kitchen", labelKey: "nav.kitchen", icon: ChefHat },
   { href: "/chat", labelKey: "nav.chat", icon: MessageCircle },
   { href: "/stats", labelKey: "nav.stats", icon: BarChart3, permission: "view_stats" },
+  { href: "/analytics", labelKey: "nav.analytics", icon: TrendingUp, permission: "view_stats" },
   { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
@@ -44,8 +48,56 @@ export function Sidebar() {
       !item.permission || (user?.permissions.includes(item.permission) ?? false),
   );
 
+  const unreadBadge = (href: string) =>
+    href === "/chat" &&
+    unread > 0 && (
+      <span
+        className="absolute -right-2.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+        aria-label={t("nav.unreadMessages", { count: unread })}
+      >
+        {unread > 99 ? "99+" : unread}
+      </span>
+    );
+
   return (
-    <aside className="flex h-full w-24 shrink-0 flex-col items-center border-r bg-card py-4 print:hidden lg:w-56 lg:items-stretch lg:px-3">
+    <>
+    {/* Phones: the side rail would eat a quarter of the width — swap it for a
+        fixed bottom nav; <main> reserves the height via pb-14 sm:pb-0 */}
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t bg-card print:hidden sm:hidden">
+      {visibleItems.map(({ href, labelKey, icon: Icon }) => {
+        const active = pathname.startsWith(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              "flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors",
+              active
+                ? "text-primary"
+                : "text-muted-foreground hover:text-accent-foreground",
+            )}
+          >
+            <span className="relative">
+              <Icon className="h-5 w-5" />
+              {unreadBadge(href)}
+            </span>
+            <span className="max-w-full truncate">{t(labelKey)}</span>
+          </Link>
+        );
+      })}
+      {user && (
+        <button
+          type="button"
+          onClick={signOut}
+          className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-accent-foreground"
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="max-w-full truncate">{t("nav.switchUser")}</span>
+        </button>
+      )}
+    </nav>
+
+    <aside className="hidden h-full w-24 shrink-0 flex-col items-center border-r bg-card py-4 print:hidden sm:flex lg:w-56 lg:items-stretch lg:px-3">
       <div className="mb-6 flex items-center justify-center gap-2 px-2 lg:justify-start">
         <UtensilsCrossed className="h-8 w-8 text-primary" />
         <span className="hidden text-lg font-semibold lg:inline">
@@ -71,14 +123,7 @@ export function Sidebar() {
             >
               <span className="relative">
                 <Icon className="h-6 w-6" />
-                {href === "/chat" && unread > 0 && (
-                  <span
-                    className="absolute -right-2.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
-                    aria-label={t("nav.unreadMessages", { count: unread })}
-                  >
-                    {unread > 99 ? "99+" : unread}
-                  </span>
-                )}
+                {unreadBadge(href)}
               </span>
               <span>{t(labelKey)}</span>
             </Link>
@@ -108,5 +153,6 @@ export function Sidebar() {
         </div>
       )}
     </aside>
+    </>
   );
 }
