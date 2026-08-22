@@ -28,7 +28,12 @@ import {
   type PaymentResult,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
-import { calcTotals, splitCents, toCents } from "@/lib/money";
+import {
+  evenSharesLeft,
+  evenSharesPaid,
+  previewEvenShareCents,
+  previewItemsPaymentCents,
+} from "@/lib/pos/bill-preview";
 import { useT, type TFn } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -71,35 +76,21 @@ export function SplitBillDialog({
 
   // Shares already taken count against the chosen head-count; the math always
   // works off the live remaining balance, so changing N mid-way stays exact.
-  const evenPaid = payments.filter((p) => p.kind === "even").length;
-  const sharesLeft = Math.max(1, people - evenPaid);
-  const nextShareCents = Math.min(
-    splitCents(Math.max(remainingCents, 0), sharesLeft)[0],
-    Math.max(remainingCents, 0),
-  );
+  const evenPaid = evenSharesPaid(payments);
+  const sharesLeft = evenSharesLeft(payments, people);
+  const nextShareCents = previewEvenShareCents(order, payments, sharesLeft);
 
   const selectedItems = useMemo(
     () => unpaid.filter((i) => selected.has(i.id)),
     [unpaid, selected],
   );
-  // Mirror of payForItems: the last selection pays exactly the balance.
-  const selectionCents =
-    selectedItems.length === 0
-      ? 0
-      : selectedItems.length === unpaid.length
-        ? remainingCents
-        : Math.min(
-            toCents(
-              calcTotals(
-                selectedItems.map((i) => ({
-                  unitPrice: i.unit_price,
-                  quantity: i.quantity,
-                })),
-                order.tax_rate,
-              ).total,
-            ),
-            remainingCents,
-          );
+  // Same function payForItems uses, so the label cannot disagree with the charge.
+  const selectionCents = previewItemsPaymentCents(
+    order,
+    items,
+    payments,
+    Array.from(selected),
+  );
 
   function toggleSelected(id: string) {
     setSelected((prev) => {

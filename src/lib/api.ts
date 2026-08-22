@@ -1,10 +1,17 @@
 import { TAX_RATE } from "@/lib/constants";
 import {
   calcTotals,
+  remainingBalanceCents,
   splitCents,
   toCents,
   unitPriceWithModifiers,
 } from "@/lib/money";
+// re-exported so existing callers keep importing it from the data layer
+export { remainingBalanceCents } from "@/lib/money";
+import {
+  previewEvenShareCents,
+  previewItemsPaymentCents,
+} from "@/lib/pos/bill-preview";
 import { getSupabase } from "@/lib/supabase/client";
 import type {
   Category,
@@ -195,17 +202,6 @@ export async function fetchOrderPayments(
     .order("created_at");
   if (error) throw new Error(error.message);
   return data;
-}
-
-/** Cents still owed on an order after its partial payments */
-export function remainingBalanceCents(
-  order: Order,
-  payments: OrderPayment[],
-): number {
-  return (
-    toCents(order.total) -
-    payments.reduce((sum, p) => sum + toCents(p.amount), 0)
-  );
 }
 
 /**
@@ -774,9 +770,7 @@ export async function payEvenShare(
   const remainingCents = remainingBalanceCents(open.order, open.payments);
   if (remainingCents <= 0) throw new Error("Nothing left to pay");
 
-  const n = Math.max(1, Math.floor(sharesLeft));
-  const shareCents =
-    n === 1 ? remainingCents : Math.min(splitCents(remainingCents, n)[0], remainingCents);
+  const shareCents = previewEvenShareCents(open.order, open.payments, sharesLeft);
   return recordPayment(open.order, "even", shareCents, [], userId);
 }
 
@@ -801,14 +795,12 @@ export async function payForItems(
   const remainingCents = remainingBalanceCents(open.order, open.payments);
   if (remainingCents <= 0) throw new Error("Nothing left to pay");
 
-  let amountCents = toCents(
-    calcTotals(
-      selected.map((i) => ({ unitPrice: i.unit_price, quantity: i.quantity })),
-      open.order.tax_rate,
-    ).total,
+  const amountCents = previewItemsPaymentCents(
+    open.order,
+    open.items,
+    open.payments,
+    orderItemIds,
   );
-  if (selected.length === unpaid.length) amountCents = remainingCents;
-  amountCents = Math.min(amountCents, remainingCents);
 
   const paidItemIds = selected.map((i) => i.id);
   const result = await recordPayment(

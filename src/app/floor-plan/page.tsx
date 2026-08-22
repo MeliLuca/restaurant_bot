@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NewDeliveryDialog } from "@/components/floor-plan/new-delivery-dialog";
 import { ReservationDialog } from "@/components/floor-plan/reservation-dialog";
 import { ReservationsPanel } from "@/components/floor-plan/reservations-panel";
-import { STATUS_CONFIG, type TableDisplayStatus } from "@/components/floor-plan/status";
+import { STATUS_CONFIG, type TableDisplayStatus } from "@/lib/floor/status";
 import { TableActionsDialog } from "@/components/floor-plan/table-actions-dialog";
 import { TableCard } from "@/components/floor-plan/table-card";
 import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";

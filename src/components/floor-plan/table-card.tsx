@@ -4,7 +4,7 @@ import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
-import { STATUS_CONFIG, displayStatus } from "./status";
+import { STATUS_CONFIG, displayStatus } from "@/lib/floor/status";
 
 interface TableCardProps {
   table: RestaurantTable;

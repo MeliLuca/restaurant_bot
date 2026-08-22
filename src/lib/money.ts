@@ -112,3 +112,19 @@ export function splitCents(totalCents: number, parts: number): number[] {
     i < remainder ? base + 1 : base,
   );
 }
+
+/**
+ * Cents still owed on an order after its partial payments.
+ *
+ * Lives here rather than in api.ts because it is pure money math with no
+ * Supabase involvement — which also lets bill-preview.ts use it without
+ * creating an import cycle back through the data layer.
+ */
+export function remainingBalanceCents(
+  order: { total: number },
+  payments: { amount: number }[],
+): number {
+  return (
+    toCents(order.total) - payments.reduce((sum, p) => sum + toCents(p.amount), 0)
+  );
+}

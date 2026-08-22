@@ -33,21 +33,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  checkoutOrder,
   createDeliveryOrder,
   fetchDeliveryLabels,
-  printPreReceipt,
-  printProductionSlips,
-  printReceipt,
-  sendTakeawayToKitchen,
-  sendToKitchen,
-  setSentItemPrice,
-  setSentItemQuantity,
   updateTableStatus,
   type ModifierGroupWithModifiers,
   type OpenOrder,
-  type PrintJobResult,
-  type SentRound,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import { calcTotals, toCents } from "@/lib/money";
@@ -59,6 +49,7 @@ import {
   type TicketMode,
 } from "@/stores/ticket-store";
 import { useT } from "@/lib/i18n/use-translation";
+import { useOrderActions } from "@/hooks/use-order-actions";
 import { useAuthStore, usePermission } from "@/stores/auth-store";
 import { ModifierDialog } from "./modifier-dialog";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
@@ -133,13 +124,11 @@ export function TicketPanel({
     setQuantity,
     setLinePrice,
     setLineModifiers,
-    clearLines,
     clearTicket,
   } = useTicketStore();
   const t = useT();
   const canCheckout = usePermission("checkout_orders");
   const userId = useAuthStore((s) => s.user?.id ?? null);
-  const [busy, setBusy] = useState(false);
   const [priceEdit, setPriceEdit] = useState<PriceEditTarget | null>(null);
   const [editLine, setEditLine] = useState<TicketLine | null>(null);
   const [splitOpen, setSplitOpen] = useState(false);
@@ -160,13 +149,41 @@ export function TicketPanel({
     tableName: string;
   } | null>(null);
 
-  const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
-  const targetLabel =
-    mode === "table"
-      ? subtable
-        ? `${tableName}/${subtable}`
-        : tableName
-      : takeawayName;
+  // Send / checkout / amend / price-override / pre-receipt are shared with the
+  // phone UI — see src/hooks/use-order-actions.ts.
+  const {
+    busy: actionsBusy,
+    hasTarget,
+    targetLabel,
+    send: handleSend,
+    checkout: runCheckout,
+    amendSentItem,
+    setSentPrice,
+    preReceipt: handlePreReceipt,
+  } = useOrderActions({ openOrder, onOrderChanged });
+
+  // Take-away creation and the cleanup prompt stay panel-local (the phone has
+  // its own flows for both), so they carry their own busy flag.
+  const [panelBusy, setPanelBusy] = useState(false);
+  const busy = actionsBusy || panelBusy;
+
+  async function handleCheckout() {
+    const outcome = await runCheckout();
+    // Whole table is free — let the user decide dirty vs. available.
+    if (outcome.kind === "table-freed") {
+      setCleanup({ tableId: outcome.tableId, tableName: outcome.tableName });
+    }
+  }
+
+  // Manual price override — the pending branch is pure store state, so it
+  // stays here; only the sent branch hits the DB.
+  async function applyPriceEdit(target: PriceEditTarget, unitPrice: number) {
+    if (target.kind === "pending") {
+      setLinePrice(target.id, unitPrice);
+      return;
+    }
+    await setSentPrice(target.id, unitPrice, target.name);
+  }
 
   // sent unit_price already includes modifier adjustments (snapshot at send);
   // pending lines add them here
@@ -188,167 +205,13 @@ export function TicketPanel({
   const paidCents = payments.reduce((sum, p) => sum + toCents(p.amount), 0);
   const balanceCents = toCents(totals.total) - paidCents;
 
-  // Printing is best-effort: the order is already saved, so a dead printer
-  // warns instead of failing the send.
-  function warnOnPrintFailure(jobs: PromiseSettledResult<PrintJobResult[]>) {
-    if (jobs.status === "rejected") {
-      toast.warning(
-        jobs.reason instanceof Error ? jobs.reason.message : t("pos.printingFailed"),
-      );
-      return;
-    }
-    const failed = jobs.value.filter((j) => !j.ok);
-    if (failed.length > 0) {
-      toast.warning(
-        t("pos.printerOffline", {
-          printers: failed.map((f) => f.printerName).join(", "),
-        }),
-      );
-    }
-  }
-
-  async function printRound(round: SentRound) {
-    const [jobs] = await Promise.allSettled([
-      printProductionSlips(round.orderId, round.newItemIds),
-    ]);
-    warnOnPrintFailure(jobs);
-  }
-
-  async function sendPendingLines(): Promise<SentRound> {
-    if (mode === "table") {
-      return sendToKitchen(tableId!, lines, subtable, userId);
-    }
-    const round = await sendTakeawayToKitchen(
-      takeawayOrderId,
-      takeawayName!,
-      lines,
-      userId,
-    );
-    setTakeaway(round.orderId, takeawayName!);
-    return round;
-  }
-
-  async function handleSend() {
-    if (!hasTarget) return;
-    setBusy(true);
-    try {
-      const round = await sendPendingLines();
-      clearLines();
-      await onOrderChanged();
-      toast.success(t("pos.orderSent", { label: targetLabel ?? "" }));
-      await printRound(round);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("pos.couldNotSend"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleCheckout() {
-    if (!hasTarget) return;
-    setBusy(true);
-    try {
-      // anything still pending goes on the bill before payment
-      let orderId = openOrder?.order.id ?? null;
-      let round: SentRound | null = null;
-      if (lines.length > 0) {
-        round = await sendPendingLines();
-        orderId = round.orderId;
-        clearLines();
-      }
-      if (!orderId) {
-        toast.error(t("pos.nothingToCheckout"));
-        return;
-      }
-      const tableClosed = await checkoutOrder(
-        orderId,
-        mode === "table" ? tableId : null,
-      );
-      const closedLabel = targetLabel;
-      const closedTableId = tableId;
-      const closedTableName = tableName ?? "";
-      clearTicket();
-      await onOrderChanged();
-      if (mode === "table" && tableClosed && closedTableId) {
-        // Whole table is free — let the user decide dirty vs. available.
-        setCleanup({ tableId: closedTableId, tableName: closedTableName });
-      } else {
-        toast.success(
-          mode === "takeaway"
-            ? t("pos.takeawayPaid", { label: closedLabel ?? "" })
-            : t("pos.splitPaidOthersOpen", { label: closedLabel ?? "" }),
-        );
-      }
-      // last-second items still reach the kitchen, then the bill prints
-      if (round) await printRound(round);
-      const [receipt] = await Promise.allSettled([printReceipt(orderId)]);
-      warnOnPrintFailure(receipt);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("pos.checkoutFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function amendSentItem(orderItemId: string, quantity: number) {
-    if (!openOrder) return;
-    setBusy(true);
-    try {
-      await setSentItemQuantity(openOrder.order.id, orderItemId, quantity);
-      await onOrderChanged();
-      if (quantity <= 0) toast.success(t("pos.itemRemoved"));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("pos.couldNotUpdateOrder"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Manual price override — current ticket/order only, never the menu.
-  async function applyPriceEdit(target: PriceEditTarget, unitPrice: number) {
-    if (target.kind === "pending") {
-      setLinePrice(target.id, unitPrice);
-      return;
-    }
-    if (!openOrder) return;
-    setBusy(true);
-    try {
-      await setSentItemPrice(openOrder.order.id, target.id, unitPrice);
-      await onOrderChanged();
-      toast.success(
-        t("pos.priceNow", { name: target.name, price: formatMoney(unitPrice) }),
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("pos.couldNotUpdatePrice"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Courtesy bill: print only — no payment, no order/table state change.
-  async function handlePreReceipt() {
-    if (!openOrder) return;
-    setBusy(true);
-    try {
-      const [jobs] = await Promise.allSettled([
-        printPreReceipt(openOrder.order.id),
-      ]);
-      warnOnPrintFailure(jobs);
-      if (jobs.status === "fulfilled" && jobs.value.every((j) => j.ok)) {
-        toast.success(t("pos.preReceiptPrinted"));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
   // Start a new take-away from the POS using the same logic as the floor-plan
   // New Delivery: create the order eagerly so it gets tonight's counter number,
   // save the name as a reusable label, then load it as the active ticket.
   async function startNewTakeaway(name: string) {
     const trimmed = name.trim();
     if (!trimmed || busy) return;
-    setBusy(true);
+    setPanelBusy(true);
     try {
       const { orderId, deliveryNumber } = await createDeliveryOrder(
         trimmed,
@@ -365,7 +228,7 @@ export function TicketPanel({
         e instanceof Error ? e.message : t("pos.couldNotStartTakeaway"),
       );
     } finally {
-      setBusy(false);
+      setPanelBusy(false);
     }
   }
 
@@ -389,7 +252,7 @@ export function TicketPanel({
   // Apply the dirty/available choice from the post-checkout cleanup prompt.
   async function applyCleanup(status: TableStatus) {
     if (!cleanup) return;
-    setBusy(true);
+    setPanelBusy(true);
     try {
       await updateTableStatus(cleanup.tableId, status);
       await onOrderChanged();
@@ -401,7 +264,7 @@ export function TicketPanel({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("common.updateFailed"));
     } finally {
-      setBusy(false);
+      setPanelBusy(false);
       setCleanup(null);
     }
   }

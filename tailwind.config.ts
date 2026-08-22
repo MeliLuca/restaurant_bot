@@ -6,6 +6,10 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    // class strings also live outside components — e.g. STATUS_CONFIG in
+    // src/lib/floor/status.ts — and the phone UI lives in src/mobile
+    "./src/lib/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/mobile/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
   	extend: {

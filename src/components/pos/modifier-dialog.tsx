@@ -14,13 +14,18 @@ import {
 } from "@/components/ui/dialog";
 import { formatMoney } from "@/lib/constants";
 import {
-  addedIngredientsLinearSum,
-  addedIngredientsSurcharge,
-} from "@/lib/money";
+  filterGroups,
+  isCapped,
+  modifierPricePreview,
+  pickedToModifiers,
+  seedPicked,
+  selectionRule,
+  togglePick,
+} from "@/lib/pos/modifier-selection";
 import type { ModifierGroupWithModifiers } from "@/lib/api";
 import type { Modifier } from "@/lib/database.types";
 import type { SelectedModifier } from "@/stores/ticket-store";
-import { useT, type TFn } from "@/lib/i18n/use-translation";
+import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
 interface ModifierDialogProps {
@@ -35,29 +40,6 @@ interface ModifierDialogProps {
   initialModifiers?: SelectedModifier[];
   onClose: () => void;
   onConfirm: (modifiers: SelectedModifier[]) => void;
-}
-
-function selectionRule(group: ModifierGroupWithModifiers, t: TFn): string {
-  const { min_selections: min, max_selections: max } = group;
-  if (min === max)
-    return min === 1 ? t("pos.ruleChoose1") : t("pos.ruleChooseN", { count: min });
-  if (min === 0)
-    return max === 1 ? t("pos.ruleOptional") : t("pos.ruleUpToN", { count: max });
-  return t("pos.ruleChooseRange", { min, max });
-}
-
-/** Map the line's existing modifiers back to picked ids, per group. */
-function seedPicked(
-  groups: ModifierGroupWithModifiers[],
-  initial: SelectedModifier[],
-): Record<string, string[]> {
-  const chosen = new Set(initial.map((m) => m.modifierId));
-  const picked: Record<string, string[]> = {};
-  for (const g of groups) {
-    const ids = g.modifiers.filter((m) => chosen.has(m.id)).map((m) => m.id);
-    if (ids.length) picked[g.id] = ids;
-  }
-  return picked;
 }
 
 /**
@@ -96,60 +78,26 @@ export function ModifierDialog({
   function toggle(group: ModifierGroupWithModifiers, modifier: Modifier) {
     setPicked((prev) => {
       const current = prev[group.id] ?? [];
-      if (current.includes(modifier.id)) {
-        return {
-          ...prev,
-          [group.id]: current.filter((id) => id !== modifier.id),
-        };
-      }
-      // single-choice groups swap the selection; multi-choice respect the cap
-      if (group.max_selections === 1) {
-        return { ...prev, [group.id]: [modifier.id] };
-      }
-      if (current.length >= group.max_selections) return prev;
-      return { ...prev, [group.id]: [...current, modifier.id] };
+      const next = togglePick(group, current, modifier.id);
+      // togglePick returns the same array when the group is capped
+      return next === current ? prev : { ...prev, [group.id]: next };
     });
   }
 
   const selected: SelectedModifier[] = useMemo(
-    () =>
-      groups.flatMap((g) =>
-        g.modifiers
-          .filter((m) => (picked[g.id] ?? []).includes(m.id))
-          .map((m) => ({
-            modifierId: m.id,
-            name: m.name,
-            priceAdjustment: m.price_adjustment,
-          })),
-      ),
+    () => pickedToModifiers(groups, picked),
     [groups, picked],
   );
 
-  // Search only filters what's shown — picks and the running total below always
-  // read the full `selected` set, so a filtered-out ingredient stays selected.
-  const q = query.trim().toLowerCase();
   const visibleGroups = useMemo(
-    () =>
-      q
-        ? groups
-            .map((g) => ({
-              ...g,
-              modifiers: g.modifiers.filter((m) =>
-                m.name.toLowerCase().includes(q),
-              ),
-            }))
-            .filter((g) => g.modifiers.length > 0)
-        : groups,
-    [groups, q],
+    () => filterGroups(groups, query),
+    [groups, query],
   );
 
   // Live diminishing-scale preview: the linear sum of the added ingredients
   // (S) tapers to `surcharge` (P_total); removals never deduct.
-  const addedCount = selected.filter((m) => m.priceAdjustment > 0).length;
-  const linearExtras = addedIngredientsLinearSum(selected);
-  const surcharge = addedIngredientsSurcharge(selected);
-  const tapered = surcharge < linearExtras; // n ≥ 2 → the scale has kicked in
-  const total = basePrice + surcharge;
+  const { addedCount, linearExtras, surcharge, tapered, total } =
+    modifierPricePreview(basePrice, selected);
 
   function confirm() {
     onConfirm(selected);
@@ -204,10 +152,7 @@ export function ModifierDialog({
                   )}
                   {g.modifiers.map((m) => {
                     const active = (picked[g.id] ?? []).includes(m.id);
-                    const capped =
-                      !active &&
-                      g.max_selections > 1 &&
-                      count >= g.max_selections;
+                    const capped = isCapped(g, count, active);
                     // Positive adjustment = an addition (+, charged on the
                     // diminishing scale); anything else = a removal (−, free).
                     const isAdd = m.price_adjustment > 0;

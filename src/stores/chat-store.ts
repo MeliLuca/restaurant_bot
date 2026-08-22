@@ -74,7 +74,12 @@ export const useChatStore = create<ChatState>()((set, get) => {
       get().teardown();
       set({ userId });
 
-      void (async () => {
+      // The one fetch that has to succeed: `refresh` below only re-reads
+      // messages, so nothing else can supply `staff` or flip `ready`. Left to
+      // fail once, chat would sit on its loading skeleton until a full page
+      // reload — a real outcome for a phone that starts a shift out of wifi
+      // range — so the poll retries this until it lands.
+      const loadInitial = async () => {
         try {
           const [messages, reads, staff] = await Promise.all([
             fetchMessagesFor(userId),
@@ -91,9 +96,10 @@ export const useChatStore = create<ChatState>()((set, get) => {
             ready: true,
           });
         } catch {
-          // polling below retries; the chat page surfaces load errors
+          // retried by the poll below
         }
-      })();
+      };
+      void loadInitial();
 
       channel = getSupabase()
         .channel("staff-chat")
@@ -108,6 +114,10 @@ export const useChatStore = create<ChatState>()((set, get) => {
 
       // Fallback: if the websocket is down, keep the chat fresh by polling.
       pollTimer = setInterval(() => {
+        if (!get().ready) {
+          void loadInitial();
+          return;
+        }
         if (!realtimeUp) void get().refresh();
       }, POLL_INTERVAL_MS);
     },

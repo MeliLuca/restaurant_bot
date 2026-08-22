@@ -23,7 +23,7 @@ import type { RestaurantTable, TableStatus } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
 import { useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
-import { STATUS_CONFIG } from "./status";
+import { STATUS_CONFIG } from "@/lib/floor/status";
 
 interface TableActionsDialogProps {
   table: RestaurantTable | null;

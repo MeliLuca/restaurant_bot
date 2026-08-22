@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { chatRouteFor } from "@/lib/mobile-route";
 import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
 
@@ -32,7 +33,15 @@ export function ChatListener() {
 
   useEffect(() => {
     setOnIncoming((m) => {
-      if (pathRef.current === "/chat") return;
+      // Whichever UI the user is in, don't toast a message they are already
+      // looking at — including inside a thread (/chat/… or /m/chat/…).
+      const chatRoute = chatRouteFor(pathRef.current);
+      if (
+        pathRef.current === chatRoute ||
+        pathRef.current.startsWith(`${chatRoute}/`)
+      ) {
+        return;
+      }
       const sender = useChatStore
         .getState()
         .staff.find((u) => u.id === m.sender_id);
@@ -40,7 +49,10 @@ export function ChatListener() {
       const preview = m.body.length > 80 ? `${m.body.slice(0, 80)}…` : m.body;
       toast(title, {
         description: preview,
-        action: { label: "Open", onClick: () => router.push("/chat") },
+        action: {
+          label: "Open",
+          onClick: () => router.push(chatRouteFor(pathRef.current)),
+        },
       });
     });
     return () => setOnIncoming(null);

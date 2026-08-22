@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ReceiptText, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,24 +8,9 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ItemSearch } from "@/components/pos/item-search";
 import { MenuPanel } from "@/components/pos/menu-panel";
 import { TicketPanel } from "@/components/pos/ticket-panel";
-import {
-  fetchCategories,
-  fetchMenuItems,
-  fetchMenuModifierGroups,
-  fetchOpenOrder,
-  fetchOpenOrderById,
-  fetchOpenOrdersForTable,
-  fetchOpenTakeaways,
-  fetchTables,
-  type ModifierGroupWithModifiers,
-  type OpenOrder,
-} from "@/lib/api";
-import type {
-  Category,
-  MenuItem,
-  Order,
-  RestaurantTable,
-} from "@/lib/database.types";
+import { useMenuData } from "@/hooks/use-menu-data";
+import { useOpenOrder } from "@/hooks/use-open-order";
+import type { MenuItem } from "@/lib/database.types";
 import { formatMoney } from "@/lib/constants";
 import { calcTotals } from "@/lib/money";
 import { useT } from "@/lib/i18n/use-translation";
@@ -36,71 +21,28 @@ export default function PosPage() {
   const t = useT();
   const mode = useTicketStore((s) => s.mode);
   const tableId = useTicketStore((s) => s.tableId);
-  const subtable = useTicketStore((s) => s.subtable);
-  const takeawayOrderId = useTicketStore((s) => s.takeawayOrderId);
   const takeawayName = useTicketStore((s) => s.takeawayName);
   const addItem = useTicketStore((s) => s.addItem);
   const lines = useTicketStore((s) => s.lines);
   const canTakeOrders = usePermission("take_orders");
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [items, setItems] = useState<MenuItem[]>([]);
-  const [modifierGroups, setModifierGroups] = useState<
-    Record<string, ModifierGroupWithModifiers[]>
-  >({});
-  const [tables, setTables] = useState<RestaurantTable[]>([]);
-  const [openOrder, setOpenOrder] = useState<OpenOrder | null>(null);
-  const [openSplits, setOpenSplits] = useState<Order[]>([]);
-  const [openTakeaways, setOpenTakeaways] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    categories,
+    items,
+    modifierGroups,
+    tables,
+    loading,
+    error,
+    reload: loadStatic,
+  } = useMenuData();
+  const {
+    openOrder,
+    openSplits,
+    openTakeaways,
+    refresh: refreshOrder,
+  } = useOpenOrder();
   // Phone layout: the ticket lives in a bottom sheet instead of the sidebar
   const [ticketOpen, setTicketOpen] = useState(false);
-
-  const loadStatic = useCallback(async () => {
-    try {
-      const [c, i, t, mg] = await Promise.all([
-        fetchCategories(),
-        fetchMenuItems(),
-        fetchTables(),
-        fetchMenuModifierGroups(),
-      ]);
-      setCategories(c);
-      setItems(i);
-      setTables(t);
-      setModifierGroups(mg);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("pos.failedLoadMenu"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  const refreshOrder = useCallback(async () => {
-    try {
-      if (mode === "table") {
-        setOpenOrder(tableId ? await fetchOpenOrder(tableId, subtable) : null);
-        setOpenSplits(tableId ? await fetchOpenOrdersForTable(tableId) : []);
-      } else {
-        setOpenOrder(
-          takeawayOrderId ? await fetchOpenOrderById(takeawayOrderId) : null,
-        );
-        setOpenSplits([]);
-      }
-      setOpenTakeaways(await fetchOpenTakeaways());
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("pos.failedLoadOrder"));
-    }
-  }, [mode, tableId, subtable, takeawayOrderId, t]);
-
-  useEffect(() => {
-    void loadStatic();
-  }, [loadStatic]);
-
-  useEffect(() => {
-    void refreshOrder();
-  }, [refreshOrder]);
 
   // Auto-close the mobile ticket sheet when the pending lines empty out —
   // i.e. right after a successful "send to kitchen" clears the ticket.

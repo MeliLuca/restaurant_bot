@@ -1,3 +1,35 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"]
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "overrides": [
+    {
+      "files": ["src/mobile/**/*.{ts,tsx}", "src/app/m/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [{
+            "group": [
+              "@/components/pos/*",
+              "@/components/floor-plan/*",
+              "@/components/layout/*",
+              "@/components/stats/*",
+              "@/components/analytics/*",
+              "@/components/settings/*"
+            ],
+            "message": "The phone UI must stay liftable into its own app: it may use the shared logic layer, but not desktop components. Extract the logic to @/lib or @/hooks first, then use it from both."
+          }]
+        }]
+      }
+    },
+    {
+      "files": ["src/**/*.{ts,tsx}"],
+      "excludedFiles": ["src/mobile/**/*.{ts,tsx}", "src/app/m/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [{
+            "group": ["@/mobile/*"],
+            "message": "src/mobile is the future standalone app; the dependency must stay one-way."
+          }]
+        }]
+      }
+    }
+  ]
 }

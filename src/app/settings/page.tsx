@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { RolesManager } from "@/components/settings/roles-manager";
 import { SettingsNav } from "@/components/settings/settings-nav";
+import { UiModeCard } from "@/components/settings/ui-mode-card";
 import { UsersManager } from "@/components/settings/users-manager";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { useT } from "@/lib/i18n/use-translation";
@@ -78,6 +79,8 @@ export default function SettingsPage() {
           </span>
         </CardContent>
       </Card>
+
+      <UiModeCard />
 
       <Card>
         <CardHeader>

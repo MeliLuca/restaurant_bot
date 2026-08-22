@@ -37,6 +37,41 @@ export const it = {
     unreadMessages: "{count} messaggi non letti",
     brand: "Trattoria",
   },
+  m: {
+    tabTables: "Tavoli",
+    tabBills: "Conti",
+    tabChat: "Chat",
+    uiMode: "Interfaccia",
+    uiModeHelp:
+      "Di norma i telefoni aprono l'interfaccia da sala e gli altri dispositivi quella completa.",
+    uiModeAuto: "Automatica",
+    desktopVersion: "Versione desktop",
+    phoneVersion: "Versione telefono",
+    addOrder: "Aggiungi ordine",
+    noItemsFound: "Nessuna voce trovata.",
+    sendRound: "Invia",
+    itemsPending: "{count} da inviare",
+    emptyTicket: "Tocca le voci di menù per comporre l'ordine.",
+    ingredients: "Ingredienti",
+    noOpenBills: "Nessun conto aperto.",
+    billClosed: "Conto chiuso",
+    billClosedBody: "Questo conto è stato saldato o annullato.",
+    backToTables: "Torna ai tavoli",
+    backToBill: "Torna al conto",
+    pendingNotOnBillOne:
+      "1 voce non è ancora sul conto ({amount}). Inviala in cucina prima di incassare.",
+    pendingNotOnBill:
+      "{count} voci non sono ancora sul conto ({amount}). Inviale in cucina prima di incassare.",
+    sendBeforePaying:
+      "Ci sono voci non ancora inviate: mandale in cucina prima di incassare.",
+    payAll: "Tutto",
+    payAllHelp: "Chiude il conto e stampa la ricevuta per l'intero saldo.",
+    offline: "Nessuna connessione — i dati potrebbero non essere aggiornati.",
+    loadFailed: "Caricamento non riuscito. Controlla la connessione.",
+    noCheckoutTitle: "Nessun accesso ai pagamenti",
+    noCheckoutBody:
+      "Il tuo ruolo non include il permesso “Conto e pagamenti”. Chiedi a un responsabile se ti serve.",
+  },
   auth: {
     whosWorking: "Chi è in servizio?",
     enterPin: "Inserisci il tuo PIN a 4 cifre",
@@ -825,6 +860,41 @@ export const en: typeof it = {
     switchUser: "Switch user",
     unreadMessages: "{count} unread messages",
     brand: "Trattoria",
+  },
+  m: {
+    tabTables: "Tables",
+    tabBills: "Bills",
+    tabChat: "Chat",
+    uiMode: "Interface",
+    uiModeHelp:
+      "By default phones open the floor interface and other devices the full one.",
+    uiModeAuto: "Automatic",
+    desktopVersion: "Desktop version",
+    phoneVersion: "Phone version",
+    addOrder: "Add order",
+    noItemsFound: "No items found.",
+    sendRound: "Send",
+    itemsPending: "{count} to send",
+    emptyTicket: "Tap menu items to build the order.",
+    ingredients: "Ingredients",
+    noOpenBills: "No open bills.",
+    billClosed: "Bill closed",
+    billClosedBody: "This bill has been settled or cancelled.",
+    backToTables: "Back to tables",
+    backToBill: "Back to the bill",
+    pendingNotOnBillOne:
+      "1 item is not on the bill yet ({amount}). Send it to the kitchen before taking payment.",
+    pendingNotOnBill:
+      "{count} items are not on the bill yet ({amount}). Send them to the kitchen before taking payment.",
+    sendBeforePaying:
+      "Some items have not been sent yet — send them to the kitchen before taking payment.",
+    payAll: "All",
+    payAllHelp: "Closes the bill and prints the receipt for the whole balance.",
+    offline: "No connection — data may be out of date.",
+    loadFailed: "Could not load. Check the connection.",
+    noCheckoutTitle: "No payment access",
+    noCheckoutBody:
+      "Your role doesn’t include the “Bill and payments” permission. Ask a manager if you need it.",
   },
   auth: {
     whosWorking: "Who's working?",

@@ -4,7 +4,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthGate } from "@/components/auth/auth-gate";
 import { ChatListener } from "@/components/chat/chat-listener";
 import { LangSync } from "@/components/layout/lang-sync";
-import { Sidebar } from "@/components/layout/sidebar";
+import { DeviceRedirect } from "@/components/layout/device-redirect";
+import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -29,6 +30,8 @@ export const viewport: Viewport = {
   // tablets: prevent accidental pinch-zoom while tapping quickly
   maximumScale: 1,
   userScalable: false,
+  // lets the /m tab bar clear the home indicator via env(safe-area-inset-bottom)
+  viewportFit: "cover",
   themeColor: "#18181b",
 };
 
@@ -41,15 +44,10 @@ export default function RootLayout({
     <html lang="it">
       <body className={`${geistSans.variable} font-sans antialiased`}>
         <LangSync />
+        <DeviceRedirect />
         <AuthGate>
           <ChatListener />
-          <div className="flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
-            <Sidebar />
-            {/* pb-14 clears the phone bottom nav rendered by <Sidebar> */}
-            <main className="flex-1 overflow-y-auto pb-14 print:overflow-visible sm:pb-0">
-              {children}
-            </main>
-          </div>
+          <AppShell>{children}</AppShell>
         </AuthGate>
         <Toaster richColors position="top-center" />
       </body>
