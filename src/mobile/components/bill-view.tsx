@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ChefHat, Printer, TriangleAlert, Wallet } from "lucide-react";
+import { toast } from "sonner";
+import { ChefHat, Printer, TriangleAlert, Users, Wallet } from "lucide-react";
+import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
 import { useOrderActions } from "@/hooks/use-order-actions";
+import { updateOrderCovers } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import { useT } from "@/lib/i18n/use-translation";
 import { remainingBalanceCents } from "@/lib/money";
@@ -58,10 +62,24 @@ export function BillView({ orderId }: { orderId: string }) {
     bill?.order.tax_rate ?? undefined,
   ).total;
 
-  const { send, preReceipt, busy } = useOrderActions({
+  const { send, preReceipt, busy, covers } = useOrderActions({
     openOrder: bill,
     onOrderChanged: refresh,
   });
+  const [coversOpen, setCoversOpen] = useState(false);
+
+  async function handleCovers(next: number) {
+    if (!bill) return;
+    try {
+      await updateOrderCovers(bill.order.id, next);
+      await refresh();
+      toast.success(t("pos.coversUpdated", { count: next }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("pos.coversUpdateFailed"));
+      return;
+    }
+    setCoversOpen(false);
+  }
 
   if (closed) return <ClosedBill />;
 
@@ -91,7 +109,33 @@ export function BillView({ orderId }: { orderId: string }) {
 
   return (
     <>
-      <MHeader title={label || "…"} backHref={backHref} />
+      <MHeader
+        title={label || "…"}
+        backHref={backHref}
+        action={
+          order.order_type === "dine_in" && (
+            <CoversChip
+              covers={covers}
+              onClick={() => setCoversOpen(true)}
+              className="mr-2"
+            />
+          )
+        }
+      />
+
+      {/* The bill is where a wrong guest count actually gets noticed, so the
+          correction is available right here rather than back at the order
+          screen. */}
+      {coversOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-center bg-black/50 p-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+          <CoversPrompt
+            initial={covers ?? 2}
+            busy={busy}
+            onConfirm={(n) => void handleCovers(n)}
+            onCancel={() => setCoversOpen(false)}
+          />
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {blockedByPending && (
@@ -127,22 +171,40 @@ export function BillView({ orderId }: { orderId: string }) {
               (i.menu_items?.name ?? t("floor.itemFallback")) +
               (i.fraction_of ? ` (1/${i.fraction_of})` : "");
             const paid = i.paid_by_payment_id !== null;
+            const isCoperto = i.menu_items?.is_coperto ?? false;
+            // The bill carries no per-line controls, so there is nothing here
+            // to lock down — but a waiter who spots a wrong cover charge will
+            // reach for this row first. An unpaid one opens the count that
+            // produced it; a paid one is settled and stays put.
+            const Row = isCoperto && !paid ? "button" : "div";
             return (
               <li key={i.id}>
-                <div
+                <Row
+                  {...(isCoperto && !paid
+                    ? {
+                        type: "button" as const,
+                        onClick: () => setCoversOpen(true),
+                        "aria-label": t("pos.coversEditAria"),
+                      }
+                    : {})}
                   className={cn(
-                    "flex items-baseline gap-2 text-base",
+                    "flex w-full items-baseline gap-2 text-left text-base",
                     paid && "text-muted-foreground line-through",
                   )}
                 >
                   <span className="w-7 shrink-0 font-semibold tabular-nums">
                     {i.quantity}×
                   </span>
-                  <span className="min-w-0 flex-1">{name}</span>
+                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                    {isCoperto && (
+                      <Users className="h-4 w-4 shrink-0 self-center text-muted-foreground" />
+                    )}
+                    {name}
+                  </span>
                   <span className="shrink-0 tabular-nums">
                     {formatMoney(i.unit_price * i.quantity)}
                   </span>
-                </div>
+                </Row>
                 {(i.order_item_modifiers ?? []).map((m) => (
                   <div
                     key={m.id}

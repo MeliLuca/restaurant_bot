@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ReceiptText, TriangleAlert } from "lucide-react";
+import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
+import { updateOrderCovers } from "@/lib/api";
 import { useMenuData } from "@/hooks/use-menu-data";
 import { useOpenOrder } from "@/hooks/use-open-order";
 import { useOrderActions } from "@/hooks/use-order-actions";
@@ -45,7 +48,7 @@ export function OrderScreen({
   useTicketTarget(tableId, table?.name, subtable);
 
   const { openOrder, refresh } = useOpenOrder();
-  const { send, busy } = useOrderActions({
+  const { send, busy, covers, needsCovers } = useOrderActions({
     openOrder,
     onOrderChanged: refresh,
   });
@@ -53,9 +56,11 @@ export function OrderScreen({
   const lines = useTicketStore((s) => s.lines);
   const addItem = useTicketStore((s) => s.addItem);
   const setLineModifiers = useTicketStore((s) => s.setLineModifiers);
+  const setDraftCovers = useTicketStore((s) => s.setDraftCovers);
 
   const [ticketOpen, setTicketOpen] = useState(false);
   const [editLine, setEditLine] = useState<TicketLine | null>(null);
+  const [coversOpen, setCoversOpen] = useState(false);
 
   const pendingCount = lines.reduce((n, l) => n + l.quantity, 0);
   const pendingTotal = calcTotals(
@@ -78,6 +83,25 @@ export function OrderScreen({
     );
   }
 
+  async function handleCovers(next: number) {
+    // Before the first send there is no order to write to, so the answer waits
+    // in the ticket store; afterwards the order owns it.
+    if (openOrder) {
+      try {
+        await updateOrderCovers(openOrder.order.id, next);
+        await refresh();
+      } catch (e) {
+        toast.error(
+          e instanceof Error ? e.message : t("pos.coversUpdateFailed"),
+        );
+        return;
+      }
+    } else {
+      setDraftCovers(next);
+    }
+    setCoversOpen(false);
+  }
+
   function handleAdd(item: MenuItem) {
     // straight onto the ticket at base price; ingredients are added after, on
     // demand, from the line itself — same rule as the desktop till
@@ -98,6 +122,13 @@ export function OrderScreen({
       <MHeader
         title={subtable ? `${table?.name ?? ""}/${subtable}` : (table?.name ?? "…")}
         backHref={mRoutes.table(tableId)}
+        action={
+          <CoversChip
+            covers={covers}
+            onClick={() => setCoversOpen(true)}
+            className="mr-2"
+          />
+        }
       />
 
       {error && (
@@ -148,6 +179,25 @@ export function OrderScreen({
           busy={busy}
           onSend={() => void handleSend()}
         />
+      )}
+
+      {/* Asked on arrival for a check nobody has answered for yet, and on
+          demand from the chip. Cancel goes back to the table rather than
+          trapping the waiter here: you can always leave, you just cannot send
+          a round without saying how many people are sitting down. */}
+      {(coversOpen || needsCovers) && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-center bg-black/50 p-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+          <CoversPrompt
+            initial={covers ?? table?.capacity ?? 2}
+            busy={busy}
+            onConfirm={(n) => void handleCovers(n)}
+            onCancel={
+              coversOpen
+                ? () => setCoversOpen(false)
+                : () => router.push(mRoutes.table(tableId))
+            }
+          />
+        </div>
       )}
 
       {editLine && (

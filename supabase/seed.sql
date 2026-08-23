@@ -265,6 +265,12 @@ insert into menu_items (id, category_id, name, price, is_available, sort_order, 
   ('30000000-0000-0000-0000-000000000217', '20000000-0000-0000-0000-000000000018', 'Giraffa Leffe + Pizza — 3,5 litri', 50.00, true, 4, NULL)
 on conflict (id) do nothing;
 
+-- The Coperto row above is not a browsable item: it is the cover charge, and
+-- the app generates it per check from the guest count. Flagged separately so
+-- the 217-row insert above stays a straight dump of the listino.
+update menu_items set is_coperto = true
+ where id = '30000000-0000-0000-0000-000000000091';
+
 -- INGREDIENTS (parsed from the listino 'ingredienti'; powers the 86 board) ----
 insert into ingredients (id, name) values
   ('90000000-0000-0000-0000-000000000001', 'belga'),

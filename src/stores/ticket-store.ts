@@ -61,6 +61,10 @@ interface TicketState {
    * table/split/take-away preserves its pending items; switching back
    * restores them instantly. */
   drafts: Record<string, TicketLine[]>;
+  /** Guest count answered for a check that does not exist in the database
+   * yet, stashed per target like the lines are. A dine-in order is created
+   * lazily on the first send, so the number has to live somewhere until then. */
+  draftCovers: Record<string, number>;
 
   /** Switch dine-in / take-away; the in-progress ticket is stashed as a draft */
   setMode: (mode: TicketMode) => void;
@@ -82,6 +86,9 @@ interface TicketState {
   /** Replace a pending line's ingredients (add/remove after it's on the
    * ticket); the charged price re-derives from the new modifier set */
   setLineModifiers: (lineId: string, modifiers: SelectedModifier[]) => void;
+  /** Record how many guests the current target is for, before its order
+   * exists. Once it does, orders.covers is the truth and this is dropped. */
+  setDraftCovers: (covers: number) => void;
   /** Drop pending lines AND their draft (after Send to Kitchen) */
   clearLines: () => void;
   clearTicket: () => void;
@@ -134,6 +141,7 @@ export const useTicketStore = create<TicketState>((set) => ({
   mode: "table",
   ...EMPTY_TARGET,
   drafts: {},
+  draftCovers: {},
 
   setMode: (mode) =>
     set((state) =>
@@ -247,14 +255,39 @@ export const useTicketStore = create<TicketState>((set) => ({
       ),
     })),
 
+  setDraftCovers: (covers) =>
+    set((state) => {
+      const key = draftKey(state);
+      if (!key) return {};
+      return { draftCovers: { ...state.draftCovers, [key]: covers } };
+    }),
+
   clearLines: () =>
     set((state) => {
       const drafts = { ...state.drafts };
+      const draftCovers = { ...state.draftCovers };
       const key = draftKey(state);
-      if (key) delete drafts[key];
-      return { lines: [], drafts };
+      if (key) {
+        delete drafts[key];
+        // the order now exists and owns its covers; a stale draft here would
+        // shadow a number the waiter has since corrected on the bill
+        delete draftCovers[key];
+      }
+      return { lines: [], drafts, draftCovers };
     }),
 
   clearTicket: () =>
     set((state) => stashAndRestore(state, { ...EMPTY_TARGET })),
 }));
+
+/**
+ * Guest count answered for the current target but not yet persisted, or null
+ * when nobody has been asked. Exported as a hook because draftKey is internal:
+ * callers should never have to rebuild the target's identity themselves.
+ */
+export function useDraftCovers(): number | null {
+  return useTicketStore((s) => {
+    const key = draftKey(s);
+    return key ? (s.draftCovers[key] ?? null) : null;
+  });
+}

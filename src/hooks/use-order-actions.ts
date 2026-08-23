@@ -18,7 +18,11 @@ import {
 import { formatMoney } from "@/lib/constants";
 import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore } from "@/stores/auth-store";
-import { useTicketStore, type TicketMode } from "@/stores/ticket-store";
+import {
+  useDraftCovers,
+  useTicketStore,
+  type TicketMode,
+} from "@/stores/ticket-store";
 
 /**
  * What a checkout did, so each UI can choose its own follow-up. The hook
@@ -35,6 +39,12 @@ interface OrderActions {
   busy: boolean;
   hasTarget: boolean;
   targetLabel: string | null;
+  /** Guests on this check: the order's count, or the answer given for a check
+   * that has no order yet. Null means nobody has been asked. */
+  covers: number | null;
+  /** A dine-in target whose guest count is still unknown. The UI must ask
+   * before it can send — see the guard in sendPendingLines. */
+  needsCovers: boolean;
   send: () => Promise<boolean>;
   checkout: () => Promise<CheckoutOutcome>;
   amendSentItem: (orderItemId: string, quantity: number) => Promise<void>;
@@ -75,6 +85,7 @@ export function useOrderActions({
   const takeawayOrderId = useTicketStore((s) => s.takeawayOrderId);
   const takeawayName = useTicketStore((s) => s.takeawayName);
   const lines = useTicketStore((s) => s.lines);
+  const draftCovers = useDraftCovers();
   const setTakeaway = useTicketStore((s) => s.setTakeaway);
   const clearLines = useTicketStore((s) => s.clearLines);
   const clearTicket = useTicketStore((s) => s.clearTicket);
@@ -82,6 +93,9 @@ export function useOrderActions({
   const [busy, setBusy] = useState(false);
 
   const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
+  // the order's own count wins; the draft answer covers a check not created yet
+  const covers = openOrder?.order.covers ?? draftCovers;
+  const needsCovers = mode === "table" && hasTarget && covers == null;
   const targetLabel =
     mode === "table"
       ? subtable
@@ -119,7 +133,13 @@ export function useOrderActions({
 
   async function sendPendingLines(): Promise<SentRound> {
     if (mode === "table") {
-      return sendToKitchen(tableId!, lines, subtable, userId);
+      // The one place a dine-in order comes into existence, so the one place
+      // worth guarding: without a guest count the check would open with no
+      // cover charge and nothing on the bill to show it was skipped. Both UIs
+      // ask before getting here; this is the backstop that makes a missed
+      // prompt a visible error rather than silently lost revenue.
+      if (covers == null) throw new Error(t("pos.coversAsk"));
+      return sendToKitchen(tableId!, lines, subtable, userId, covers);
     }
     const round = await sendTakeawayToKitchen(
       takeawayOrderId,
@@ -262,6 +282,8 @@ export function useOrderActions({
     busy,
     hasTarget,
     targetLabel,
+    covers,
+    needsCovers,
     send,
     checkout,
     amendSentItem,

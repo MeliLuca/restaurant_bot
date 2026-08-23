@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   Split,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,9 +33,11 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
 import {
   createDeliveryOrder,
   fetchDeliveryLabels,
+  updateOrderCovers,
   updateTableStatus,
   type ModifierGroupWithModifiers,
   type OpenOrder,
@@ -124,6 +127,7 @@ export function TicketPanel({
     setQuantity,
     setLinePrice,
     setLineModifiers,
+    setDraftCovers,
     clearTicket,
   } = useTicketStore();
   const t = useT();
@@ -160,7 +164,31 @@ export function TicketPanel({
     amendSentItem,
     setSentPrice,
     preReceipt: handlePreReceipt,
+    covers,
+    needsCovers,
   } = useOrderActions({ openOrder, onOrderChanged });
+
+  const [coversOpen, setCoversOpen] = useState(false);
+
+  async function handleCovers(next: number) {
+    // No order yet on a table being opened, so the answer waits in the ticket
+    // store until the first send creates one.
+    if (openOrder) {
+      try {
+        await updateOrderCovers(openOrder.order.id, next);
+        await onOrderChanged();
+        toast.success(t("pos.coversUpdated", { count: next }));
+      } catch (e) {
+        toast.error(
+          e instanceof Error ? e.message : t("pos.coversUpdateFailed"),
+        );
+        return;
+      }
+    } else {
+      setDraftCovers(next);
+    }
+    setCoversOpen(false);
+  }
 
   // Take-away creation and the cleanup prompt stay panel-local (the phone has
   // its own flows for both), so they carry their own busy flag.
@@ -307,12 +335,19 @@ export function TicketPanel({
               </SelectContent>
             </Select>
             {tableId && (
-              <SplitPicker
-                tableName={tableName ?? ""}
-                openSplits={openSplits}
-                subtable={subtable}
-                onSelect={setSubtable}
-              />
+              <>
+                <SplitPicker
+                  tableName={tableName ?? ""}
+                  openSplits={openSplits}
+                  subtable={subtable}
+                  onSelect={setSubtable}
+                />
+                <CoversChip
+                  covers={covers}
+                  onClick={() => setCoversOpen(true)}
+                  className="self-start"
+                />
+              </>
             )}
           </>
         ) : takeawayName ? (
@@ -395,6 +430,42 @@ export function TicketPanel({
                         </span>
                       </div>
                       <ModifierRows modifiers={modifierRows} muted />
+                    </div>
+                  );
+                }
+                if (i.menu_items?.is_coperto) {
+                  // The cover charge is derived from the guest count, so it
+                  // carries none of the per-line controls: a trash button here
+                  // would drop the charge outright, and a stepper would let the
+                  // quantity drift away from covers — which is the hand-managed
+                  // cover charge this feature exists to replace. The pencil goes
+                  // to the count instead, the one number that owns this line.
+                  // The empty span holds the column where the trash sits on
+                  // every other row, so the prices stay in one line.
+                  return (
+                    <div
+                      key={i.id}
+                      className="flex items-center gap-2 text-sm text-muted-foreground"
+                    >
+                      <Users className="h-3.5 w-3.5 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {i.quantity > 1 ? `${i.quantity}× ` : ""}
+                        {name}
+                      </span>
+                      <span className="w-14 text-right tabular-nums">
+                        {formatMoney(i.unit_price * i.quantity)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={t("pos.coversEditAria")}
+                        disabled={busy}
+                        onClick={() => setCoversOpen(true)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <span className="w-8" aria-hidden />
                     </div>
                   );
                 }
@@ -650,6 +721,34 @@ export function TicketPanel({
           )}
         </div>
       </div>
+
+      {/* Asked as soon as a table is targeted and nobody has answered yet, and
+          on demand from the chip. Closing it leaves the table unanswered
+          rather than trapping the till — the send is what actually requires a
+          count, and it says so. */}
+      <Dialog
+        open={coversOpen || needsCovers}
+        onOpenChange={(o) => {
+          if (!o) setCoversOpen(false);
+        }}
+      >
+        <DialogContent className="max-w-sm gap-0 border-0 bg-transparent p-0 shadow-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{t("pos.coversTitle")}</DialogTitle>
+            <DialogDescription>{t("pos.coversBody")}</DialogDescription>
+          </DialogHeader>
+          <CoversPrompt
+            initial={
+              covers ??
+              tables.find((x) => x.id === tableId)?.capacity ??
+              2
+            }
+            busy={busy}
+            onConfirm={(n) => void handleCovers(n)}
+            onCancel={() => setCoversOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       <PriceEditDialog
         target={priceEdit}

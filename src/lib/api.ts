@@ -108,17 +108,30 @@ export async function fetchCategories(): Promise<Category[]> {
   return data;
 }
 
-/** Items orderable right now: available AND no out-of-stock ingredient (86'd) */
+/**
+ * Items orderable right now: available AND no out-of-stock ingredient (86'd).
+ *
+ * The cover charge is not among them. It is generated per check from the guest
+ * count, so a waiter who could find it in the menu could also add it twice, or
+ * to the wrong table, or not at all — the failure this whole feature exists to
+ * remove. Excluding it here leaves it with no tap target anywhere.
+ *
+ * Nothing downstream loses sight of it: analytics reads sold lines through its
+ * own join (stats-api), so coperto revenue still ranks and reports normally.
+ * The only other consumer of this list is the dead-stock report, where a cover
+ * charge would be noise — it is not an item anyone is deciding whether to cull.
+ */
 export async function fetchMenuItems(): Promise<MenuItem[]> {
   const { data, error } = await getSupabase()
     .from("menu_items")
     .select("*, ingredients(is_available)")
     .eq("is_available", true)
+    .eq("is_coperto", false)
     .order("sort_order");
   if (error) throw new Error(error.message);
   return (data as unknown as (MenuItem & { ingredients: { is_available: boolean }[] })[])
     .filter((item) => item.ingredients.every((i) => i.is_available))
-    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice }) => ({
+    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice, is_coperto }) => ({
       id,
       category_id,
       name,
@@ -127,6 +140,7 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
       sort_order,
       target_printer_id,
       codice,
+      is_coperto,
     }));
 }
 
@@ -171,7 +185,9 @@ export async function fetchMenuModifierGroups(): Promise<
 }
 
 export type OrderItemWithName = OrderItem & {
-  menu_items: { name: string } | null;
+  /** `is_coperto` rides along so the bill can render the cover charge as the
+   * derived line it is, rather than one more thing to delete by accident */
+  menu_items: { name: string; is_coperto: boolean } | null;
   order_item_modifiers: OrderItemModifier[];
 };
 
@@ -185,7 +201,7 @@ export interface OpenOrder {
 async function fetchOrderItems(orderId: string): Promise<OrderItemWithName[]> {
   const { data, error } = await getSupabase()
     .from("order_items")
-    .select("*, menu_items(name), order_item_modifiers(*)")
+    .select("*, menu_items(name, is_coperto), order_item_modifiers(*)")
     .eq("order_id", orderId)
     .order("created_at");
   if (error) throw new Error(error.message);
@@ -262,7 +278,7 @@ export async function fetchOpenOrdersWithItems(
 ): Promise<OrderWithItems[]> {
   const { data, error } = await getSupabase()
     .from("orders")
-    .select("*, order_items(*, menu_items(name), order_item_modifiers(*))")
+    .select("*, order_items(*, menu_items(name, is_coperto), order_item_modifiers(*))")
     .eq("table_id", tableId)
     .eq("status", "open")
     .order("opened_at");
@@ -316,6 +332,136 @@ async function recomputeOrderTotals(orderId: string): Promise<void> {
     .update({ subtotal, tax, total })
     .eq("id", orderId);
   if (updateError) throw new Error(updateError.message);
+}
+
+// ---------------------------------------------------------------------------
+// Cover charge ("coperto")
+// ---------------------------------------------------------------------------
+
+/**
+ * The single menu row that IS the cover charge, or null when this house
+ * charges none. `maybeSingle` is safe: a partial unique index allows at most
+ * one such row.
+ */
+async function fetchCopertoItem(): Promise<{ id: string; price: number } | null> {
+  const { data, error } = await getSupabase()
+    .from("menu_items")
+    .select("id, price")
+    .eq("is_coperto", true)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * The house cover charge per guest, or null when there is none. Lets the
+ * covers prompt show what the number it is about to accept will cost — a
+ * waiter who can see "4 x EUR 1.50" will notice they typed 40.
+ */
+export async function fetchCoverCharge(): Promise<number | null> {
+  return (await fetchCopertoItem())?.price ?? null;
+}
+
+/**
+ * Make the order's coperto line match its guest count.
+ *
+ * The waiter never touches this line: they state how many people are at the
+ * table and the charge follows, here, every time the count changes. That is
+ * the whole design — a per-person line punched in by hand is a line that gets
+ * forgotten on a busy Saturday, and a forgotten coperto leaves nothing on the
+ * bill to notice it by.
+ *
+ * Covers already paid for are honoured: on a split bill the coperto may have
+ * been settled before the count changed, so only the still-unpaid remainder is
+ * adjusted, and a paid line is never rewritten (same invariant as
+ * setSentItemPrice). Raising the count after a partial payment therefore adds
+ * the difference rather than re-charging everyone.
+ *
+ * Callers recompute totals afterwards; this function only moves the line.
+ */
+async function syncCoperto(orderId: string, covers: number): Promise<void> {
+  const sb = getSupabase();
+  const item = await fetchCopertoItem();
+  if (!item) return; // this house charges no coperto
+
+  const { data: existing, error } = await sb
+    .from("order_items")
+    .select("id, quantity, paid_by_payment_id")
+    .eq("order_id", orderId)
+    .eq("menu_item_id", item.id)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+
+  const paid = existing.filter((r) => r.paid_by_payment_id !== null);
+  const unpaid = existing.filter((r) => r.paid_by_payment_id === null);
+  const alreadyCharged = paid.reduce((n, r) => n + r.quantity, 0);
+  const outstanding = covers - alreadyCharged;
+
+  // Collapse to at most one unpaid line, so repeated edits can never leave a
+  // trail of coperto rows on the bill.
+  const [keep, ...extra] = unpaid;
+  if (extra.length > 0) {
+    const { error: delError } = await sb
+      .from("order_items")
+      .delete()
+      .in("id", extra.map((r) => r.id));
+    if (delError) throw new Error(delError.message);
+  }
+
+  if (outstanding <= 0) {
+    if (keep) {
+      const { error: delError } = await sb
+        .from("order_items")
+        .delete()
+        .eq("id", keep.id);
+      if (delError) throw new Error(delError.message);
+    }
+    return;
+  }
+
+  if (keep) {
+    const { error: upError } = await sb
+      .from("order_items")
+      .update({ quantity: outstanding })
+      .eq("id", keep.id);
+    if (upError) throw new Error(upError.message);
+    return;
+  }
+
+  const { error: insError } = await sb.from("order_items").insert({
+    order_id: orderId,
+    menu_item_id: item.id,
+    quantity: outstanding,
+    // price snapshot at the moment the charge lands, like every other line
+    unit_price: item.price,
+  });
+  if (insError) throw new Error(insError.message);
+}
+
+/**
+ * Change how many guests a check is for, at any point while it is open.
+ *
+ * Deliberately not a write-once field: a table gains a latecomer, loses
+ * someone before the food arrives, or the waiter simply mistyped. Being able
+ * to correct the number is what makes it safe to demand one up front.
+ * Zero is a legitimate answer — this check carries no cover charge — and
+ * removes the line rather than being rejected.
+ */
+export async function updateOrderCovers(
+  orderId: string,
+  covers: number,
+): Promise<void> {
+  if (!Number.isInteger(covers) || covers < 0) {
+    throw new Error("Covers must be a whole number, zero or more");
+  }
+  const { error } = await getSupabase()
+    .from("orders")
+    .update({ covers })
+    .eq("id", orderId)
+    .eq("status", "open");
+  if (error) throw new Error(error.message);
+  await syncCoperto(orderId, covers);
+  await recomputeOrderTotals(orderId);
 }
 
 export interface TicketLineInput {
@@ -383,29 +529,56 @@ async function insertOrderItems(
  * Persist pending ticket lines: appends to the (table, split)'s open order
  * (creating one if needed, stamped with the ordering user), recomputes stored
  * totals, and marks the table occupied.
+ *
+ * `covers` is the guest count collected when the check was opened. It is
+ * applied on creation, and adopted by an order that has none yet — which is
+ * how the checks already sitting open when this shipped pick up their cover
+ * charge instead of going without one forever. It never overwrites a count
+ * that is already set: changing it is updateOrderCovers' job, so sending a
+ * round can't silently rewrite a number the waiter corrected by hand.
+ *
+ * The returned newItemIds hold only the lines from this round, so the coperto
+ * never reaches a production slip.
  */
 export async function sendToKitchen(
   tableId: string,
   lines: TicketLineInput[],
   subtable: string | null,
   openedBy: string | null,
+  covers?: number | null,
 ): Promise<SentRound> {
   if (lines.length === 0) throw new Error("Ticket is empty");
   const sb = getSupabase();
 
   const existing = await fetchOpenOrder(tableId, subtable);
   let orderId = existing?.order.id;
+  const adoptCovers =
+    covers != null && (!existing || existing.order.covers == null);
+
   if (!orderId) {
     const { data, error } = await sb
       .from("orders")
-      .insert({ table_id: tableId, subtable, tax_rate: TAX_RATE, opened_by: openedBy })
+      .insert({
+        table_id: tableId,
+        subtable,
+        tax_rate: TAX_RATE,
+        opened_by: openedBy,
+        covers: covers ?? null,
+      })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
     orderId = data.id;
+  } else if (adoptCovers) {
+    const { error } = await sb
+      .from("orders")
+      .update({ covers })
+      .eq("id", orderId);
+    if (error) throw new Error(error.message);
   }
 
   const newItemIds = await insertOrderItems(orderId, lines);
+  if (adoptCovers) await syncCoperto(orderId, covers as number);
   await recomputeOrderTotals(orderId);
   await updateTableStatus(tableId, "occupied");
   return { orderId, newItemIds };
@@ -646,10 +819,15 @@ export async function setSentItemQuantity(
     if (error) throw new Error(error.message);
   }
 
+  // A check whose last real line just came off is cancelled — and the coperto
+  // does not count as a real line. It is derived from the guest count, so an
+  // order holding nothing but a cover charge is an order with nothing on it,
+  // and leaving it open would strand the table as occupied.
   const { count, error: countError } = await sb
     .from("order_items")
-    .select("id", { count: "exact", head: true })
-    .eq("order_id", orderId);
+    .select("id, menu_items!inner(is_coperto)", { count: "exact", head: true })
+    .eq("order_id", orderId)
+    .eq("menu_items.is_coperto", false);
   if (countError) throw new Error(countError.message);
 
   if (count === 0) {

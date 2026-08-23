@@ -177,6 +177,17 @@ export const it = {
     noAccessTitle: "Nessun accesso alla cassa",
     noAccessBody:
       "Il tuo ruolo non include il permesso “Prendi ordini”. Chiedi a un responsabile se ti serve.",
+    // coperto
+    coversTitle: "Quante persone?",
+    coversBody:
+      "Il coperto viene calcolato su questo numero. Puoi correggerlo quando vuoi.",
+    coversLabel: "Coperti",
+    coversNone: "Nessun coperto su questo conto",
+    coversCharge: "Coperto {price} × {count} = {total}",
+    coversEditAria: "Modifica il numero di coperti",
+    coversUpdated: "Coperti: {count}",
+    coversUpdateFailed: "Impossibile aggiornare i coperti",
+    coversAsk: "Indica quante persone",
     // item search
     searchMenuItems: "Cerca voci di menù…",
     searchMenuItemsAria: "Cerca voci di menù",
@@ -996,6 +1007,16 @@ export const en: typeof it = {
     noAccessTitle: "No POS access",
     noAccessBody:
       "Your role doesn't include the “Take orders” permission. Ask a manager if you need it.",
+    coversTitle: "How many guests?",
+    coversBody:
+      "The cover charge follows this number. You can correct it whenever you like.",
+    coversLabel: "Covers",
+    coversNone: "No cover charge on this check",
+    coversCharge: "Cover {price} × {count} = {total}",
+    coversEditAria: "Change the number of covers",
+    coversUpdated: "Covers: {count}",
+    coversUpdateFailed: "Could not update the covers",
+    coversAsk: "Say how many guests",
     searchMenuItems: "Search menu items…",
     searchMenuItemsAria: "Search menu items",
     clearSearch: "Clear search",
