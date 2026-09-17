@@ -17,6 +17,11 @@ export const PERMISSIONS = [
     description: "Use the POS to build tickets and send to kitchen",
   },
   {
+    key: "view_takeaway",
+    label: "Take-away screen",
+    description: "See and work the take-away board, on the till and on a phone",
+  },
+  {
     key: "checkout_orders",
     label: "Checkout & payments",
     description: "Close orders and take payment",

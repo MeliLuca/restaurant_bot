@@ -10,6 +10,7 @@ import {
   ChevronDown,
   RotateCcw,
   Search,
+  ShoppingBag,
   TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -315,6 +316,15 @@ export default function FloorPlanPage() {
                   onClick={() => void handleResetCounter()}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" /> {t("floor.resetCounter")}
+                </Button>
+                {/* The panel here is the glance; the board is where the evening
+                    is actually worked, so the tab always offers the way over. */}
+                <Button
+                  variant="ghost"
+                  className="h-12"
+                  onClick={() => router.push("/asporto")}
+                >
+                  <ShoppingBag className="mr-2 h-4 w-4" /> {t("takeaway.openBoard")}
                 </Button>
               </div>
             )}

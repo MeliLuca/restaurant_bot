@@ -11,9 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { OverloadBanner } from "@/components/takeaway/overload-banner";
 import { SlotGrid } from "@/components/takeaway/slot-grid";
-import { formatTime, type SlotConfig } from "@/lib/takeaway/slots";
+import { formatTime } from "@/lib/takeaway/slots";
 import { setPickupTime } from "@/lib/takeaway/api";
+import { useTakeawayPressure } from "@/hooks/use-takeaway-load";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
@@ -61,16 +63,16 @@ export function PickupTimeControl({
   orderId,
   pickupAt,
   onChanged,
-  config,
   className,
 }: {
   orderId: string | null;
   pickupAt: string | null;
   onChanged: () => Promise<void> | void;
-  config?: SlotConfig;
   className?: string;
 }) {
   const t = useT();
+  const { config, load, options, pressureFor, refresh } =
+    useTakeawayPressure(orderId);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string | null>(pickupAt);
   const [busy, setBusy] = useState(false);
@@ -92,6 +94,7 @@ export function PickupTimeControl({
     try {
       await setPickupTime(orderId, draft);
       await onChanged();
+      await refresh();
       setOpen(false);
       toast.success(
         draft === null
@@ -104,6 +107,15 @@ export function PickupTimeControl({
       setBusy(false);
     }
   }
+
+  // The chosen time's own warning, so a full slot is visible before Confirm.
+  const draftPressure =
+    draft !== null && load.hasRules
+      ? (() => {
+          const p = load.pressureAt(draft, options);
+          return p.over.length > 0 ? p : null;
+        })()
+      : null;
 
   return (
     <>
@@ -120,7 +132,21 @@ export function PickupTimeControl({
             </DialogTitle>
             <DialogDescription>{t("takeaway.pickupTimeBody")}</DialogDescription>
           </DialogHeader>
-          <SlotGrid value={draft} onChange={setDraft} config={config} now={now} />
+          <SlotGrid
+            value={draft}
+            onChange={setDraft}
+            config={config}
+            now={now}
+            pressureFor={pressureFor}
+          />
+          {draftPressure !== null && (
+            <OverloadBanner
+              pressure={draftPressure}
+              at={draft as string}
+              suggestions={load.suggest(draft as string, config, options)}
+              onPickTime={setDraft}
+            />
+          )}
           <div className="flex gap-3">
             <Button
               variant="outline"

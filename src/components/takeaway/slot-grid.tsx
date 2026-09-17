@@ -2,10 +2,14 @@
 
 import { useMemo } from "react";
 import { Clock, Zap } from "lucide-react";
+import { LoadDot, pressureDetail } from "@/components/takeaway/load-dot";
+import type { SlotPressure } from "@/lib/takeaway/load";
 import {
   DEFAULT_SLOT_CONFIG,
   buildSlots,
   formatTime,
+  sameInstant,
+  type Slot,
   type SlotConfig,
 } from "@/lib/takeaway/slots";
 import { useT } from "@/lib/i18n/use-translation";
@@ -20,6 +24,8 @@ interface SlotGridProps {
   now?: Date;
   /** Offer the "no time" escape hatch (hidden when a time is mandatory) */
   allowNoTime?: boolean;
+  /** How full each slot is — omitted when no capacity rules are configured */
+  pressureFor?: (slot: Slot) => SlotPressure | null;
   className?: string;
 }
 
@@ -41,12 +47,13 @@ export function SlotGrid({
   config = DEFAULT_SLOT_CONFIG,
   now,
   allowNoTime = true,
+  pressureFor,
   className,
 }: SlotGridProps) {
   const t = useT();
   const slots = useMemo(() => buildSlots(config, now ?? new Date()), [config, now]);
 
-  const onGrid = value !== null && slots.some((s) => s.key === value);
+  const onGrid = value !== null && slots.some((s) => sameInstant(s.key, value));
   const custom = value !== null && !onGrid;
 
   return (
@@ -83,22 +90,29 @@ export function SlotGrid({
       </div>
 
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-        {slots.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => onChange(s.key)}
-            className={cn(
-              "flex h-12 items-center justify-center rounded-lg border text-base font-semibold tabular-nums transition-colors",
-              value === s.key
-                ? "border-primary bg-primary text-primary-foreground"
-                : "hover:bg-accent",
-              s.isPast && value !== s.key && "text-muted-foreground/50",
-            )}
-          >
-            {s.label}
-          </button>
-        ))}
+        {slots.map((s) => {
+          const pressure = pressureFor?.(s) ?? null;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => onChange(s.key)}
+              title={pressureDetail(pressure) || undefined}
+              className={cn(
+                "flex h-12 flex-col items-center justify-center gap-0.5 rounded-lg border text-base font-semibold tabular-nums transition-colors",
+                sameInstant(s.key, value)
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "hover:bg-accent",
+                s.isPast &&
+                  !sameInstant(s.key, value) &&
+                  "text-muted-foreground/50",
+              )}
+            >
+              <span>{s.label}</span>
+              <LoadDot pressure={pressure} />
+            </button>
+          );
+        })}
       </div>
 
       {slots.length === 0 && (

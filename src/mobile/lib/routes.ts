@@ -20,6 +20,10 @@ export const mRoutes = {
   bills: () => `${MOBILE_ROOT}/bills`,
   bill: (orderId: string) => `${MOBILE_ROOT}/o/${orderId}`,
   pay: (orderId: string) => `${MOBILE_ROOT}/o/${orderId}/pay`,
+  takeaway: () => `${MOBILE_ROOT}/takeaway`,
+  // take-away order taking is addressed by the order, which always exists by
+  // then: a take-away is created the moment it is named
+  takeawayOrder: (orderId: string) => `${MOBILE_ROOT}/ta/${orderId}/order`,
   chat: () => `${MOBILE_ROOT}/chat`,
   thread: (conversationId: string) => `${MOBILE_ROOT}/chat/${conversationId}`,
 };

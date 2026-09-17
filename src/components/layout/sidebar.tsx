@@ -10,6 +10,7 @@ import {
   MessageCircle,
   ReceiptText,
   Settings,
+  ShoppingBag,
   TrendingUp,
   UserRound,
   UtensilsCrossed,
@@ -29,6 +30,7 @@ const NAV_ITEMS: {
 }[] = [
   { href: "/floor-plan", labelKey: "nav.floorPlan", icon: LayoutGrid },
   { href: "/pos", labelKey: "nav.pos", icon: ReceiptText, permission: "take_orders" },
+  { href: "/asporto", labelKey: "nav.takeaway", icon: ShoppingBag, permission: "view_takeaway" },
   { href: "/kitchen", labelKey: "nav.kitchen", icon: ChefHat },
   { href: "/chat", labelKey: "nav.chat", icon: MessageCircle },
   { href: "/stats", labelKey: "nav.stats", icon: BarChart3, permission: "view_stats" },

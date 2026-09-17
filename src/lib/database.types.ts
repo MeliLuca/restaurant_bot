@@ -166,6 +166,8 @@ export interface Database {
           delivery_number: number | null;
           /** When the customer said they would come for it (null = no promised time) */
           pickup_at: string | null;
+          /** The take-away this one adds to; null = a customer's first order */
+          parent_order_id: string | null;
           /** Guests on this check; drives the coperto line. Null = never asked (legacy rows, take-away) */
           covers: number | null;
           opened_by: string | null;
@@ -186,6 +188,7 @@ export interface Database {
           ticket_number?: number;
           delivery_number?: number | null;
           pickup_at?: string | null;
+          parent_order_id?: string | null;
           covers?: number | null;
           opened_by?: string | null;
           opened_at?: string;
@@ -205,6 +208,7 @@ export interface Database {
           ticket_number?: number;
           delivery_number?: number | null;
           pickup_at?: string | null;
+          parent_order_id?: string | null;
           covers?: number | null;
           opened_by?: string | null;
           opened_at?: string;
@@ -606,6 +610,11 @@ export interface Database {
           phone: string;
           receipt_greeting: string;
           legal_footer: string;
+          /** Width of one take-away pickup slot, in minutes */
+          takeaway_slot_minutes: number;
+          /** Take-away service window, "HH:mm" */
+          takeaway_service_start: string;
+          takeaway_service_end: string;
           updated_at: string;
         };
         Insert: {
@@ -616,6 +625,9 @@ export interface Database {
           phone?: string;
           receipt_greeting?: string;
           legal_footer?: string;
+          takeaway_slot_minutes?: number;
+          takeaway_service_start?: string;
+          takeaway_service_end?: string;
           updated_at?: string;
         };
         Update: {
@@ -626,9 +638,44 @@ export interface Database {
           phone?: string;
           receipt_greeting?: string;
           legal_footer?: string;
+          takeaway_slot_minutes?: number;
+          takeaway_service_start?: string;
+          takeaway_service_end?: string;
           updated_at?: string;
         };
         Relationships: [];
+      };
+      takeaway_category_limits: {
+        // One rule per category; the primary key is the category itself.
+        Row: {
+          category_id: string;
+          max_items: number;
+          window_minutes: number;
+          is_active: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          category_id: string;
+          max_items: number;
+          window_minutes: number;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          category_id?: string;
+          max_items?: number;
+          window_minutes?: number;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "takeaway_category_limits_category_id_fkey";
+            columns: ["category_id"];
+            referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       print_jobs: {
         // payload is bytea: PostgREST expects/returns it hex-encoded ("\x1b40…")
@@ -774,3 +821,5 @@ export type Printer = Database["public"]["Tables"]["printers"]["Row"];
 export type RestaurantSettings =
   Database["public"]["Tables"]["restaurant_settings"]["Row"];
 export type PrintJob = Database["public"]["Tables"]["print_jobs"]["Row"];
+export type TakeawayCategoryLimit =
+  Database["public"]["Tables"]["takeaway_category_limits"]["Row"];

@@ -25,32 +25,56 @@ import {
 } from "@/stores/ticket-store";
 import { mRoutes } from "@/mobile/lib/routes";
 import { useKeyboardInset } from "@/mobile/hooks/use-keyboard-inset";
-import { useTicketTarget } from "@/mobile/hooks/use-ticket-target";
+import {
+  useTakeawayTicketTarget,
+  useTicketTarget,
+} from "@/mobile/hooks/use-ticket-target";
+import { PickupTimeControl } from "@/components/takeaway/pickup-time-control";
+import { TakeawayCapacityBanner } from "@/components/takeaway/capacity-banner";
 import { MHeader } from "./m-header";
 import { VariationScreen } from "./variation-screen";
 import { TicketLinesSheet } from "./ticket-lines";
 
+/** What this screen is adding items to */
+export type OrderTarget =
+  | { kind: "table"; tableId: string; subtable: string | null }
+  | { kind: "takeaway"; orderId: string; name: string };
+
 /**
- * Order taking for one (table, subtable). The flow underneath — send, and the
- * price snapshot it writes — is the shared useOrderActions, so a round sent
- * from here is identical to one sent from the desktop till.
+ * Order taking for one target — a (table, subtable), or a take-away. The flow
+ * underneath — send, and the price snapshot it writes — is the shared
+ * useOrderActions, so a round sent from here is identical to one sent from the
+ * desktop till.
+ *
+ * The two targets share the whole screen because a waiter browsing the menu is
+ * doing the same job either way; what differs is the header (guests vs pickup
+ * time), and where "send" takes you afterwards.
  */
-export function OrderScreen({
-  tableId,
-  subtable,
-}: {
-  tableId: string;
-  subtable: string | null;
-}) {
+export function OrderScreen({ target }: { target: OrderTarget }) {
   const t = useT();
   const router = useRouter();
   const canTakeOrders = usePermission("take_orders");
   const canOverridePrice = usePermission("override_price");
 
+  const takeaway = target.kind === "takeaway";
+  const tableId = target.kind === "table" ? target.tableId : "";
+  const subtable = target.kind === "table" ? target.subtable : null;
+
   const { categories, items, variations, tables, loading, error } =
     useMenuData();
   const table = tables.find((x) => x.id === tableId);
-  useTicketTarget(tableId, table?.name, subtable);
+  // Both hooks are always called — a conditional hook is not an option — but
+  // each is inert for the target it does not own.
+  useTicketTarget(tableId, takeaway ? undefined : table?.name, subtable);
+  useTakeawayTicketTarget(
+    target.kind === "takeaway" ? target.orderId : null,
+    target.kind === "takeaway" ? target.name : "",
+  );
+
+  const backHref =
+    target.kind === "takeaway"
+      ? mRoutes.bill(target.orderId)
+      : mRoutes.table(tableId);
 
   const { openOrder, refresh } = useOpenOrder();
   const { send, busy, covers, needsCovers } = useOrderActions({
@@ -100,7 +124,7 @@ export function OrderScreen({
   if (!canTakeOrders) {
     return (
       <>
-        <MHeader title={t("pos.noAccessTitle")} backHref={mRoutes.table(tableId)} />
+        <MHeader title={t("pos.noAccessTitle")} backHref={backHref} />
         <div className="flex flex-col items-center gap-3 p-6 text-center">
           <TriangleAlert className="h-10 w-10 text-amber-500" />
           <p className="text-sm text-muted-foreground">{t("pos.noAccessBody")}</p>
@@ -142,8 +166,8 @@ export function OrderScreen({
     const ok = await send();
     if (ok) {
       setTicketOpen(false);
-      // back to the table, where the new round is now on the bill
-      router.push(mRoutes.table(tableId));
+      // back where the new round is now on the bill
+      router.push(backHref);
     }
   }
 
@@ -156,16 +180,40 @@ export function OrderScreen({
         style={keyboardInset ? { paddingBottom: keyboardInset } : undefined}
       >
         <MHeader
-          title={subtable ? `${table?.name ?? ""}/${subtable}` : (table?.name ?? "…")}
-          backHref={mRoutes.table(tableId)}
+          title={
+            target.kind === "takeaway"
+              ? target.name
+              : subtable
+                ? `${table?.name ?? ""}/${subtable}`
+                : (table?.name ?? "…")
+          }
+          backHref={backHref}
           action={
-            <CoversChip
-              covers={covers}
-              onClick={() => setCoversOpen(true)}
-              className="mr-2"
-            />
+            takeaway ? (
+              <PickupTimeControl
+                orderId={openOrder?.order.id ?? null}
+                pickupAt={openOrder?.order.pickup_at ?? null}
+                onChanged={refresh}
+                className="mr-2"
+              />
+            ) : (
+              <CoversChip
+                covers={covers}
+                onClick={() => setCoversOpen(true)}
+                className="mr-2"
+              />
+            )
           }
         />
+
+        {takeaway && (
+          <div className="px-3 pt-3">
+            <TakeawayCapacityBanner
+              openOrder={openOrder}
+              onChanged={refresh}
+            />
+          </div>
+        )}
 
         {error && (
           <p className="p-4 text-sm text-destructive">{t("m.loadFailed")}</p>

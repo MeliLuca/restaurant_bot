@@ -60,6 +60,9 @@ import { VariationDialog } from "./variation-dialog";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
 import { SplitBillDialog } from "./split-bill-dialog";
 import { SplitPicker } from "./split-picker";
+import { createFollowUpOrder } from "@/lib/takeaway/api";
+import { TakeawayCapacityBanner } from "@/components/takeaway/capacity-banner";
+import { TakeawayCaption } from "@/components/takeaway/takeaway-caption";
 import { PickupTimeControl } from "@/components/takeaway/pickup-time-control";
 import { TakeawayPicker } from "./takeaway-picker";
 
@@ -273,6 +276,32 @@ export function TicketPanel({
     }
   }
 
+  // The same customer ringing back: a second order, not a second "Rossi".
+  async function addToExistingTakeaway(parent: Order) {
+    if (busy) return;
+    setPanelBusy(true);
+    try {
+      const { orderId, deliveryNumber } = await createFollowUpOrder(
+        parent,
+        userId,
+      );
+      setTakeaway(orderId, parent.customer_name ?? "");
+      await onOrderChanged();
+      toast.success(
+        t("takeaway.followUpStarted", {
+          number: deliveryNumber,
+          name: parent.customer_name ?? "",
+        }),
+      );
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : t("pos.couldNotStartTakeaway"),
+      );
+    } finally {
+      setPanelBusy(false);
+    }
+  }
+
   async function handleSplitOrderClosed(tableClosed: boolean) {
     const closedLabel = targetLabel;
     const closedTableId = tableId;
@@ -373,11 +402,10 @@ export function TicketPanel({
             )}
             <div className="min-w-0 flex-1">
               <span className="block truncate font-medium">{takeawayName}</span>
-              <span className="block text-xs text-muted-foreground">
-                {takeawayOrderId
-                  ? t("pos.openTakeawayOrder")
-                  : t("pos.newTakeawayLabel")}
-              </span>
+              <TakeawayCaption
+                order={openOrder?.order ?? null}
+                bound={takeawayOrderId !== null}
+              />
             </div>
             <PickupTimeControl
               orderId={openOrder?.order.id ?? null}
@@ -400,11 +428,17 @@ export function TicketPanel({
             savedLabels={savedLabels}
             onPickExisting={(o) => setTakeaway(o.id, o.customer_name ?? "")}
             onStartNew={(name) => void startNewTakeaway(name)}
+            onAddToExisting={(o) => void addToExistingTakeaway(o)}
           />
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
+        <TakeawayCapacityBanner
+          openOrder={openOrder}
+          onChanged={onOrderChanged}
+        />
+
         {!hasTarget && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {mode === "table"

@@ -128,7 +128,9 @@ export function BillView({ orderId }: { orderId: string }) {
   const balanceCents = remainingBalanceCents(order, payments);
   const backHref = order.table_id
     ? mRoutes.table(order.table_id)
-    : mRoutes.bills();
+    : order.order_type === "takeaway"
+      ? mRoutes.takeaway()
+      : mRoutes.bills();
   // Paying a bill that has unsent items would settle the wrong amount, so the
   // send is offered first rather than folded silently into the charge.
   const blockedByPending = lines.length > 0;
@@ -298,9 +300,13 @@ export function BillView({ orderId }: { orderId: string }) {
       </div>
 
       <div className="relative flex shrink-0 gap-2 border-t bg-card p-3">
-        {canTakeOrders && order.table_id && (
+        {canTakeOrders && (order.table_id || order.order_type === "takeaway") && (
           <Link
-            href={mRoutes.order(order.table_id, order.subtable)}
+            href={
+              order.table_id
+                ? mRoutes.order(order.table_id, order.subtable)
+                : mRoutes.takeawayOrder(orderId)
+            }
             aria-label={t("m.addOrder")}
             className="absolute -top-7 left-1/2 z-10 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background"
           >

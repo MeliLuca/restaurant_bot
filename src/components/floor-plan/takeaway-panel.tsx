@@ -59,7 +59,7 @@ export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
           <div key={o.id}>
             {i > 0 && <Separator className="my-1" />}
             <div className="flex items-center gap-3 py-2">
-              <div className="w-16 shrink-0">
+              <div className="w-20 shrink-0">
                 <div
                   className={
                     o.pickup_at === null
@@ -71,7 +71,7 @@ export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
                     ? t("takeaway.noTimeShort")
                     : formatTime(o.pickup_at)}
                 </div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="whitespace-nowrap text-[11px] text-muted-foreground">
                   {t("takeaway.openedAt", { time: formatTime(o.opened_at) })}
                 </div>
               </div>

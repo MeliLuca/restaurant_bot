@@ -4,13 +4,11 @@ import { useMemo, useState } from "react";
 import { ShoppingBag, Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/constants";
+import { findOpenTakeawayByName } from "@/lib/takeaway/api";
+import { formatTime } from "@/lib/takeaway/slots";
 import type { Order } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
-
-const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  hour: "numeric",
-  minute: "2-digit",
-});
+import { cn } from "@/lib/utils";
 
 interface TakeawayPickerProps {
   openOrders: Order[];
@@ -18,6 +16,8 @@ interface TakeawayPickerProps {
   savedLabels?: string[];
   onPickExisting: (order: Order) => void;
   onStartNew: (name: string) => void;
+  /** Start a second order for a customer who already has one open */
+  onAddToExisting?: (order: Order) => void;
 }
 
 export function TakeawayPicker({
@@ -25,6 +25,7 @@ export function TakeawayPicker({
   savedLabels = [],
   onPickExisting,
   onStartNew,
+  onAddToExisting,
 }: TakeawayPickerProps) {
   const t = useT();
   const [query, setQuery] = useState("");
@@ -59,10 +60,26 @@ export function TakeawayPicker({
     setOpen(false);
   }
 
+  // Typing the name of someone who already has an order open is never a new
+  // customer — it is the same one ringing back. Creating a second "Rossi"
+  // here would leave two identical rows at the counter with no way to tell
+  // which bag is which, so that path offers the follow-up instead.
+  const nameClash = findOpenTakeawayByName(query, openOrders);
+
   function startNew() {
     const name = query.trim();
     if (!name) return;
+    if (nameClash && onAddToExisting) {
+      addToExisting(nameClash);
+      return;
+    }
     onStartNew(name);
+    setQuery("");
+    setOpen(false);
+  }
+
+  function addToExisting(order: Order) {
+    onAddToExisting?.(order);
     setQuery("");
     setOpen(false);
   }
@@ -111,9 +128,13 @@ export function TakeawayPicker({
                           {o.customer_name}
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          {t("pos.openedAt", {
-                            time: TIME_FORMATTER.format(new Date(o.opened_at)),
-                          })}
+                          {o.pickup_at === null
+                            ? t("pos.openedAt", {
+                                time: formatTime(o.opened_at),
+                              })
+                            : t("takeaway.pickupSet", {
+                                time: formatTime(o.pickup_at),
+                              })}
                         </span>
                       </span>
                     </span>
@@ -149,10 +170,19 @@ export function TakeawayPicker({
                 e.preventDefault();
                 startNew();
               }}
-              className="flex min-h-12 w-full items-center gap-2 border-t px-4 py-2 text-left font-medium text-primary transition-colors hover:bg-accent"
+              className={cn(
+                "flex min-h-12 w-full items-center gap-2 border-t px-4 py-2 text-left font-medium transition-colors hover:bg-accent",
+                nameClash && onAddToExisting
+                  ? "text-amber-700 dark:text-amber-400"
+                  : "text-primary",
+              )}
             >
               <Plus className="h-4 w-4" />{" "}
-              {t("pos.newTakeawayFor", { query: query.trim() })}
+              {nameClash && onAddToExisting
+                ? t("takeaway.addToOrder", {
+                    number: nameClash.delivery_number ?? "?",
+                  })
+                : t("pos.newTakeawayFor", { query: query.trim() })}
             </button>
           ) : (
             matches.length === 0 &&

@@ -105,6 +105,21 @@ export function buildSlots(
   return slots;
 }
 
+/**
+ * Same instant, whatever the spelling.
+ *
+ * Slot keys are minted with `toISOString()` ("…T18:00:00.000Z") but Postgres
+ * hands timestamptz back as "…T18:00:00+00:00". Comparing the strings makes a
+ * saved time look like a custom one and lights the wrong chip, so the
+ * comparison has to go through Date.
+ */
+export function sameInstant(a: string | null, b: string | null): boolean {
+  if (a === null || b === null) return a === b;
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  return !Number.isNaN(ta) && ta === tb;
+}
+
 /** The grid slot a timestamp belongs to, or null when it falls outside service */
 export function slotFor(
   at: Date | string,
@@ -128,4 +143,91 @@ export function defaultSlot(
   now: Date = new Date(),
 ): Slot | null {
   return buildSlots(config, now).find((s) => !s.isPast) ?? null;
+}
+
+export interface SlotGroup<T> {
+  /** Slot start as ISO, or "none" for the bucket of orders with no time */
+  key: string;
+  /** "20:00" — null for the no-time bucket */
+  label: string | null;
+  /** "20:30", the end of the window */
+  endLabel: string | null;
+  at: Date | null;
+  items: T[];
+}
+
+/**
+ * Bucket orders into the slots they belong to.
+ *
+ * A time that falls outside the configured service (a customer who insisted on
+ * 17:00, or an order carried over from a shorter evening) gets a bucket of its
+ * own rather than being dropped or forced into the nearest slot: the board must
+ * show every open order, and quietly relabelling one would send someone to the
+ * counter at the wrong time.
+ */
+export function groupBySlot<T>(
+  items: T[],
+  pickupOf: (item: T) => string | null,
+  config: SlotConfig = DEFAULT_SLOT_CONFIG,
+  now: Date = new Date(),
+): SlotGroup<T>[] {
+  const step = Math.max(5, Math.round(config.slotMinutes));
+  const grid = buildSlots(config, now);
+  const groups = new Map<string, SlotGroup<T>>();
+  const noTime: SlotGroup<T> = {
+    key: "none",
+    label: null,
+    endLabel: null,
+    at: null,
+    items: [],
+  };
+
+  for (const item of items) {
+    const pickup = pickupOf(item);
+    if (pickup === null) {
+      noTime.items.push(item);
+      continue;
+    }
+    const at = new Date(pickup);
+    if (Number.isNaN(at.getTime())) {
+      noTime.items.push(item);
+      continue;
+    }
+    const slot = slotFor(at, config, grid);
+    const start = slot ? slot.at : new Date(Math.floor(at.getTime() / 60_000) * 60_000);
+    const key = start.toISOString();
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        key,
+        label: formatTime(start),
+        endLabel: formatTime(new Date(start.getTime() + step * MINUTE)),
+        at: start,
+        items: [],
+      };
+      groups.set(key, group);
+    }
+    group.items.push(item);
+  }
+
+  const ordered = Array.from(groups.values()).sort(
+    (a, b) => (a.at?.getTime() ?? 0) - (b.at?.getTime() ?? 0),
+  );
+  if (noTime.items.length > 0) ordered.push(noTime);
+  return ordered;
+}
+
+/**
+ * "30 min", "1 h", "1 h 30".
+ *
+ * Deliberately not translated: the two units read identically in Italian and
+ * English, and a duration that changes shape with the language would make the
+ * settings preview and the warning banner disagree about the same number.
+ */
+export function formatDuration(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  if (h === 0) return `${rest} min`;
+  return rest === 0 ? `${h} h` : `${h} h ${rest}`;
 }

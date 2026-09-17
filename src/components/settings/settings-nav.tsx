@@ -16,6 +16,7 @@ const LINKS: { href: string; labelKey: TranslationKey; permission: string | null
     labelKey: "settings.navAvailability",
     permission: "manage_availability",
   },
+  { href: "/settings/takeaway", labelKey: "settings.navTakeaway", permission: "manage_menu" },
   { href: "/settings/printers", labelKey: "settings.navPrinters", permission: "manage_printers" },
 ];
 

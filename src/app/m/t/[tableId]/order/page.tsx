@@ -9,6 +9,12 @@ export default function MobileOrderPage({
 }) {
   // subtable travels as ?s= because it is nullable and free-text
   return (
-    <OrderScreen tableId={params.tableId} subtable={searchParams.s ?? null} />
+    <OrderScreen
+      target={{
+        kind: "table",
+        tableId: params.tableId,
+        subtable: searchParams.s ?? null,
+      }}
+    />
   );
 }
