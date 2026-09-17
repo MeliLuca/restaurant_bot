@@ -1288,7 +1288,8 @@ set search_path to public, extensions;
 insert into roles (id, name, permissions) values
   ('70000000-0000-0000-0000-000000000001', 'Admin',
    array['manage_tables','manage_reservations','take_orders','checkout_orders','manage_staff',
-         'manage_menu','manage_floor','manage_availability','view_stats','manage_printers']),
+         'manage_menu','manage_floor','manage_availability','view_stats','manage_printers',
+         'override_price']),
   ('70000000-0000-0000-0000-000000000002', 'Host',
    array['manage_tables','manage_reservations']),
   ('70000000-0000-0000-0000-000000000003', 'Server',
@@ -1322,3 +1323,25 @@ insert into table_tag_links (table_id, tag_id) values
   ('10000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000002'),
   ('10000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000003')
 on conflict do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Pantry hygiene + demo add-on prices
+-- ---------------------------------------------------------------------------
+-- The listino's "ingredienti" column split a few beer strengths into the
+-- pantry ('5% vol.') plus the bare counts '4' and '6'. Harmless while the
+-- pantry only drove the 86 board; now that it is also the POS add-on list they
+-- would be offered as pizza toppings. Migrations run BEFORE this file, so the
+-- same cleanup has to happen here or a db reset puts them straight back.
+-- Narrow on purpose: '^[0-9]' would also take '4 formaggi' and '2 hamburger'.
+delete from ingredients where name ~ '^[0-9]+$' or name like '%vol.%';
+
+-- A few realistic add-on prices so the diminishing scale is visible out of the
+-- box; everything else stays free until someone prices it in Settings → Menu.
+update ingredients set price = 2.00 where name in ('bufala', 'crudo', 'speck', 'gorgonzola', 'brie');
+update ingredients set price = 1.50 where name in ('funghi', 'salsiccia', 'tonno', 'grana', 'asiago');
+update ingredients set price = 1.00 where name in ('rucola', 'cipolla', 'olive', 'capperi', 'pomodorini');
+
+-- Pizze and bruschette are what actually get customized at the counter.
+update menu_items m set allows_variations = true
+from categories c
+where m.category_id = c.id and lower(c.name) in ('pizze', 'bruschette');

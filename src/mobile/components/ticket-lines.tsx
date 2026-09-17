@@ -19,14 +19,16 @@ import {
 export function TicketLinesSheet({
   onClose,
   onEditModifiers,
-  hasModifiers,
+  canEditLine,
   total,
   busy,
   onSend,
 }: {
   onClose: () => void;
   onEditModifiers: (line: TicketLine) => void;
-  hasModifiers: (menuItemId: string) => boolean;
+  /** True when this user can change something on the line — its ingredients,
+   * its price, or both. Mirrors the pencil's gate on the POS. */
+  canEditLine: (menuItemId: string) => boolean;
   total: number;
   busy: boolean;
   onSend: () => void;
@@ -73,8 +75,14 @@ export function TicketLinesSheet({
             {l.modifiers.length > 0 && (
               <ul className="pl-3 text-xs text-muted-foreground">
                 {l.modifiers.map((m) => (
-                  <li key={m.modifierId} className="flex justify-between gap-2">
-                    <span className="min-w-0 truncate">› {m.name}</span>
+                  <li
+                    key={`${m.ingredientId}:${m.isRemoval}`}
+                    className="flex justify-between gap-2"
+                  >
+                    <span className="min-w-0 truncate">
+                      {m.isRemoval ? "− " : "+ "}
+                      {m.name}
+                    </span>
                     {m.priceAdjustment > 0 && (
                       <span className="shrink-0 tabular-nums">
                         +{formatMoney(m.priceAdjustment)}
@@ -106,7 +114,7 @@ export function TicketLinesSheet({
                 <Plus className="h-4 w-4" />
               </button>
 
-              {hasModifiers(l.menuItemId) && (
+              {canEditLine(l.menuItemId) && (
                 <button
                   type="button"
                   onClick={() => onEditModifiers(l)}

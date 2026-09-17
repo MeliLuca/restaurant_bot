@@ -22,6 +22,12 @@ export const PERMISSIONS = [
     description: "Close orders and take payment",
   },
   {
+    key: "override_price",
+    label: "Override line prices",
+    description:
+      "Change what a single ticket line is charged; ingredient edits stay open to everyone",
+  },
+  {
     key: "manage_staff",
     label: "Manage staff & roles",
     description: "Create users and roles, edit permissions",

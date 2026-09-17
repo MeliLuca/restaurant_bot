@@ -16,6 +16,7 @@ import type {
 export interface RoutableModifier {
   name: string;
   price_adjustment: number;
+  is_removal: boolean;
 }
 
 // One order_items row joined with its menu item — the routing input shape.
@@ -37,19 +38,18 @@ export function parseModifiers(notes: string | null): string[] {
     .filter(Boolean);
 }
 
-// "+ Bufala" / "- Acciughe" — paid additions/discounts get a sign; zero-cost
-// modifiers ("No Basilico") already carry their meaning in the name.
+// "+ Bufala" / "- Basilico". The sign comes from is_removal, not from the
+// amount: a free addition and a removal are both worth 0, and a cook reading a
+// bare "Mozzarella" cannot tell which one was meant.
 function modifierLabel(m: RoutableModifier): string {
-  if (m.price_adjustment > 0) return `+ ${m.name}`;
-  if (m.price_adjustment < 0) return `- ${m.name}`;
-  return m.name;
+  return `${m.is_removal ? "-" : "+"} ${m.name}`;
 }
 
 // CASSA shows each addition's list price as detail; the line's unit price
 // already carries the (diminishing-scaled) surcharge, so these are detail, not
 // extra charges. Removals never deduct, so they print without an amount.
 function cassaModifierLabel(m: RoutableModifier): string {
-  if (m.price_adjustment <= 0) return modifierLabel(m);
+  if (m.is_removal || m.price_adjustment <= 0) return modifierLabel(m);
   return `${modifierLabel(m)} (+${formatEuro(m.price_adjustment)})`;
 }
 

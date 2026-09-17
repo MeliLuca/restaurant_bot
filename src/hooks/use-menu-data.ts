@@ -4,19 +4,21 @@ import { useCallback, useEffect, useState } from "react";
 import {
   fetchCategories,
   fetchMenuItems,
-  fetchMenuModifierGroups,
   fetchTables,
-  type ModifierGroupWithModifiers,
+  fetchVariationData,
+  type VariationData,
 } from "@/lib/api";
 import type { Category, RestaurantTable } from "@/lib/database.types";
 import type { MenuItemView } from "@/lib/menu-display";
 import { useT } from "@/lib/i18n/use-translation";
 
+const NO_VARIATIONS: VariationData = { pantry: [], byItem: {} };
+
 interface MenuData {
   categories: Category[];
   items: MenuItemView[];
-  /** Modifier groups keyed by menu_item_id */
-  modifierGroups: Record<string, ModifierGroupWithModifiers[]>;
+  /** The pantry, plus each modifiable dish's own ingredients */
+  variations: VariationData;
   tables: RestaurantTable[];
   loading: boolean;
   error: string | null;
@@ -25,7 +27,7 @@ interface MenuData {
 
 /**
  * The slow-moving reference data an order-taking screen needs: menu,
- * categories, modifier groups and tables, in one round of parallel fetches.
+ * categories, variation data and tables, in one round of parallel fetches.
  *
  * Extracted from the POS page so the phone UI loads the same data the same
  * way rather than assembling its own subtly different set.
@@ -34,25 +36,23 @@ export function useMenuData(): MenuData {
   const t = useT();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemView[]>([]);
-  const [modifierGroups, setModifierGroups] = useState<
-    Record<string, ModifierGroupWithModifiers[]>
-  >({});
+  const [variations, setVariations] = useState<VariationData>(NO_VARIATIONS);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
-      const [c, i, tb, mg] = await Promise.all([
+      const [c, i, tb, v] = await Promise.all([
         fetchCategories(),
         fetchMenuItems(),
         fetchTables(),
-        fetchMenuModifierGroups(),
+        fetchVariationData(),
       ]);
       setCategories(c);
       setItems(i);
       setTables(tb);
-      setModifierGroups(mg);
+      setVariations(v);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("pos.failedLoadMenu"));
@@ -65,5 +65,5 @@ export function useMenuData(): MenuData {
     void reload();
   }, [reload]);
 
-  return { categories, items, modifierGroups, tables, loading, error, reload };
+  return { categories, items, variations, tables, loading, error, reload };
 }

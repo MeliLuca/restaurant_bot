@@ -67,15 +67,18 @@ type OrderRow = {
     ready_at: string | null;
     created_at: string;
     menu_items: { name: string; target_printer_id: string | null } | null;
-    order_item_modifiers: { name: string; price_adjustment: number }[];
+    order_item_modifiers: {
+      name: string;
+      price_adjustment: number;
+      is_removal: boolean;
+    }[];
   }[];
 };
 
-/** Same signing convention as the production slips (route-order.ts) */
-function modifierLabel(m: { name: string; price_adjustment: number }): string {
-  if (m.price_adjustment > 0) return `+ ${m.name}`;
-  if (m.price_adjustment < 0) return `- ${m.name}`;
-  return m.name;
+/** Same signing convention as the production slips (route-order.ts): the
+ * direction comes from is_removal, never from the amount. */
+function modifierLabel(m: { name: string; is_removal: boolean }): string {
+  return `${m.is_removal ? "-" : "+"} ${m.name}`;
 }
 
 export function useKitchenOrders(): KitchenData {
@@ -90,7 +93,7 @@ export function useKitchenOrders(): KitchenData {
         sb
           .from("orders")
           .select(
-            "id, ticket_number, order_type, subtable, customer_name, delivery_number, opened_at, tables(name), order_items(id, quantity, notes, fraction_of, ready_at, created_at, menu_items(name, target_printer_id), order_item_modifiers(name, price_adjustment))",
+            "id, ticket_number, order_type, subtable, customer_name, delivery_number, opened_at, tables(name), order_items(id, quantity, notes, fraction_of, ready_at, created_at, menu_items(name, target_printer_id), order_item_modifiers(name, price_adjustment, is_removal))",
           )
           .eq("status", "open")
           .order("opened_at")

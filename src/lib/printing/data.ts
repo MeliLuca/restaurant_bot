@@ -25,7 +25,11 @@ type ItemRow = {
   notes: string | null;
   fraction_of: number | null;
   menu_items: { name: string; target_printer_id: string | null } | null;
-  order_item_modifiers: { name: string; price_adjustment: number }[];
+  order_item_modifiers: {
+    name: string;
+    price_adjustment: number;
+    is_removal: boolean;
+  }[];
 };
 
 /**
@@ -50,7 +54,7 @@ export async function loadOrderPrintContext(
   let itemQuery = sb
     .from("order_items")
     .select(
-      "quantity, unit_price, notes, fraction_of, menu_items(name, target_printer_id), order_item_modifiers(name, price_adjustment)",
+      "quantity, unit_price, notes, fraction_of, menu_items(name, target_printer_id), order_item_modifiers(name, price_adjustment, is_removal)",
     )
     .eq("order_id", orderId)
     .order("created_at");

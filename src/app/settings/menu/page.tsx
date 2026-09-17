@@ -6,11 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MenuManager } from "@/components/settings/menu-manager";
 import { SettingsNav } from "@/components/settings/settings-nav";
-import { fetchCategories, type ModifierGroupWithModifiers } from "@/lib/api";
+import { fetchCategories } from "@/lib/api";
 import {
   fetchIngredients,
   fetchMenuItemsWithIngredients,
-  fetchModifierGroups,
   fetchPrinters,
   type MenuItemWithIngredients,
 } from "@/lib/settings-api";
@@ -24,9 +23,6 @@ export default function MenuSettingsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItemWithIngredients[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [modifierGroups, setModifierGroups] = useState<
-    ModifierGroupWithModifiers[]
-  >([]);
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,17 +33,15 @@ export default function MenuSettingsPage() {
       return;
     }
     try {
-      const [c, i, g, mg, p] = await Promise.all([
+      const [c, i, g, p] = await Promise.all([
         fetchCategories(),
         fetchMenuItemsWithIngredients(),
         fetchIngredients(),
-        fetchModifierGroups(),
         fetchPrinters(),
       ]);
       setCategories(c);
       setItems(i);
       setIngredients(g);
-      setModifierGroups(mg);
       setPrinters(p);
       setError(null);
     } catch (e) {
@@ -85,7 +79,6 @@ export default function MenuSettingsPage() {
           categories={categories}
           items={items}
           ingredients={ingredients}
-          modifierGroups={modifierGroups}
           printers={printers}
           onChanged={refresh}
         />

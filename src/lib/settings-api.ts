@@ -1,5 +1,4 @@
 import { getSupabase } from "@/lib/supabase/client";
-import type { ModifierGroupWithModifiers } from "@/lib/api";
 import type {
   Database,
   Ingredient,
@@ -137,10 +136,28 @@ export async function fetchIngredients(): Promise<Ingredient[]> {
   return rows;
 }
 
-export async function createIngredient(name: string): Promise<void> {
+export async function createIngredient(
+  name: string,
+  price = 0,
+): Promise<void> {
   const { error } = await getSupabase()
     .from("ingredients")
-    .insert({ name: name.trim() });
+    .insert({ name: name.trim(), price });
+  if (error) throw new Error(error.message);
+}
+
+/** Rename an ingredient or reprice it as an add-on (0 = free to add). */
+export async function updateIngredient(
+  ingredientId: string,
+  fields: { name?: string; price?: number },
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from("ingredients")
+    .update({
+      ...(fields.name !== undefined ? { name: fields.name.trim() } : {}),
+      ...(fields.price !== undefined ? { price: fields.price } : {}),
+    })
+    .eq("id", ingredientId);
   if (error) throw new Error(error.message);
 }
 
@@ -169,26 +186,19 @@ export async function setIngredientAvailability(
 
 export type MenuItemWithIngredients = MenuItem & {
   ingredients: Ingredient[];
-  /** ids of the modifier groups (pizzeria variations) linked to this item */
-  modifierGroupIds: string[];
 };
 
 export async function fetchMenuItemsWithIngredients(): Promise<
   MenuItemWithIngredients[]
 > {
   const sb = getSupabase();
-  const rows: Array<
-    MenuItem & {
-      ingredients: Ingredient[];
-      menu_item_modifier_groups: { group_id: string }[];
-    }
-  > = [];
+  const rows: MenuItemWithIngredients[] = [];
   for (let from = 0; ; from += FETCH_PAGE) {
     // sort_order repeats across categories, so tie-break on id to keep the
     // pagination windows stable
     const { data, error } = await sb
       .from("menu_items")
-      .select("*, ingredients(*), menu_item_modifier_groups(group_id)")
+      .select("*, ingredients(*)")
       .order("sort_order")
       .order("id")
       .range(from, from + FETCH_PAGE - 1);
@@ -196,10 +206,7 @@ export async function fetchMenuItemsWithIngredients(): Promise<
     rows.push(...(data as unknown as typeof rows));
     if (data.length < FETCH_PAGE) break;
   }
-  return rows.map(({ menu_item_modifier_groups, ...item }) => ({
-    ...item,
-    modifierGroupIds: menu_item_modifier_groups.map((g) => g.group_id),
-  }));
+  return rows;
 }
 
 export async function createCategory(
@@ -228,6 +235,7 @@ export async function createMenuItem(item: {
   sortOrder: number;
   targetPrinterId: string | null;
   codice: string | null;
+  allowsVariations: boolean;
 }): Promise<string> {
   const { data, error } = await getSupabase()
     .from("menu_items")
@@ -238,6 +246,7 @@ export async function createMenuItem(item: {
       sort_order: item.sortOrder,
       target_printer_id: item.targetPrinterId,
       codice: item.codice,
+      allows_variations: item.allowsVariations,
     })
     .select("id")
     .single();
@@ -254,6 +263,7 @@ export async function updateMenuItem(
     is_available?: boolean;
     target_printer_id?: string | null;
     codice?: string | null;
+    allows_variations?: boolean;
   },
 ): Promise<void> {
   const { error } = await getSupabase()
@@ -261,6 +271,31 @@ export async function updateMenuItem(
     .update(fields)
     .eq("id", itemId);
   if (error) throw new Error(error.message);
+}
+
+/** PostgREST puts the id filter in the query string, so a whole category at
+ * once would build a URL long enough to be refused. Chunked, not looped
+ * per item: 65 pizzas become one or two requests instead of 65. */
+const BULK_CHUNK = 100;
+
+/** Apply the same field(s) to many menu items — the bulk counterpart of
+ * `updateMenuItem`, used by multi-select in the menu manager. */
+export async function updateMenuItems(
+  itemIds: string[],
+  fields: {
+    is_available?: boolean;
+    allows_variations?: boolean;
+    target_printer_id?: string | null;
+    category_id?: string;
+  },
+): Promise<void> {
+  for (let i = 0; i < itemIds.length; i += BULK_CHUNK) {
+    const { error } = await getSupabase()
+      .from("menu_items")
+      .update(fields)
+      .in("id", itemIds.slice(i, i + BULK_CHUNK));
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function deleteMenuItem(itemId: string): Promise<void> {
@@ -353,117 +388,5 @@ export async function setMenuItemIngredients(
         ingredient_id,
       })),
     );
-  if (error) throw new Error(error.message);
-}
-
-// ---------------------------------------------------------------------------
-// Modifier groups & options (pizzeria-style variations)
-// ---------------------------------------------------------------------------
-
-/** Every modifier group with its options, each sorted by sort_order. */
-export async function fetchModifierGroups(): Promise<
-  ModifierGroupWithModifiers[]
-> {
-  const { data, error } = await getSupabase()
-    .from("modifier_groups")
-    .select("*, modifiers(*)")
-    .order("sort_order");
-  if (error) throw new Error(error.message);
-  const groups = data as unknown as ModifierGroupWithModifiers[];
-  return groups.map((g) => ({
-    ...g,
-    modifiers: [...g.modifiers].sort((a, b) => a.sort_order - b.sort_order),
-  }));
-}
-
-export async function createModifierGroup(group: {
-  name: string;
-  minSelections: number;
-  maxSelections: number;
-  sortOrder: number;
-}): Promise<string> {
-  const { data, error } = await getSupabase()
-    .from("modifier_groups")
-    .insert({
-      name: group.name.trim(),
-      min_selections: group.minSelections,
-      max_selections: group.maxSelections,
-      sort_order: group.sortOrder,
-    })
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
-  return data.id;
-}
-
-export async function updateModifierGroup(
-  groupId: string,
-  fields: { name?: string; min_selections?: number; max_selections?: number },
-): Promise<void> {
-  const { error } = await getSupabase()
-    .from("modifier_groups")
-    .update(fields)
-    .eq("id", groupId);
-  if (error) throw new Error(error.message);
-}
-
-// Cascades to its options and any item links; order snapshots keep their copy.
-export async function deleteModifierGroup(groupId: string): Promise<void> {
-  const { error } = await getSupabase()
-    .from("modifier_groups")
-    .delete()
-    .eq("id", groupId);
-  if (error) throw new Error(error.message);
-}
-
-export async function createModifier(modifier: {
-  groupId: string;
-  name: string;
-  priceAdjustment: number;
-  sortOrder: number;
-}): Promise<void> {
-  const { error } = await getSupabase().from("modifiers").insert({
-    group_id: modifier.groupId,
-    name: modifier.name.trim(),
-    price_adjustment: modifier.priceAdjustment,
-    sort_order: modifier.sortOrder,
-  });
-  if (error) throw new Error(error.message);
-}
-
-export async function updateModifier(
-  modifierId: string,
-  fields: { name?: string; price_adjustment?: number },
-): Promise<void> {
-  const { error } = await getSupabase()
-    .from("modifiers")
-    .update(fields)
-    .eq("id", modifierId);
-  if (error) throw new Error(error.message);
-}
-
-export async function deleteModifier(modifierId: string): Promise<void> {
-  const { error } = await getSupabase()
-    .from("modifiers")
-    .delete()
-    .eq("id", modifierId);
-  if (error) throw new Error(error.message);
-}
-
-/** Replace the set of modifier groups offered by an item (mirrors ingredients). */
-export async function setMenuItemModifierGroups(
-  itemId: string,
-  groupIds: string[],
-): Promise<void> {
-  const sb = getSupabase();
-  const { error: delError } = await sb
-    .from("menu_item_modifier_groups")
-    .delete()
-    .eq("menu_item_id", itemId);
-  if (delError) throw new Error(delError.message);
-  if (groupIds.length === 0) return;
-  const { error } = await sb
-    .from("menu_item_modifier_groups")
-    .insert(groupIds.map((group_id) => ({ menu_item_id: itemId, group_id })));
   if (error) throw new Error(error.message);
 }

@@ -5,9 +5,10 @@ import type { ServiceDateRange } from "@/lib/analytics/date-range";
 export type AnalyticsOrderItem = OrderItem & {
   menu_items: { name: string; category_id: string } | null;
   order_item_modifiers: {
-    modifier_id: string | null;
+    ingredient_id: string | null;
     name: string;
     price_adjustment: number;
+    is_removal: boolean;
   }[];
 };
 
@@ -32,7 +33,7 @@ export async function fetchOrdersForRange(
     const { data, error } = await sb
       .from("orders")
       .select(
-        "*, order_items(*, menu_items(name, category_id), order_item_modifiers(modifier_id, name, price_adjustment)), tables(name)",
+        "*, order_items(*, menu_items(name, category_id), order_item_modifiers(ingredient_id, name, price_adjustment, is_removal)), tables(name)",
       )
       .gte("opened_at", range.start.toISOString())
       .lt("opened_at", range.end.toISOString())

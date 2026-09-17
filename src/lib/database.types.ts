@@ -107,6 +107,8 @@ export interface Database {
           codice: string | null;
           /** True on the single row that IS the cover charge (at most one, enforced by a partial unique index) */
           is_coperto: boolean;
+          /** Staff may add/remove ingredients on this dish in the POS */
+          allows_variations: boolean;
         };
         Insert: {
           id?: string;
@@ -118,6 +120,7 @@ export interface Database {
           target_printer_id?: string | null;
           codice?: string | null;
           is_coperto?: boolean;
+          allows_variations?: boolean;
         };
         Update: {
           id?: string;
@@ -129,6 +132,7 @@ export interface Database {
           target_printer_id?: string | null;
           codice?: string | null;
           is_coperto?: boolean;
+          allows_variations?: boolean;
         };
         Relationships: [
           {
@@ -379,18 +383,22 @@ export interface Database {
           id: string;
           name: string;
           is_available: boolean;
+          /** What it costs to ADD this to a dish; 0 = free. Removals never deduct. */
+          price: number;
           created_at: string;
         };
         Insert: {
           id?: string;
           name: string;
           is_available?: boolean;
+          price?: number;
           created_at?: string;
         };
         Update: {
           id?: string;
           name?: string;
           is_available?: boolean;
+          price?: number;
           created_at?: string;
         };
         Relationships: [];
@@ -423,120 +431,37 @@ export interface Database {
           },
         ];
       };
-      modifier_groups: {
-        Row: {
-          id: string;
-          name: string;
-          min_selections: number;
-          max_selections: number;
-          sort_order: number;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          min_selections?: number;
-          max_selections?: number;
-          sort_order?: number;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          min_selections?: number;
-          max_selections?: number;
-          sort_order?: number;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
-      modifiers: {
-        Row: {
-          id: string;
-          group_id: string;
-          name: string;
-          price_adjustment: number;
-          sort_order: number;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          group_id: string;
-          name: string;
-          price_adjustment?: number;
-          sort_order?: number;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          group_id?: string;
-          name?: string;
-          price_adjustment?: number;
-          sort_order?: number;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "modifiers_group_id_fkey";
-            columns: ["group_id"];
-            referencedRelation: "modifier_groups";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      menu_item_modifier_groups: {
-        Row: {
-          menu_item_id: string;
-          group_id: string;
-        };
-        Insert: {
-          menu_item_id: string;
-          group_id: string;
-        };
-        Update: {
-          menu_item_id?: string;
-          group_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "menu_item_modifier_groups_menu_item_id_fkey";
-            columns: ["menu_item_id"];
-            referencedRelation: "menu_items";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "menu_item_modifier_groups_group_id_fkey";
-            columns: ["group_id"];
-            referencedRelation: "modifier_groups";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       order_item_modifiers: {
-        // name/price_adjustment are order-time snapshots; modifier_id is
-        // informational only and nulls out if the menu modifier is deleted
+        // name/price_adjustment are order-time snapshots; ingredient_id is
+        // informational only and nulls out if the pantry row is deleted.
+        // price_adjustment is the list price of an ADDITION and is never
+        // negative — removals carry is_removal and cost exactly 0 (both
+        // enforced by check constraints).
         Row: {
           id: string;
           order_item_id: string;
-          modifier_id: string | null;
+          ingredient_id: string | null;
           name: string;
           price_adjustment: number;
+          is_removal: boolean;
           created_at: string;
         };
         Insert: {
           id?: string;
           order_item_id: string;
-          modifier_id?: string | null;
+          ingredient_id?: string | null;
           name: string;
           price_adjustment: number;
+          is_removal?: boolean;
           created_at?: string;
         };
         Update: {
           id?: string;
           order_item_id?: string;
-          modifier_id?: string | null;
+          ingredient_id?: string | null;
           name?: string;
           price_adjustment?: number;
+          is_removal?: boolean;
           created_at?: string;
         };
         Relationships: [
@@ -547,9 +472,9 @@ export interface Database {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "order_item_modifiers_modifier_id_fkey";
-            columns: ["modifier_id"];
-            referencedRelation: "modifiers";
+            foreignKeyName: "order_item_modifiers_ingredient_id_fkey";
+            columns: ["ingredient_id"];
+            referencedRelation: "ingredients";
             referencedColumns: ["id"];
           },
         ];
@@ -837,9 +762,6 @@ export type Role = Database["public"]["Tables"]["roles"]["Row"];
 export type AppUser = Database["public"]["Tables"]["app_users"]["Row"];
 export type TableTag = Database["public"]["Tables"]["table_tags"]["Row"];
 export type Ingredient = Database["public"]["Tables"]["ingredients"]["Row"];
-export type ModifierGroup =
-  Database["public"]["Tables"]["modifier_groups"]["Row"];
-export type Modifier = Database["public"]["Tables"]["modifiers"]["Row"];
 export type OrderItemModifier =
   Database["public"]["Tables"]["order_item_modifiers"]["Row"];
 export type ChatMessage = Database["public"]["Tables"]["messages"]["Row"];

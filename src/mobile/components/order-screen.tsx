@@ -27,7 +27,7 @@ import { mRoutes } from "@/mobile/lib/routes";
 import { useKeyboardInset } from "@/mobile/hooks/use-keyboard-inset";
 import { useTicketTarget } from "@/mobile/hooks/use-ticket-target";
 import { MHeader } from "./m-header";
-import { ModifierScreen } from "./modifier-screen";
+import { VariationScreen } from "./variation-screen";
 import { TicketLinesSheet } from "./ticket-lines";
 
 /**
@@ -45,8 +45,9 @@ export function OrderScreen({
   const t = useT();
   const router = useRouter();
   const canTakeOrders = usePermission("take_orders");
+  const canOverridePrice = usePermission("override_price");
 
-  const { categories, items, modifierGroups, tables, loading, error } =
+  const { categories, items, variations, tables, loading, error } =
     useMenuData();
   const table = tables.find((x) => x.id === tableId);
   useTicketTarget(tableId, table?.name, subtable);
@@ -60,6 +61,7 @@ export function OrderScreen({
   const lines = useTicketStore((s) => s.lines);
   const addItem = useTicketStore((s) => s.addItem);
   const setLineModifiers = useTicketStore((s) => s.setLineModifiers);
+  const setLinePrice = useTicketStore((s) => s.setLinePrice);
   const setDraftCovers = useTicketStore((s) => s.setDraftCovers);
 
   const [ticketOpen, setTicketOpen] = useState(false);
@@ -86,8 +88,14 @@ export function OrderScreen({
     openOrder?.order.tax_rate ?? undefined,
   ).total;
 
-  const hasModifiers = (menuItemId: string) =>
-    (modifierGroups[menuItemId] ?? []).length > 0;
+  // Key presence, not a non-empty list: a dish can allow variations and still
+  // have no ingredients of its own (chips, a dessert) — it offers nothing to
+  // remove but the whole pantry to add.
+  const hasVariations = (menuItemId: string) => menuItemId in variations.byItem;
+  // Same rule as the POS: the editor is offered when the user can change
+  // something here — ingredients, the price, or both.
+  const canEditLine = (menuItemId: string) =>
+    hasVariations(menuItemId) || canOverridePrice;
 
   if (!canTakeOrders) {
     return (
@@ -230,7 +238,7 @@ export function OrderScreen({
         <TicketLinesSheet
           onClose={() => setTicketOpen(false)}
           onEditModifiers={setEditLine}
-          hasModifiers={hasModifiers}
+          canEditLine={canEditLine}
           total={pendingTotal}
           busy={busy}
           onSend={() => void handleSend()}
@@ -257,13 +265,19 @@ export function OrderScreen({
       )}
 
       {editLine && (
-        <ModifierScreen
+        <VariationScreen
           itemName={editLine.name}
           basePrice={editLine.unitPrice}
-          groups={modifierGroups[editLine.menuItemId] ?? []}
+          dishIngredients={variations.byItem[editLine.menuItemId] ?? []}
+          pantry={variations.pantry}
+          variationsAllowed={hasVariations(editLine.menuItemId)}
+          canEditPrice={canOverridePrice}
           initialModifiers={editLine.modifiers}
           onClose={() => setEditLine(null)}
-          onConfirm={(mods) => setLineModifiers(editLine.lineId, mods)}
+          onConfirm={(mods, basePrice) => {
+            setLineModifiers(editLine.lineId, mods);
+            if (basePrice !== null) setLinePrice(editLine.lineId, basePrice);
+          }}
         />
       )}
     </>

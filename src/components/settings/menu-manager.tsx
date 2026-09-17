@@ -3,12 +3,13 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  Ban,
   Carrot,
+  Check,
   LayoutGrid,
   Pencil,
   Plus,
   Search,
-  SlidersHorizontal,
   Trash2,
   UtensilsCrossed,
   X,
@@ -37,28 +38,17 @@ import {
   createCategory,
   createIngredient,
   createMenuItem,
-  createModifier,
-  createModifierGroup,
   deleteCategory,
   deleteIngredient,
   deleteMenuItem,
-  deleteModifier,
-  deleteModifierGroup,
   setMenuItemIngredients,
-  setMenuItemModifierGroups,
+  updateIngredient,
   updateMenuItem,
-  updateModifier,
-  updateModifierGroup,
+  updateMenuItems,
   type MenuItemWithIngredients,
 } from "@/lib/settings-api";
-import type { ModifierGroupWithModifiers } from "@/lib/api";
-import type {
-  Category,
-  Ingredient,
-  Modifier,
-  Printer,
-} from "@/lib/database.types";
-import { useT, type TFn } from "@/lib/i18n/use-translation";
+import type { Category, Ingredient, Printer } from "@/lib/database.types";
+import { useT } from "@/lib/i18n/use-translation";
 import { buildHaystack, normalize, tokenize } from "@/lib/menu-search";
 import { cn } from "@/lib/utils";
 
@@ -66,7 +56,6 @@ interface MenuManagerProps {
   categories: Category[];
   items: MenuItemWithIngredients[];
   ingredients: Ingredient[];
-  modifierGroups: ModifierGroupWithModifiers[];
   printers: Printer[];
   onChanged: () => Promise<void>;
 }
@@ -78,7 +67,6 @@ export function MenuManager({
   categories,
   items,
   ingredients,
-  modifierGroups,
   printers,
   onChanged,
 }: MenuManagerProps) {
@@ -99,6 +87,42 @@ export function MenuManager({
     try {
       await action();
       await onChanged();
+      toast.success(success);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Multi-select for bulk edits. Cleared whenever the visible set changes (see
+  // the effect below), so an action can only ever reach rows the user just saw
+  // — selecting every pizza, switching to Bruschette and hitting a toggle must
+  // not silently rewrite the pizzas too.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
+
+  /** Same field applied to every selected row, in one request per chunk.
+   * Deliberately not routed through `run`: the selection has to survive a
+   * failure so the user can retry without picking everything again. */
+  async function bulkUpdate(
+    fields: Parameters<typeof updateMenuItems>[1],
+    success: string,
+  ) {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBusy(true);
+    try {
+      await updateMenuItems(ids, fields);
+      await onChanged();
+      setSelected(new Set());
       toast.success(success);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
@@ -172,10 +196,13 @@ export function MenuManager({
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
+    setSelected(new Set());
   }, [deferredQuery, categoryFilter]);
 
   const browsing = words.length > 0 || categoryFilter !== "all";
   const visible = results.slice(0, visibleCount);
+  const allResultsSelected =
+    results.length > 0 && results.every((r) => selected.has(r.id));
   const categoryName = (id: string) =>
     categories.find((c) => c.id === id)?.name ?? "";
 
@@ -261,11 +288,102 @@ export function MenuManager({
 
           {browsing ? (
             <>
-              <p className="text-sm text-muted-foreground">
-                {results.length === 1
-                  ? t("menu.resultsOne")
-                  : t("menu.resultsMany", { count: results.length })}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">
+                  {results.length === 1
+                    ? t("menu.resultsOne")
+                    : t("menu.resultsMany", { count: results.length })}
+                </p>
+                {results.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-primary hover:underline"
+                    onClick={() =>
+                      setSelected(
+                        allResultsSelected
+                          ? new Set()
+                          : new Set(results.map((r) => r.id)),
+                      )
+                    }
+                  >
+                    {allResultsSelected
+                      ? t("menu.clearSelection")
+                      : t("menu.selectAllResults", { count: results.length })}
+                  </button>
+                )}
+              </div>
+
+              {selected.size > 0 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 p-2">
+                  <span className="px-1 text-sm font-medium">
+                    {t("menu.selectedCount", { count: selected.size })}
+                  </span>
+                  <div className="ml-auto flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-10"
+                      disabled={busy}
+                      onClick={() =>
+                        bulkUpdate(
+                          { allows_variations: true },
+                          t("menu.bulkVariationsOn", { count: selected.size }),
+                        )
+                      }
+                    >
+                      <Check className="mr-1 h-4 w-4" />
+                      {t("menu.bulkAllowVariations")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-10"
+                      disabled={busy}
+                      onClick={() =>
+                        bulkUpdate(
+                          { allows_variations: false },
+                          t("menu.bulkVariationsOff", { count: selected.size }),
+                        )
+                      }
+                    >
+                      <Ban className="mr-1 h-4 w-4" />
+                      {t("menu.bulkBlockVariations")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-10"
+                      disabled={busy}
+                      onClick={() =>
+                        bulkUpdate(
+                          { is_available: true },
+                          t("menu.bulkOnMenu", { count: selected.size }),
+                        )
+                      }
+                    >
+                      {t("menu.onMenu")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-10"
+                      disabled={busy}
+                      onClick={() =>
+                        bulkUpdate(
+                          { is_available: false },
+                          t("menu.bulkOffMenu", { count: selected.size }),
+                        )
+                      }
+                    >
+                      {t("menu.offMenu")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="h-10"
+                      disabled={busy}
+                      onClick={() => setSelected(new Set())}
+                    >
+                      {t("menu.clearSelection")}
+                    </Button>
+                  </div>
+                </div>
+              )}
               {results.length === 0 && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
                   {t("menu.noResults")}
@@ -295,6 +413,8 @@ export function MenuManager({
                         busy={busy}
                         run={run}
                         onEdit={openEdit}
+                        selected={selected.has(item.id)}
+                        onToggleSelect={toggleSelected}
                       />
                     </div>
                   );
@@ -339,14 +459,6 @@ export function MenuManager({
             busy={busy}
             run={run}
           />
-
-          <ModifierGroupsCard
-            groups={modifierGroups}
-            items={items}
-            busy={busy}
-            run={run}
-            onChanged={onChanged}
-          />
         </>
       )}
 
@@ -356,7 +468,6 @@ export function MenuManager({
         defaultCategoryId={dialogCategoryId}
         categories={categories}
         ingredients={ingredients}
-        modifierGroups={modifierGroups}
         printers={printers}
         items={items}
         onClose={() => setDialogOpen(false)}
@@ -525,15 +636,39 @@ function ItemRow({
   busy,
   run,
   onEdit,
+  selected,
+  onToggleSelect,
 }: {
   item: MenuItemWithIngredients;
   busy: boolean;
   run: (action: () => Promise<void>, success: string) => Promise<void>;
   onEdit: (item: MenuItemWithIngredients) => void;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const t = useT();
   return (
-    <div className="flex items-center gap-3 py-1.5">
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-md py-1.5",
+        selected && "bg-primary/5",
+      )}
+    >
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={selected}
+        aria-label={t("menu.selectItemAria", { name: item.name })}
+        onClick={() => onToggleSelect(item.id)}
+        className={cn(
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors",
+          selected
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-input hover:border-foreground/40",
+        )}
+      >
+        {selected && <Check className="h-3.5 w-3.5" />}
+      </button>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           {item.codice && (
@@ -618,7 +753,9 @@ function IngredientsCard({
 }) {
   const t = useT();
   const [newIngredient, setNewIngredient] = useState("");
+  const [newPrice, setNewPrice] = useState("");
   const [filter, setFilter] = useState("");
+  const [editing, setEditing] = useState<Ingredient | null>(null);
 
   const usage = useMemo(() => {
     const m = new Map<string, number>();
@@ -641,8 +778,17 @@ function IngredientsCard({
     e.preventDefault();
     const name = newIngredient.trim();
     if (!name) return;
-    await run(() => createIngredient(name), t("menu.ingredientAdded", { name }));
+    const price = newPrice.trim() === "" ? 0 : Number(newPrice);
+    if (!Number.isFinite(price) || price < 0) {
+      toast.error(t("menu.validIngredientPrice"));
+      return;
+    }
+    await run(
+      () => createIngredient(name, price),
+      t("menu.ingredientAdded", { name }),
+    );
     setNewIngredient("");
+    setNewPrice("");
   }
 
   return (
@@ -674,9 +820,23 @@ function IngredientsCard({
               className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm"
             >
               {g.name}
+              {g.price > 0 && (
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  +{formatMoney(g.price)}
+                </span>
+              )}
               <span className="text-xs text-muted-foreground">
                 {usage.get(g.id) ?? 0}
               </span>
+              <button
+                type="button"
+                aria-label={t("menu.editIngredientAria", { name: g.name })}
+                disabled={busy}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                onClick={() => setEditing(g)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 aria-label={t("menu.deleteIngredientAria", { name: g.name })}
@@ -709,6 +869,16 @@ function IngredientsCard({
             className="h-12"
             aria-label={t("menu.newIngredientAria")}
           />
+          <Input
+            value={newPrice}
+            onChange={(e) => setNewPrice(e.target.value)}
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            className="h-12 w-28"
+            aria-label={t("menu.ingredientPrice")}
+          />
           <Button
             type="submit"
             className="h-12"
@@ -717,8 +887,108 @@ function IngredientsCard({
             <Plus className="mr-1 h-4 w-4" /> {t("common.add")}
           </Button>
         </form>
+        <p className="text-xs text-muted-foreground">
+          {t("menu.ingredientPriceHelp")}
+        </p>
       </CardContent>
+      <IngredientDialog
+        ingredient={editing}
+        busy={busy}
+        run={run}
+        onClose={() => setEditing(null)}
+      />
     </Card>
+  );
+}
+
+/** Rename an ingredient or reprice it as an add-on. Kept inline rather than
+ *  as a chip-side field: the pantry runs to a couple of hundred rows and a
+ *  grid of live number inputs is a lot of accidental edits waiting to happen. */
+function IngredientDialog({
+  ingredient,
+  busy,
+  run,
+  onClose,
+}: {
+  ingredient: Ingredient | null;
+  busy: boolean;
+  run: (action: () => Promise<void>, success: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+
+  useEffect(() => {
+    if (!ingredient) return;
+    setName(ingredient.name);
+    setPrice(ingredient.price.toFixed(2));
+  }, [ingredient]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ingredient) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error(t("menu.ingredientNameRequired"));
+      return;
+    }
+    const parsed = Number(price);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      toast.error(t("menu.validIngredientPrice"));
+      return;
+    }
+    await run(
+      () => updateIngredient(ingredient.id, { name: trimmed, price: parsed }),
+      t("menu.ingredientSaved", { name: trimmed }),
+    );
+    onClose();
+  }
+
+  return (
+    <Dialog open={ingredient !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            {t("menu.editIngredientTitle", { name: ingredient?.name ?? "" })}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="ing-name">{t("menu.name")}</Label>
+            <Input
+              id="ing-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-12"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="ing-price">{t("menu.ingredientPrice")}</Label>
+            <Input
+              id="ing-price"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              type="number"
+              step="0.01"
+              min="0"
+              className="h-12"
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("menu.ingredientPriceHelp")}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {t("common.save")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -731,7 +1001,6 @@ function MenuItemDialog({
   defaultCategoryId,
   categories,
   ingredients,
-  modifierGroups,
   printers,
   items,
   onClose,
@@ -742,7 +1011,6 @@ function MenuItemDialog({
   defaultCategoryId: string;
   categories: Category[];
   ingredients: Ingredient[];
-  modifierGroups: ModifierGroupWithModifiers[];
   printers: Printer[];
   items: MenuItemWithIngredients[];
   onClose: () => void;
@@ -754,7 +1022,7 @@ function MenuItemDialog({
   const [codice, setCodice] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [ingredientIds, setIngredientIds] = useState<string[]>([]);
-  const [groupIds, setGroupIds] = useState<string[]>([]);
+  const [allowsVariations, setAllowsVariations] = useState(false);
   const [printerId, setPrinterId] = useState(NO_PRINTER);
   const [ingredientFilter, setIngredientFilter] = useState("");
   const [busy, setBusy] = useState(false);
@@ -766,7 +1034,7 @@ function MenuItemDialog({
     setCodice(item?.codice ?? "");
     setCategoryId(item?.category_id ?? defaultCategoryId);
     setIngredientIds(item ? item.ingredients.map((g) => g.id) : []);
-    setGroupIds(item ? [...item.modifierGroupIds] : []);
+    setAllowsVariations(item?.allows_variations ?? false);
     setPrinterId(item?.target_printer_id ?? NO_PRINTER);
     setIngredientFilter("");
   }, [open, item, defaultCategoryId]);
@@ -785,12 +1053,6 @@ function MenuItemDialog({
 
   function toggleIngredient(id: string) {
     setIngredientIds((ids) =>
-      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
-    );
-  }
-
-  function toggleGroup(id: string) {
-    setGroupIds((ids) =>
       ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
     );
   }
@@ -824,6 +1086,7 @@ function MenuItemDialog({
           category_id: categoryId,
           target_printer_id: targetPrinterId,
           codice: trimmedCodice,
+          allows_variations: allowsVariations,
         });
       } else {
         const maxSort = Math.max(
@@ -839,10 +1102,10 @@ function MenuItemDialog({
           sortOrder: maxSort + 1,
           targetPrinterId,
           codice: trimmedCodice,
+          allowsVariations,
         });
       }
       await setMenuItemIngredients(itemId, ingredientIds);
-      await setMenuItemModifierGroups(itemId, groupIds);
       await onSaved();
       toast.success(t("menu.nameSaved", { name: trimmed }));
       onClose();
@@ -992,42 +1255,28 @@ function MenuItemDialog({
 
           <div className="grid gap-2">
             <Label>{t("menu.variations")}</Label>
-            <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto">
-              {modifierGroups.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {t("menu.noModifierGroupsYet2")}
-                </p>
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={allowsVariations}
+              onClick={() => setAllowsVariations((v) => !v)}
+              className={cn(
+                "inline-flex min-h-11 w-fit items-center gap-2 rounded-full border px-4 text-sm transition-colors disabled:opacity-50",
+                allowsVariations
+                  ? "border-emerald-500 bg-emerald-500/10 text-emerald-600"
+                  : "text-muted-foreground hover:bg-accent",
               )}
-              {modifierGroups.map((g) => {
-                const active = groupIds.includes(g.id);
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => toggleGroup(g.id)}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-sm transition-colors disabled:opacity-50",
-                      active
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent",
-                    )}
-                  >
-                    {g.name}
-                    <span
-                      className={cn(
-                        "ml-1.5 text-xs",
-                        active
-                          ? "text-primary-foreground/80"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {g.modifiers.length}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            >
+              {allowsVariations ? (
+                <Check className="h-4 w-4 shrink-0" />
+              ) : (
+                <Ban className="h-4 w-4 shrink-0" />
+              )}
+              {t("menu.allowsVariations")}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              {t("menu.allowsVariationsHelp")}
+            </p>
           </div>
 
           <DialogFooter>
@@ -1046,500 +1295,6 @@ function MenuItemDialog({
                 : item
                   ? t("printers.saveChanges")
                   : t("menu.createItem")}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function adjustmentLabel(amount: number, t: TFn): string {
-  if (amount === 0) return t("menu.free");
-  return `${amount > 0 ? "+" : "−"}${formatMoney(Math.abs(amount))}`;
-}
-
-function ruleLabel(min: number, max: number, t: TFn): string {
-  if (min === max)
-    return min === 1 ? t("pos.ruleChoose1") : t("pos.ruleChooseN", { count: min });
-  if (min === 0)
-    return max === 1 ? t("pos.ruleOptional") : t("pos.ruleUpToN", { count: max });
-  return t("pos.ruleChooseRange", { min, max });
-}
-
-/**
- * Admin for pizzeria-style variations: groups (Impasto, Aggiunte, Senza…) with
- * a min/max rule and priced options. Items opt in via the menu-item dialog;
- * the POS then forces a valid selection before the item joins a ticket.
- */
-function ModifierGroupsCard({
-  groups,
-  items,
-  busy,
-  run,
-  onChanged,
-}: {
-  groups: ModifierGroupWithModifiers[];
-  items: MenuItemWithIngredients[];
-  busy: boolean;
-  run: (action: () => Promise<void>, success: string) => Promise<void>;
-  onChanged: () => Promise<void>;
-}) {
-  const t = useT();
-  const [groupDialog, setGroupDialog] = useState<{
-    open: boolean;
-    group: ModifierGroupWithModifiers | null;
-  }>({ open: false, group: null });
-  const [optionDialog, setOptionDialog] = useState<{
-    open: boolean;
-    groupId: string;
-    optionCount: number;
-    option: Modifier | null;
-  }>({ open: false, groupId: "", optionCount: 0, option: null });
-
-  const usageCount = (groupId: string) =>
-    items.filter((i) => i.modifierGroupIds.includes(groupId)).length;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <SlidersHorizontal className="h-5 w-5" /> {t("menu.modifierGroups")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-5">
-        {groups.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            {t("menu.noModifierGroupsYet")}
-          </p>
-        )}
-        {groups.map((g) => {
-          const used = usageCount(g.id);
-          return (
-            <div key={g.id} className="rounded-lg border p-4">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="font-semibold">{g.name}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {ruleLabel(g.min_selections, g.max_selections, t)} ·{" "}
-                    {used === 0
-                      ? t("menu.unused")
-                      : used === 1
-                        ? t("stats.itemCountOne", { count: used })
-                        : t("stats.itemCountMany", { count: used })}
-                  </span>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-10"
-                    disabled={busy}
-                    onClick={() =>
-                      setOptionDialog({
-                        open: true,
-                        groupId: g.id,
-                        optionCount: g.modifiers.length,
-                        option: null,
-                      })
-                    }
-                  >
-                    <Plus className="mr-1 h-4 w-4" /> {t("menu.addOption")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10"
-                    aria-label={t("menu.editGroupAria", { name: g.name })}
-                    disabled={busy}
-                    onClick={() => setGroupDialog({ open: true, group: g })}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10 text-muted-foreground"
-                    aria-label={t("menu.deleteGroupAria", { name: g.name })}
-                    disabled={busy}
-                    onClick={() =>
-                      run(
-                        () => deleteModifierGroup(g.id),
-                        t("menu.groupDeleted", { name: g.name }),
-                      )
-                    }
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {g.modifiers.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">
-                  {t("menu.noOptionsYet")}
-                </p>
-              ) : (
-                g.modifiers.map((m, idx) => (
-                  <div key={m.id}>
-                    {idx > 0 && <Separator className="my-1" />}
-                    <div className="flex items-center gap-3 py-1.5">
-                      <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                      <span
-                        className={cn(
-                          "shrink-0 text-sm tabular-nums",
-                          m.price_adjustment === 0
-                            ? "text-muted-foreground"
-                            : "font-medium",
-                        )}
-                      >
-                        {adjustmentLabel(m.price_adjustment, t)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 shrink-0"
-                        aria-label={t("menu.editOptionAria", { name: m.name })}
-                        disabled={busy}
-                        onClick={() =>
-                          setOptionDialog({
-                            open: true,
-                            groupId: g.id,
-                            optionCount: g.modifiers.length,
-                            option: m,
-                          })
-                        }
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 shrink-0 text-muted-foreground"
-                        aria-label={t("menu.deleteOptionAria", { name: m.name })}
-                        disabled={busy}
-                        onClick={() =>
-                          run(
-                            () => deleteModifier(m.id),
-                            t("menu.nameDeleted", { name: m.name }),
-                          )
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          );
-        })}
-
-        <Button
-          variant="outline"
-          className="h-12 self-start"
-          disabled={busy}
-          onClick={() => setGroupDialog({ open: true, group: null })}
-        >
-          <Plus className="mr-1 h-4 w-4" /> {t("menu.addGroup")}
-        </Button>
-      </CardContent>
-
-      <ModifierGroupDialog
-        open={groupDialog.open}
-        group={groupDialog.group}
-        groupCount={groups.length}
-        onClose={() => setGroupDialog({ open: false, group: null })}
-        onSaved={onChanged}
-      />
-      <ModifierOptionDialog
-        open={optionDialog.open}
-        groupId={optionDialog.groupId}
-        optionCount={optionDialog.optionCount}
-        option={optionDialog.option}
-        onClose={() =>
-          setOptionDialog({
-            open: false,
-            groupId: "",
-            optionCount: 0,
-            option: null,
-          })
-        }
-        onSaved={onChanged}
-      />
-    </Card>
-  );
-}
-
-function ModifierGroupDialog({
-  open,
-  group,
-  groupCount,
-  onClose,
-  onSaved,
-}: {
-  open: boolean;
-  group: ModifierGroupWithModifiers | null;
-  groupCount: number;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
-  const t = useT();
-  const [name, setName] = useState("");
-  const [min, setMin] = useState("0");
-  const [max, setMax] = useState("1");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setName(group?.name ?? "");
-    setMin(String(group?.min_selections ?? 0));
-    setMax(String(group?.max_selections ?? 1));
-  }, [open, group]);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = name.trim();
-    const minN = parseInt(min, 10);
-    const maxN = parseInt(max, 10);
-    if (!trimmed) {
-      toast.error(t("menu.groupNameRequired"));
-      return;
-    }
-    if (!Number.isInteger(minN) || minN < 0) {
-      toast.error(t("menu.minMustBe0"));
-      return;
-    }
-    if (!Number.isInteger(maxN) || maxN < 1) {
-      toast.error(t("menu.maxMustBe1"));
-      return;
-    }
-    if (maxN < minN) {
-      toast.error(t("menu.maxLessThanMin"));
-      return;
-    }
-    setBusy(true);
-    try {
-      if (group) {
-        await updateModifierGroup(group.id, {
-          name: trimmed,
-          min_selections: minN,
-          max_selections: maxN,
-        });
-      } else {
-        await createModifierGroup({
-          name: trimmed,
-          minSelections: minN,
-          maxSelections: maxN,
-          sortOrder: groupCount + 1,
-        });
-      }
-      await onSaved();
-      toast.success(t("menu.groupSaved", { name: trimmed }));
-      onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("floor.couldNotSave"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {group
-              ? t("menu.editGroupTitle", { name: group.name })
-              : t("menu.newGroup")}
-          </DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="group-name">{t("menu.name")}</Label>
-            <Input
-              id="group-name"
-              className="h-12"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("menu.groupNamePlaceholder")}
-              autoFocus
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="group-min">{t("menu.minSelections")}</Label>
-              <Input
-                id="group-min"
-                className="h-12"
-                type="number"
-                min={0}
-                step={1}
-                inputMode="numeric"
-                value={min}
-                onChange={(e) => setMin(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="group-max">{t("menu.maxSelections")}</Label>
-              <Input
-                id="group-max"
-                className="h-12"
-                type="number"
-                min={1}
-                step={1}
-                inputMode="numeric"
-                value={max}
-                onChange={(e) => setMax(e.target.value)}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">{t("menu.minMaxHelp")}</p>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-12"
-              onClick={onClose}
-              disabled={busy}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" className="h-12 px-6" disabled={busy}>
-              {busy
-                ? t("common.saving")
-                : group
-                  ? t("printers.saveChanges")
-                  : t("menu.createGroup")}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ModifierOptionDialog({
-  open,
-  groupId,
-  optionCount,
-  option,
-  onClose,
-  onSaved,
-}: {
-  open: boolean;
-  groupId: string;
-  optionCount: number;
-  option: Modifier | null;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
-  const t = useT();
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("0.00");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setName(option?.name ?? "");
-    setPrice((option?.price_adjustment ?? 0).toFixed(2));
-  }, [open, option]);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = name.trim();
-    const parsed = parseFloat(price);
-    if (!trimmed) {
-      toast.error(t("menu.optionNameRequired"));
-      return;
-    }
-    if (!Number.isFinite(parsed)) {
-      toast.error(t("menu.validPriceAdjustment"));
-      return;
-    }
-    setBusy(true);
-    try {
-      if (option) {
-        await updateModifier(option.id, {
-          name: trimmed,
-          price_adjustment: parsed,
-        });
-      } else {
-        await createModifier({
-          groupId,
-          name: trimmed,
-          priceAdjustment: parsed,
-          sortOrder: optionCount + 1,
-        });
-      }
-      await onSaved();
-      toast.success(t("menu.nameSaved", { name: trimmed }));
-      onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("floor.couldNotSave"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {option
-              ? t("menu.editOptionTitle", { name: option.name })
-              : t("menu.newOption")}
-          </DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="option-name">{t("menu.name")}</Label>
-            <Input
-              id="option-name"
-              className="h-12"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("menu.optionNamePlaceholder")}
-              autoFocus
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="option-price">{t("menu.priceAdjustment")}</Label>
-            <Input
-              id="option-price"
-              className="h-12"
-              type="number"
-              step="0.01"
-              inputMode="decimal"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="0.00"
-            />
-            <p className="text-xs text-muted-foreground">
-              {t("menu.priceAdjustmentHelp")}
-            </p>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-12"
-              onClick={onClose}
-              disabled={busy}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" className="h-12 px-6" disabled={busy}>
-              {busy
-                ? t("common.saving")
-                : option
-                  ? t("printers.saveChanges")
-                  : t("menu.createOption")}
             </Button>
           </DialogFooter>
         </form>

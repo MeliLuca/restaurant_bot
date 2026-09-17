@@ -176,7 +176,11 @@ export function engineerMenu(items: ItemStat[]): MenuEngineering {
 }
 
 export interface ModifierStat {
-  name: string; // grouped by snapshot name — modifier_id is null once deleted
+  /** Signed snapshot name ("+ Bufala" / "− Basilico") — grouped by name
+   * because ingredient_id nulls out once the pantry row is deleted, and signed
+   * because adding and removing the same ingredient are opposite events that
+   * must not collapse into one row. */
+  name: string;
   attachedQuantity: number; // Σ line quantity where this modifier appears
   attachRate: number; // attachedQuantity / total item quantity in range
   chargedRevenue: number; // euros actually charged, after the taper
@@ -190,6 +194,9 @@ export interface ModifierStat {
  * non-positive modifiers (removals) earn 0 but still count for attach rate.
  * Keep in sync with lib/money.ts.
  */
+const statKey = (m: { name: string; is_removal: boolean }) =>
+  `${m.is_removal ? "−" : "+"} ${m.name}`;
+
 export function modifierStats(orders: AnalyticsOrder[]): ModifierStat[] {
   const acc = new Map<string, { attached: number; revenueCents: number }>();
   let totalQuantity = 0;
@@ -206,13 +213,15 @@ export function modifierStats(orders: AnalyticsOrder[]): ModifierStat[] {
       const chargedByName = new Map<string, number>();
       positive.forEach((m, i) => {
         const charged = toCents(m.price_adjustment) * Math.log2(1 + 1 / (i + 1));
-        chargedByName.set(m.name, (chargedByName.get(m.name) ?? 0) + charged);
+        const k = statKey(m);
+        chargedByName.set(k, (chargedByName.get(k) ?? 0) + charged);
       });
 
       for (const m of line.order_item_modifiers) {
-        const entry = acc.get(m.name) ?? { attached: 0, revenueCents: 0 };
+        const k = statKey(m);
+        const entry = acc.get(k) ?? { attached: 0, revenueCents: 0 };
         entry.attached += line.quantity;
-        acc.set(m.name, entry);
+        acc.set(k, entry);
       }
       chargedByName.forEach((cents, name) => {
         const entry = acc.get(name)!;

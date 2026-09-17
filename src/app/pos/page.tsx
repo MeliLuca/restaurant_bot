@@ -31,7 +31,7 @@ export default function PosPage() {
   const {
     categories,
     items,
-    modifierGroups,
+    variations,
     tables,
     loading,
     error,
@@ -206,7 +206,7 @@ export default function PosPage() {
             openOrder={openOrder}
             openSplits={openSplits}
             openTakeaways={openTakeaways}
-            modifierGroups={modifierGroups}
+            variations={variations}
             onOrderChanged={refreshOrder}
           />
         </SheetContent>
@@ -219,7 +219,7 @@ export default function PosPage() {
           openOrder={openOrder}
           openSplits={openSplits}
           openTakeaways={openTakeaways}
-          modifierGroups={modifierGroups}
+          variations={variations}
           onOrderChanged={refreshOrder}
         />
       </div>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { ChefHat, Plus, Printer, TriangleAlert, Users, Wallet } from "lucide-react";
 import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
 import { useOrderActions } from "@/hooks/use-order-actions";
-import { updateOrderCovers } from "@/lib/api";
+import { type OrderItemWithName, updateOrderCovers } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import { orderItemLabel } from "@/lib/menu-display";
 import { useT } from "@/lib/i18n/use-translation";
@@ -38,6 +38,30 @@ function ClosedBill() {
       </div>
     </>
   );
+}
+
+/**
+ * Bill order: the cover charge first (it's the guest count, not a dish),
+ * then grouped by the menu's own category order, alphabetically within
+ * each category — a conto a waiter can scan by section instead of by
+ * whatever order the items were rung in.
+ */
+function sortedForBill(items: OrderItemWithName[]): OrderItemWithName[] {
+  const key = (i: OrderItemWithName) => {
+    if (i.menu_items?.is_coperto) return { group: -1, name: "" };
+    return {
+      group: i.menu_items?.categories?.sort_order ?? Number.MAX_SAFE_INTEGER,
+      name: orderItemLabel(i.menu_items, "").title,
+    };
+  };
+  return [...items].sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    return (
+      ka.group - kb.group ||
+      ka.name.localeCompare(kb.name, undefined, { numeric: true })
+    );
+  });
 }
 
 /**
@@ -139,16 +163,6 @@ export function BillView({ orderId }: { orderId: string }) {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {canTakeOrders && order.table_id && (
-          <Link
-            href={mRoutes.order(order.table_id, order.subtable)}
-            className="mb-3 flex min-h-14 items-center justify-center gap-2 rounded-xl bg-primary text-base font-semibold text-primary-foreground"
-          >
-            <Plus className="h-5 w-5" />
-            {t("m.addOrder")}
-          </Link>
-        )}
-
         {blockedByPending && (
           <div className="mb-3 flex flex-col gap-3 rounded-xl border border-amber-500/60 bg-amber-500/10 p-3">
             <p className="flex items-start gap-2 text-sm">
@@ -177,7 +191,7 @@ export function BillView({ orderId }: { orderId: string }) {
         )}
 
         <ul className="flex flex-col gap-2">
-          {items.map((i) => {
+          {sortedForBill(items).map((i) => {
             // labelled the same way the menu labelled it: pizze and bruschette
             // by codice, with the toppings on the line underneath
             const label = orderItemLabel(i.menu_items, t("floor.itemFallback"));
@@ -230,7 +244,7 @@ export function BillView({ orderId }: { orderId: string }) {
                     key={m.id}
                     className="pl-9 text-sm text-muted-foreground"
                   >
-                    {m.price_adjustment > 0 ? "+" : "−"} {m.name}
+                    {m.is_removal ? "−" : "+"} {m.name}
                   </div>
                 ))}
                 {paid && (
@@ -282,7 +296,16 @@ export function BillView({ orderId }: { orderId: string }) {
         </div>
       </div>
 
-      <div className="flex shrink-0 gap-2 border-t bg-card p-3">
+      <div className="relative flex shrink-0 gap-2 border-t bg-card p-3">
+        {canTakeOrders && order.table_id && (
+          <Link
+            href={mRoutes.order(order.table_id, order.subtable)}
+            aria-label={t("m.addOrder")}
+            className="absolute -top-7 left-1/2 z-10 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background"
+          >
+            <Plus className="h-6 w-6" />
+          </Link>
+        )}
         <button
           type="button"
           disabled={busy}

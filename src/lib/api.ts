@@ -12,12 +12,11 @@ import {
   previewEvenShareCents,
   previewItemsPaymentCents,
 } from "@/lib/pos/bill-preview";
+import type { VariationOption } from "@/lib/pos/variation-selection";
 import { getSupabase } from "@/lib/supabase/client";
 import type {
   Category,
   MenuItem,
-  Modifier,
-  ModifierGroup,
   Order,
   OrderItem,
   OrderItemModifier,
@@ -134,7 +133,7 @@ export async function fetchMenuItems(): Promise<MenuItemView[]> {
     ingredients: { name: string; is_available: boolean }[];
   })[])
     .filter((item) => item.ingredients.every((i) => i.is_available))
-    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice, is_coperto, ingredients }) => ({
+    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice, is_coperto, allows_variations, ingredients }) => ({
       id,
       category_id,
       name,
@@ -144,49 +143,59 @@ export async function fetchMenuItems(): Promise<MenuItemView[]> {
       target_printer_id,
       codice,
       is_coperto,
+      allows_variations,
       // the listino's ingredienti column, for the caption under the dish name
       ingredients: ingredients.map((i) => i.name),
     }));
 }
 
-export type ModifierGroupWithModifiers = ModifierGroup & {
-  modifiers: Modifier[];
-};
+export interface VariationData {
+  /** Every ingredient in stock, priced as an addition — the "add" side */
+  pantry: VariationOption[];
+  /** A dish's own ingredients, the "remove" side, keyed by menu_item_id.
+   *
+   * KEY PRESENCE is what says a dish allows variations — NOT a non-empty
+   * array. A dish can be modifiable and still have no ingredients of its own
+   * (chips, a dessert, anything the kitchen never itemized): it offers nothing
+   * to remove but the whole pantry to add. Gating on `.length > 0` would strip
+   * those dishes of the affordance permanently. */
+  byItem: Record<string, VariationOption[]>;
+}
 
 /**
- * Modifier groups (with their modifiers) offered by each menu item, keyed by
- * menu_item_id. Items absent from the map add to the ticket directly; items
- * present open the modifier picker first.
+ * Everything the POS variation picker needs, in two round trips.
+ *
+ * Replaces the old modifier-group fetch: there is nothing to configure per
+ * dish beyond the `allows_variations` switch, so this is just the pantry plus
+ * each modifiable dish's own ingredient list.
  */
-export async function fetchMenuModifierGroups(): Promise<
-  Record<string, ModifierGroupWithModifiers[]>
-> {
-  const { data, error } = await getSupabase()
-    .from("menu_item_modifier_groups")
-    .select("menu_item_id, modifier_groups(*, modifiers(*))");
-  if (error) throw new Error(error.message);
+export async function fetchVariationData(): Promise<VariationData> {
+  const sb = getSupabase();
+  const [pantryRes, dishRes] = await Promise.all([
+    sb
+      .from("ingredients")
+      .select("id, name, price")
+      .eq("is_available", true)
+      .order("name"),
+    sb
+      .from("menu_items")
+      .select("id, ingredients(id, name, price)")
+      .eq("allows_variations", true),
+  ]);
+  if (pantryRes.error) throw new Error(pantryRes.error.message);
+  if (dishRes.error) throw new Error(dishRes.error.message);
 
-  const rows = data as unknown as Array<{
-    menu_item_id: string;
-    modifier_groups: ModifierGroupWithModifiers | null;
-  }>;
-  const byItem: Record<string, ModifierGroupWithModifiers[]> = {};
-  for (const row of rows) {
-    if (!row.modifier_groups) continue;
-    const group = {
-      ...row.modifier_groups,
-      modifiers: [...row.modifier_groups.modifiers].sort(
-        (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name),
-      ),
-    };
-    (byItem[row.menu_item_id] ??= []).push(group);
-  }
-  for (const groups of Object.values(byItem)) {
-    groups.sort(
-      (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name),
+  const byItem: Record<string, VariationOption[]> = {};
+  for (const row of dishRes.data as unknown as Array<{
+    id: string;
+    ingredients: VariationOption[];
+  }>) {
+    // the join has no ordering column, so sort here or the list comes back shuffled
+    byItem[row.id] = [...row.ingredients].sort((a, b) =>
+      a.name.localeCompare(b.name),
     );
   }
-  return byItem;
+  return { pantry: pantryRes.data as VariationOption[], byItem };
 }
 
 export type OrderItemWithName = OrderItem & {
@@ -199,7 +208,7 @@ export type OrderItemWithName = OrderItem & {
         name: string;
         is_coperto: boolean;
         codice: string | null;
-        categories: { name: string } | null;
+        categories: { name: string; sort_order: number } | null;
       }
     | null;
   order_item_modifiers: OrderItemModifier[];
@@ -215,7 +224,7 @@ export interface OpenOrder {
 async function fetchOrderItems(orderId: string): Promise<OrderItemWithName[]> {
   const { data, error } = await getSupabase()
     .from("order_items")
-    .select("*, menu_items(name, is_coperto, codice, categories(name)), order_item_modifiers(*)")
+    .select("*, menu_items(name, is_coperto, codice, categories(name, sort_order)), order_item_modifiers(*)")
     .eq("order_id", orderId)
     .order("created_at");
   if (error) throw new Error(error.message);
@@ -292,7 +301,7 @@ export async function fetchOpenOrdersWithItems(
 ): Promise<OrderWithItems[]> {
   const { data, error } = await getSupabase()
     .from("orders")
-    .select("*, order_items(*, menu_items(name, is_coperto, codice, categories(name)), order_item_modifiers(*))")
+    .select("*, order_items(*, menu_items(name, is_coperto, codice, categories(name, sort_order)), order_item_modifiers(*))")
     .eq("table_id", tableId)
     .eq("status", "open")
     .order("opened_at");
@@ -484,11 +493,12 @@ export interface TicketLineInput {
   unitPrice: number;
   quantity: number;
   notes?: string | null;
-  /** Modifiers picked for this line (pizzeria variations) */
+  /** Ingredients added to / removed from this line */
   modifiers?: Array<{
-    modifierId: string;
+    ingredientId: string;
     name: string;
     priceAdjustment: number;
+    isRemoval: boolean;
   }>;
 }
 
@@ -520,14 +530,15 @@ async function insertOrderItems(
   if (error) throw new Error(error.message);
   const itemIds = data.map((d) => d.id);
 
-  // Per-line modifier detail (name + adjustment frozen at order time) for the
+  // Per-line variation detail (name + adjustment frozen at order time) for the
   // ticket UI and the print engine; rows return in insert order, so ids align.
   const modifierRows = lines.flatMap((l, idx) =>
     (l.modifiers ?? []).map((m) => ({
       order_item_id: itemIds[idx],
-      modifier_id: m.modifierId,
+      ingredient_id: m.ingredientId,
       name: m.name,
       price_adjustment: m.priceAdjustment,
+      is_removal: m.isRemoval,
     })),
   );
   if (modifierRows.length > 0) {

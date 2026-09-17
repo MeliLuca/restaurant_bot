@@ -2,11 +2,13 @@ import { create } from "zustand";
 import { calcTotals, unitPriceWithModifiers } from "@/lib/money";
 import type { MenuItem } from "@/lib/database.types";
 
-/** One modifier picked for a cart line — name/price snapshotted from the menu */
+/** One variation on a cart line — name/price snapshotted from the pantry */
 export interface SelectedModifier {
-  modifierId: string;
+  ingredientId: string;
   name: string;
+  /** List price as an addition; always 0 on a removal, which never deducts */
   priceAdjustment: number;
+  isRemoval: boolean;
 }
 
 export interface TicketLine {
@@ -38,14 +40,18 @@ export function lineUnitPrice(line: TicketLine): number {
 let lineSeq = 0;
 const nextLineId = () => `line-${Date.now()}-${++lineSeq}`;
 
-/** Two selections are mergeable when they picked exactly the same modifiers */
+/** Two selections are mergeable when they picked exactly the same variations.
+ * The direction is part of the key: added and removed are disjoint by
+ * construction, but merging "no mozzarella" into "extra mozzarella" because
+ * they name the same ingredient would be a silent, expensive mistake. */
 function sameModifiers(a: SelectedModifier[], b: SelectedModifier[]): boolean {
   if (a.length !== b.length) return false;
-  const key = (m: SelectedModifier) => m.modifierId;
-  const sortedB = [...b].sort((x, y) => key(x).localeCompare(key(y)));
+  const key = (m: SelectedModifier) => `${m.ingredientId}:${m.isRemoval}`;
+  const sortedB = [...b].map(key).sort();
   return [...a]
-    .sort((x, y) => key(x).localeCompare(key(y)))
-    .every((m, i) => m.modifierId === sortedB[i].modifierId);
+    .map(key)
+    .sort()
+    .every((k, i) => k === sortedB[i]);
 }
 
 export { calcTotals };

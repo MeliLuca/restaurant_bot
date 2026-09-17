@@ -39,8 +39,8 @@ import {
   fetchDeliveryLabels,
   updateOrderCovers,
   updateTableStatus,
-  type ModifierGroupWithModifiers,
   type OpenOrder,
+  type VariationData,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
 import { orderItemLabel } from "@/lib/menu-display";
@@ -55,20 +55,25 @@ import {
 import { useT } from "@/lib/i18n/use-translation";
 import { useOrderActions } from "@/hooks/use-order-actions";
 import { useAuthStore, usePermission } from "@/stores/auth-store";
-import { ModifierDialog } from "./modifier-dialog";
+import { VariationDialog } from "./variation-dialog";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
 import { SplitBillDialog } from "./split-bill-dialog";
 import { SplitPicker } from "./split-picker";
 import { TakeawayPicker } from "./takeaway-picker";
 
-/** Selected modifiers, indented right under their parent line. Additions show
+/** Selected variations, indented right under their parent line. Additions show
  * their list price as detail (the line price carries the diminishing-scaled
  * surcharge); removals never deduct, so they show no amount. */
 function ModifierRows({
   modifiers,
   muted,
 }: {
-  modifiers: Array<{ key: string; name: string; priceAdjustment: number }>;
+  modifiers: Array<{
+    key: string;
+    name: string;
+    priceAdjustment: number;
+    isRemoval: boolean;
+  }>;
   muted?: boolean;
 }) {
   if (modifiers.length === 0) return null;
@@ -82,7 +87,10 @@ function ModifierRows({
     >
       {modifiers.map((m) => (
         <li key={m.key} className="flex justify-between gap-2">
-          <span className="min-w-0 truncate">› {m.name}</span>
+          <span className="min-w-0 truncate">
+            {m.isRemoval ? "− " : "+ "}
+            {m.name}
+          </span>
           {m.priceAdjustment > 0 && (
             <span className="shrink-0 tabular-nums">
               +{formatMoney(m.priceAdjustment)}
@@ -99,8 +107,8 @@ interface TicketPanelProps {
   openOrder: OpenOrder | null;
   openSplits: Order[];
   openTakeaways: Order[];
-  /** Modifier groups offered per menu item id — drives the ingredient editor */
-  modifierGroups: Record<string, ModifierGroupWithModifiers[]>;
+  /** Pantry + per-dish ingredients; key presence in `byItem` gates the editor */
+  variations: VariationData;
   onOrderChanged: () => Promise<void>;
 }
 
@@ -109,7 +117,7 @@ export function TicketPanel({
   openOrder,
   openSplits,
   openTakeaways,
-  modifierGroups,
+  variations,
   onOrderChanged,
 }: TicketPanelProps) {
   const {
@@ -133,6 +141,8 @@ export function TicketPanel({
   } = useTicketStore();
   const t = useT();
   const canCheckout = usePermission("checkout_orders");
+  // Ingredient edits are open to anyone taking orders; re-pricing a line is not.
+  const canOverridePrice = usePermission("override_price");
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [priceEdit, setPriceEdit] = useState<PriceEditTarget | null>(null);
   const [editLine, setEditLine] = useState<TicketLine | null>(null);
@@ -416,6 +426,7 @@ export function TicketPanel({
                     key: m.id,
                     name: m.name,
                     priceAdjustment: m.price_adjustment,
+                    isRemoval: m.is_removal,
                   }),
                 );
                 if (i.paid_by_payment_id) {
@@ -523,23 +534,30 @@ export function TicketPanel({
                     <span className="w-14 text-right tabular-nums">
                       {formatMoney(i.unit_price * i.quantity)}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label={t("pos.adjustPriceOf", { name })}
-                      disabled={busy}
-                      onClick={() =>
-                        setPriceEdit({
-                          kind: "sent",
-                          id: i.id,
-                          name,
-                          unitPrice: i.unit_price,
-                        })
-                      }
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    {/* Sent lines are re-priced, not re-composed: the kitchen
+                        already has the slip. The spacer keeps the totals
+                        column aligned for staff who may not re-price. */}
+                    {canOverridePrice ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={t("pos.adjustPriceOf", { name })}
+                        disabled={busy}
+                        onClick={() =>
+                          setPriceEdit({
+                            kind: "sent",
+                            id: i.id,
+                            name,
+                            unitPrice: i.unit_price,
+                          })
+                        }
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <span className="w-8" aria-hidden />
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -587,22 +605,29 @@ export function TicketPanel({
                     )}
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 text-muted-foreground"
-                  aria-label={t("pos.adjustPriceOf", { name: l.name })}
-                  onClick={() =>
-                    setPriceEdit({
-                      kind: "pending",
-                      id: l.lineId,
-                      name: l.name,
-                      unitPrice: l.unitPrice,
-                    })
-                  }
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
+                {/* One door for the whole line: ingredients for everyone,
+                    price for those allowed. Hidden only when the user may do
+                    neither, so it never opens onto an empty dialog. */}
+                {(l.menuItemId in variations.byItem || canOverridePrice) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 text-muted-foreground"
+                    // name what this user can actually change, so the label
+                    // never promises a price field they will not be shown
+                    aria-label={t(
+                      l.menuItemId in variations.byItem
+                        ? canOverridePrice
+                          ? "pos.editLineAria"
+                          : "pos.editLineIngredientsAria"
+                        : "pos.editLinePriceAria",
+                      { name: l.name },
+                    )}
+                    onClick={() => setEditLine(l)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
                 <div className="flex items-center gap-1">
                   <Button
                     variant="outline"
@@ -641,23 +666,12 @@ export function TicketPanel({
               </div>
               <ModifierRows
                 modifiers={l.modifiers.map((m) => ({
-                  key: m.modifierId,
+                  key: `${m.ingredientId}:${m.isRemoval}`,
                   name: m.name,
                   priceAdjustment: m.priceAdjustment,
+                  isRemoval: m.isRemoval,
                 }))}
               />
-              {(modifierGroups[l.menuItemId] ?? []).length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setEditLine(l)}
-                  className="ml-5 mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                  <Plus className="h-3 w-3" />
-                  {l.modifiers.length
-                    ? t("pos.editIngredients")
-                    : t("pos.addIngredients")}
-                </button>
-              )}
             </div>
           ))}
         </div>
@@ -780,15 +794,26 @@ export function TicketPanel({
         onClose={() => setPriceEdit(null)}
         onSubmit={applyPriceEdit}
       />
-      <ModifierDialog
+      <VariationDialog
         open={editLine !== null}
         itemName={editLine?.name ?? ""}
         basePrice={editLine?.unitPrice ?? 0}
-        groups={editLine ? (modifierGroups[editLine.menuItemId] ?? []) : []}
+        dishIngredients={
+          editLine ? (variations.byItem[editLine.menuItemId] ?? []) : []
+        }
+        pantry={variations.pantry}
+        variationsAllowed={
+          editLine !== null && editLine.menuItemId in variations.byItem
+        }
+        canEditPrice={canOverridePrice}
         initialModifiers={editLine?.modifiers ?? []}
         onClose={() => setEditLine(null)}
-        onConfirm={(modifiers) => {
-          if (editLine) setLineModifiers(editLine.lineId, modifiers);
+        onConfirm={(modifiers, basePrice) => {
+          if (!editLine) return;
+          setLineModifiers(editLine.lineId, modifiers);
+          // null means the base was left alone — don't flag the line as
+          // manually priced just because the editor was opened.
+          if (basePrice !== null) setLinePrice(editLine.lineId, basePrice);
         }}
       />
       {openOrder && (
