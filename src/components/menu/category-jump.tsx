@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useT } from "@/lib/i18n/use-translation";
+import { categoryIcon } from "@/lib/category-icons";
 import type { Category } from "@/lib/database.types";
 
 /**
@@ -34,6 +35,14 @@ export function CategoryJump({
   const t = useT();
   const title = t("pos.jumpToCategory");
 
+  // Alphabetical, not the listino's sort_order. Order on the paper menu is a
+  // course order nobody browsing this list is following: they already know the
+  // category they want and are hunting for its name, which is faster to find
+  // in the order names are filed in. The menu itself keeps its own order.
+  const sorted = [...categories].sort((a, b) =>
+    a.name.localeCompare(b.name, "it", { sensitivity: "base" }),
+  );
+
   const list = (
     <ul
       className={
@@ -42,9 +51,10 @@ export function CategoryJump({
           : "divide-y overflow-y-auto"
       }
     >
-      {categories.map((c) => {
+      {sorted.map((c) => {
         const count = counts.get(c.id) ?? 0;
         if (count === 0) return null;
+        const Icon = categoryIcon(c.name);
         return (
           <li key={c.id}>
             <button
@@ -59,8 +69,14 @@ export function CategoryJump({
                   : "flex min-h-14 w-full items-center justify-between gap-2 px-4 text-left active:bg-accent"
               }
             >
-              <span className="min-w-0 truncate text-base font-medium">
-                {c.name}
+              <span className="flex min-w-0 items-center gap-3">
+                <Icon
+                  aria-hidden
+                  className="size-5 shrink-0 text-muted-foreground"
+                />
+                <span className="min-w-0 truncate text-base font-medium">
+                  {c.name}
+                </span>
               </span>
               <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                 {count}
