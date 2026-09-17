@@ -1,20 +1,17 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ReceiptText, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatMoney } from "@/lib/constants";
+import { formatTime } from "@/lib/takeaway/slots";
 import type { Order } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
 import { useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
-
-const TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  hour: "numeric",
-  minute: "2-digit",
-});
 
 interface TakeawayPanelProps {
   takeaways: Order[];
@@ -25,6 +22,20 @@ export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
   const t = useT();
   const setTakeaway = useTicketStore((s) => s.setTakeaway);
   const canTakeOrders = usePermission("take_orders");
+
+  // By promised time, not by when it was written down: the list is read to
+  // answer "what goes out next". Orders with no promised time sink to the
+  // bottom — they are the ones already being packed.
+  const ordered = useMemo(
+    () =>
+      [...takeaways].sort((a, b) => {
+        if (a.pickup_at === b.pickup_at) return 0;
+        if (a.pickup_at === null) return 1;
+        if (b.pickup_at === null) return -1;
+        return a.pickup_at < b.pickup_at ? -1 : 1;
+      }),
+    [takeaways],
+  );
 
   function openInPos(order: Order) {
     setTakeaway(order.id, order.customer_name ?? "");
@@ -39,17 +50,30 @@ export function TakeawayPanel({ takeaways }: TakeawayPanelProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
-        {takeaways.length === 0 && (
+        {ordered.length === 0 && (
           <p className="py-4 text-sm text-muted-foreground">
             {t("floor.noOpenTakeaways")}
           </p>
         )}
-        {takeaways.map((o, i) => (
+        {ordered.map((o, i) => (
           <div key={o.id}>
             {i > 0 && <Separator className="my-1" />}
             <div className="flex items-center gap-3 py-2">
-              <div className="w-16 shrink-0 text-sm font-semibold tabular-nums">
-                {TIME_FORMATTER.format(new Date(o.opened_at))}
+              <div className="w-16 shrink-0">
+                <div
+                  className={
+                    o.pickup_at === null
+                      ? "text-sm font-semibold text-muted-foreground"
+                      : "text-sm font-semibold tabular-nums"
+                  }
+                >
+                  {o.pickup_at === null
+                    ? t("takeaway.noTimeShort")
+                    : formatTime(o.pickup_at)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {t("takeaway.openedAt", { time: formatTime(o.opened_at) })}
+                </div>
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">

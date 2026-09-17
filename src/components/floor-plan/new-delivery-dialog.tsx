@@ -13,11 +13,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  createDeliveryOrder,
-  fetchDeliveryLabels,
-  nextDeliveryNumber,
-} from "@/lib/api";
+import { SlotGrid } from "@/components/takeaway/slot-grid";
+import { fetchDeliveryLabels, nextDeliveryNumber } from "@/lib/api";
+import { createTakeawayOrder } from "@/lib/takeaway/api";
+import { defaultSlot } from "@/lib/takeaway/slots";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/use-translation";
 import { useTicketStore } from "@/stores/ticket-store";
@@ -42,13 +41,20 @@ export function NewDeliveryDialog({
   const [number, setNumber] = useState<number | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [name, setName] = useState("");
+  const [pickupAt, setPickupAt] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const [busy, setBusy] = useState(false);
 
   // Fetch tonight's next number + saved labels each time the dialog opens.
   useEffect(() => {
     if (!open) return;
+    const opened = new Date();
     setName("");
     setNumber(null);
+    setNow(opened);
+    // Pre-pick the next free slot: most calls are for "as soon as it's ready",
+    // and a sensible time already filled in beats an empty one nobody sets.
+    setPickupAt(defaultSlot(undefined, opened)?.key ?? null);
     Promise.all([nextDeliveryNumber(), fetchDeliveryLabels()])
       .then(([n, l]) => {
         setNumber(n);
@@ -66,7 +72,7 @@ export function NewDeliveryDialog({
     if (!trimmed || busy) return;
     setBusy(true);
     try {
-      const { orderId } = await createDeliveryOrder(trimmed, userId);
+      const { orderId } = await createTakeawayOrder(trimmed, pickupAt, userId);
       setTakeaway(orderId, trimmed);
       await onCreated();
       onClose();
@@ -82,7 +88,7 @@ export function NewDeliveryDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
             <Bike className="h-6 w-6" /> {t("floor.newDelivery")}
@@ -132,6 +138,11 @@ export function NewDeliveryDialog({
               ))}
             </div>
           )}
+
+          <div className="flex flex-col gap-2 border-t pt-3">
+            <span className="text-sm font-medium">{t("takeaway.pickupTime")}</span>
+            <SlotGrid value={pickupAt} onChange={setPickupAt} now={now} />
+          </div>
 
           <Button
             size="lg"

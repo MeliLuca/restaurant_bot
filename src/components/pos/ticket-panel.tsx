@@ -60,6 +60,7 @@ import { VariationDialog } from "./variation-dialog";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
 import { SplitBillDialog } from "./split-bill-dialog";
 import { SplitPicker } from "./split-picker";
+import { PickupTimeControl } from "@/components/takeaway/pickup-time-control";
 import { TakeawayPicker } from "./takeaway-picker";
 
 /** Selected variations, indented right under their parent line. Additions show
@@ -378,6 +379,11 @@ export function TicketPanel({
                   : t("pos.newTakeawayLabel")}
               </span>
             </div>
+            <PickupTimeControl
+              orderId={openOrder?.order.id ?? null}
+              pickupAt={openOrder?.order.pickup_at ?? null}
+              onChanged={onOrderChanged}
+            />
             <Button
               variant="ghost"
               size="icon"

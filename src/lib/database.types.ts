@@ -164,6 +164,8 @@ export interface Database {
           ticket_number: number;
           /** Per-night take-away sequence (null for dine-in) */
           delivery_number: number | null;
+          /** When the customer said they would come for it (null = no promised time) */
+          pickup_at: string | null;
           /** Guests on this check; drives the coperto line. Null = never asked (legacy rows, take-away) */
           covers: number | null;
           opened_by: string | null;
@@ -183,6 +185,7 @@ export interface Database {
           total?: number;
           ticket_number?: number;
           delivery_number?: number | null;
+          pickup_at?: string | null;
           covers?: number | null;
           opened_by?: string | null;
           opened_at?: string;
@@ -201,6 +204,7 @@ export interface Database {
           total?: number;
           ticket_number?: number;
           delivery_number?: number | null;
+          pickup_at?: string | null;
           covers?: number | null;
           opened_by?: string | null;
           opened_at?: string;
