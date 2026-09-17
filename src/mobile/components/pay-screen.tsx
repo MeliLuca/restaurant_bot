@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import {
   payEvenShare,
   payForItems,
   printPartialReceipt,
+  splitCopertoPerGuest,
   splitItemIntoFractions,
   updateTableStatus,
   type OpenOrder,
@@ -74,6 +75,9 @@ export function PayScreen({ orderId }: { orderId: string }) {
   const [people, setPeople] = useState(2);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [splittingItemId, setSplittingItemId] = useState<string | null>(null);
+  // orders whose coperto this screen has already expanded — the call is
+  // idempotent, this only spares the round trip on every mode switch
+  const copertoSplit = useRef<string | null>(null);
   const [cleanup, setCleanup] = useState<{
     tableId: string;
     tableName: string;
@@ -181,6 +185,25 @@ export function PayScreen({ orderId }: { orderId: string }) {
       await afterPayment(result);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("pos.paymentFailed"));
+    } finally {
+      setPayBusy(false);
+    }
+  }
+
+  /**
+   * Switching to by-item turns the cover charge into one line per guest, so
+   * each customer can pick up their own coperto with their own dishes instead
+   * of the whole table's landing on whoever pays first.
+   */
+  async function ensureCopertoSplit() {
+    if (copertoSplit.current === orderId) return;
+    copertoSplit.current = orderId;
+    setPayBusy(true);
+    try {
+      if (await splitCopertoPerGuest(orderId)) await refresh();
+    } catch (e) {
+      copertoSplit.current = null;
+      toast.error(e instanceof Error ? e.message : t("pos.couldNotSplit"));
     } finally {
       setPayBusy(false);
     }
@@ -316,7 +339,10 @@ export function PayScreen({ orderId }: { orderId: string }) {
           <button
             key={m.id}
             type="button"
-            onClick={() => setMode(m.id)}
+            onClick={() => {
+              setMode(m.id);
+              if (m.id === "items") void ensureCopertoSplit();
+            }}
             className={cn(
               "min-h-11 flex-1 rounded-lg text-sm font-semibold transition-colors",
               mode === m.id

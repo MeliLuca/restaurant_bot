@@ -11,6 +11,7 @@ import { formatMoney } from "@/lib/constants";
 import { orderItemLabel } from "@/lib/menu-display";
 import { useT } from "@/lib/i18n/use-translation";
 import { remainingBalanceCents } from "@/lib/money";
+import { collapseCoperto } from "@/lib/pos/coperto";
 import { calcTotals, lineUnitPrice, useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
@@ -191,7 +192,7 @@ export function BillView({ orderId }: { orderId: string }) {
         )}
 
         <ul className="flex flex-col gap-2">
-          {sortedForBill(items).map((i) => {
+          {sortedForBill(collapseCoperto(items)).map((i) => {
             // labelled the same way the menu labelled it: pizze and bruschette
             // by codice, with the toppings on the line underneath
             const label = orderItemLabel(i.menu_items, t("floor.itemFallback"));

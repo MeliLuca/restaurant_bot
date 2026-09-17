@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Banknote, Check, Divide, Minus, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
   payForItems,
   printPartialReceipt,
   remainingBalanceCents,
+  splitCopertoPerGuest,
   splitItemIntoFractions,
   type OpenOrder,
   type PaymentResult,
@@ -72,6 +73,9 @@ export function SplitBillDialog({
   const [people, setPeople] = useState(2);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [splittingItemId, setSplittingItemId] = useState<string | null>(null);
+  // orders whose coperto this dialog has already expanded — the call is
+  // idempotent, this only spares the round trip on every tab switch
+  const copertoSplit = useRef<string | null>(null);
 
   const { order, items, payments } = openOrder;
   const remainingCents = remainingBalanceCents(order, payments);
@@ -102,6 +106,25 @@ export function SplitBillDialog({
       else next.add(id);
       return next;
     });
+  }
+
+  /**
+   * Entering the by-item tab turns the cover charge into one line per guest,
+   * so each customer can pick up their own coperto with their own dishes
+   * instead of the whole table's landing on whoever pays first.
+   */
+  async function ensureCopertoSplit() {
+    if (copertoSplit.current === order.id) return;
+    copertoSplit.current = order.id;
+    setBusy(true);
+    try {
+      if (await splitCopertoPerGuest(order.id)) await onPaymentsChanged();
+    } catch (e) {
+      copertoSplit.current = null;
+      toast.error(e instanceof Error ? e.message : t("pos.couldNotSplit"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function afterPayment(result: PaymentResult) {
@@ -205,7 +228,13 @@ export function SplitBillDialog({
           </span>
         </div>
 
-        <Tabs defaultValue="even" className="flex min-h-0 flex-1 flex-col">
+        <Tabs
+          defaultValue="even"
+          className="flex min-h-0 flex-1 flex-col"
+          onValueChange={(value) => {
+            if (value === "items") void ensureCopertoSplit();
+          }}
+        >
           <TabsList className="grid h-12 w-full grid-cols-2">
             <TabsTrigger value="even" className="h-10">
               <Users className="mr-2 h-4 w-4" /> {t("pos.allaRomana")}

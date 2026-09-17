@@ -45,6 +45,7 @@ import {
 import { formatMoney } from "@/lib/constants";
 import { orderItemLabel } from "@/lib/menu-display";
 import { calcTotals, toCents } from "@/lib/money";
+import { collapseCoperto } from "@/lib/pos/coperto";
 import type { Order, RestaurantTable, TableStatus } from "@/lib/database.types";
 import {
   lineUnitPrice,
@@ -412,7 +413,7 @@ export function TicketPanel({
               {t("pos.sentToKitchen")}
             </h3>
             <div className="flex flex-col gap-1.5">
-              {openOrder.items.map((i) => {
+              {collapseCoperto(openOrder.items).map((i) => {
                 // Same label rule as the menu: a pizza that was tapped as
                 // "1202" reads as 1202 here too, with its toppings underneath.
                 const label = orderItemLabel(

@@ -1064,3 +1064,68 @@ export async function splitItemIntoFractions(
   // No-op by construction, but keeps stored totals authoritative.
   await recomputeOrderTotals(orderId);
 }
+
+/**
+ * Break the cover charge into one payable line per guest.
+ *
+ * The coperto lives on the bill as a single line of `covers` units, which is
+ * how it should read while the table is eating. The moment the bill is split
+ * by item, though, that single line is unpayable by anyone but the person who
+ * agrees to buy everybody's coperto: it is all-or-nothing, and the waiter has
+ * to reach for the divide button and retype the guest count to make it
+ * splittable. So the split-by-item flow calls this on entry and the work is
+ * already done — each guest picks up their own cover charge alongside their
+ * own dishes.
+ *
+ * Unlike splitItemIntoFractions this leaves `fraction_of` null: one guest's
+ * coperto is a whole cover charge, not 1/N of one, and the line total is
+ * already an exact multiple so nothing has to be distributed in cents. Each
+ * source row's own price snapshot is carried onto its expanded rows, so a
+ * mid-service price change on the coperto item cannot move the total.
+ *
+ * Paid rows are never touched (same invariant as syncCoperto). Idempotent:
+ * returns false — with nothing written — when the unpaid coperto is already
+ * one line per guest, when the check carries a single cover, or when this
+ * house charges no coperto at all.
+ */
+export async function splitCopertoPerGuest(orderId: string): Promise<boolean> {
+  const sb = getSupabase();
+  const item = await fetchCopertoItem();
+  if (!item) return false;
+
+  const { data: rows, error } = await sb
+    .from("order_items")
+    .select("id, quantity, unit_price, notes")
+    .eq("order_id", orderId)
+    .eq("menu_item_id", item.id)
+    .is("paid_by_payment_id", null)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+
+  const covers = rows.reduce((n, r) => n + r.quantity, 0);
+  // already one line per guest (the common case on re-entry), or nothing to split
+  if (covers < 2 || rows.length === covers) return false;
+
+  const { error: insertError } = await sb.from("order_items").insert(
+    rows.flatMap((r) =>
+      Array.from({ length: r.quantity }, () => ({
+        order_id: orderId,
+        menu_item_id: item.id,
+        quantity: 1,
+        unit_price: r.unit_price,
+        notes: r.notes,
+      })),
+    ),
+  );
+  if (insertError) throw new Error(insertError.message);
+
+  const { error: deleteError } = await sb
+    .from("order_items")
+    .delete()
+    .in("id", rows.map((r) => r.id));
+  if (deleteError) throw new Error(deleteError.message);
+
+  // No-op by construction, but keeps stored totals authoritative.
+  await recomputeOrderTotals(orderId);
+  return true;
+}
