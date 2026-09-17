@@ -32,6 +32,9 @@ export const viewport: Viewport = {
   userScalable: false,
   // lets the /m tab bar clear the home indicator via env(safe-area-inset-bottom)
   viewportFit: "cover",
+  // the order screen pins its search bar to the bottom edge; without this the
+  // Android keyboard opens straight over it
+  interactiveWidget: "resizes-content",
   themeColor: "#18181b",
 };
 

@@ -8,12 +8,13 @@ import {
   fetchTables,
   type ModifierGroupWithModifiers,
 } from "@/lib/api";
-import type { Category, MenuItem, RestaurantTable } from "@/lib/database.types";
+import type { Category, RestaurantTable } from "@/lib/database.types";
+import type { MenuItemView } from "@/lib/menu-display";
 import { useT } from "@/lib/i18n/use-translation";
 
 interface MenuData {
   categories: Category[];
-  items: MenuItem[];
+  items: MenuItemView[];
   /** Modifier groups keyed by menu_item_id */
   modifierGroups: Record<string, ModifierGroupWithModifiers[]>;
   tables: RestaurantTable[];
@@ -32,7 +33,7 @@ interface MenuData {
 export function useMenuData(): MenuData {
   const t = useT();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [items, setItems] = useState<MenuItem[]>([]);
+  const [items, setItems] = useState<MenuItemView[]>([]);
   const [modifierGroups, setModifierGroups] = useState<
     Record<string, ModifierGroupWithModifiers[]>
   >({});

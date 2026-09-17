@@ -57,8 +57,13 @@ export function TicketLinesSheet({
         {lines.map((l) => (
           <li key={l.lineId} className="flex flex-col gap-2 p-3">
             <div className="flex items-start gap-2">
-              <span className="min-w-0 flex-1 text-base leading-snug">
-                {l.name}
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-base leading-snug">{l.name}</span>
+                {l.ingredients && (
+                  <span className="text-sm leading-snug text-muted-foreground">
+                    {l.ingredients}
+                  </span>
+                )}
               </span>
               <span className="shrink-0 text-base font-semibold tabular-nums">
                 {formatMoney(lineUnitPrice(l) * l.quantity)}

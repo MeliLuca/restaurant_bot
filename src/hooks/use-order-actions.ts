@@ -95,7 +95,11 @@ export function useOrderActions({
   const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
   // the order's own count wins; the draft answer covers a check not created yet
   const covers = openOrder?.order.covers ?? draftCovers;
-  const needsCovers = mode === "table" && hasTarget && covers == null;
+  // Only the table's first order asks — once any order exists (even a
+  // drinks-only one that skipped the cover charge), adding another round
+  // never re-prompts, per house rule.
+  const needsCovers =
+    mode === "table" && hasTarget && !openOrder && covers == null;
   const targetLabel =
     mode === "table"
       ? subtable
@@ -138,7 +142,7 @@ export function useOrderActions({
       // cover charge and nothing on the bill to show it was skipped. Both UIs
       // ask before getting here; this is the backstop that makes a missed
       // prompt a visible error rather than silently lost revenue.
-      if (covers == null) throw new Error(t("pos.coversAsk"));
+      if (!openOrder && covers == null) throw new Error(t("pos.coversAsk"));
       return sendToKitchen(tableId!, lines, subtable, userId, covers);
     }
     const round = await sendTakeawayToKitchen(

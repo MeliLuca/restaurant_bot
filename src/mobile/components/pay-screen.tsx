@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { useOrderActions } from "@/hooks/use-order-actions";
 import { formatMoney } from "@/lib/constants";
+import { menuLabelText, orderItemLabel } from "@/lib/menu-display";
 import { useT, type TFn } from "@/lib/i18n/use-translation";
 import { remainingBalanceCents } from "@/lib/money";
 import {
@@ -37,7 +38,9 @@ import { MHeader } from "./m-header";
 type PayMode = "all" | "even" | "items";
 
 function itemDisplayName(item: OpenOrder["items"][number], t: TFn): string {
-  const base = item.menu_items?.name ?? t("floor.itemFallback");
+  // one line, so a code-named item carries its toppings inline — "1202" alone
+  // would leave the picker unable to tell two pizzas apart
+  const base = menuLabelText(orderItemLabel(item.menu_items, t("floor.itemFallback")));
   return item.fraction_of ? `${base} (1/${item.fraction_of})` : base;
 }
 

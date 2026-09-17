@@ -59,6 +59,7 @@ import type {
   Printer,
 } from "@/lib/database.types";
 import { useT, type TFn } from "@/lib/i18n/use-translation";
+import { buildHaystack, normalize, tokenize } from "@/lib/menu-search";
 import { cn } from "@/lib/utils";
 
 interface MenuManagerProps {
@@ -72,14 +73,6 @@ interface MenuManagerProps {
 
 /** How many result rows to render before asking for a "show more" click. */
 const PAGE_SIZE = 50;
-
-/** Accent-insensitive lowercase for search matching (Menù → menu). */
-function normalize(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
 
 export function MenuManager({
   categories,
@@ -131,9 +124,10 @@ export function MenuManager({
     () =>
       items.map((item) => ({
         item,
-        haystack: normalize(
-          [item.name, ...item.ingredients.map((g) => g.name)].join(" "),
-        ),
+        haystack: buildHaystack([
+          item.name,
+          ...item.ingredients.map((g) => g.name),
+        ]),
       })),
     [items],
   );
@@ -155,7 +149,7 @@ export function MenuManager({
   }, [items]);
 
   const words = useMemo(
-    () => normalize(deferredQuery.trim()).split(/\s+/).filter(Boolean),
+    () => tokenize(deferredQuery),
     [deferredQuery],
   );
 

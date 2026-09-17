@@ -24,6 +24,7 @@ import { useT } from "@/lib/i18n/use-translation";
 import { useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
 import { STATUS_CONFIG } from "@/lib/floor/status";
+import { menuLabelText, orderItemLabel } from "@/lib/menu-display";
 
 interface TableActionsDialogProps {
   table: RestaurantTable | null;
@@ -127,7 +128,10 @@ export function TableActionsDialog({
                           key={i.id}
                           className="text-xs text-muted-foreground"
                         >
-                          {i.quantity} × {i.menu_items?.name ?? t("floor.itemFallback")}
+                          {i.quantity} ×{" "}
+                          {menuLabelText(
+                            orderItemLabel(i.menu_items, t("floor.itemFallback")),
+                          )}
                         </span>
                       ))}
                     </div>

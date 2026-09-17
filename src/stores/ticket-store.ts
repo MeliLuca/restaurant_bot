@@ -14,7 +14,14 @@ export interface TicketLine {
    * separate lines, so menuItemId alone can't address one */
   lineId: string;
   menuItemId: string;
+  /** What the menu called it when it was tapped: the dish name, or the codice
+   * for the categories the listino numbers instead of naming (pizze,
+   * bruschette). Display only — nothing written to the DB reads it, so the
+   * kitchen slip and the receipt still print the full name from menu_items. */
   name: string;
+  /** Ingredient caption shown under `name`; set only where the name alone
+   * would not identify the dish, i.e. when `name` is a bare codice */
+  ingredients?: string | null;
   /** Base menu price; the charged price adds the modifier adjustments */
   unitPrice: number;
   quantity: number;
@@ -75,7 +82,9 @@ interface TicketState {
   /** Target a take-away: an existing open order, or a new customer name */
   setTakeaway: (orderId: string | null, name: string) => void;
   addItem: (
-    item: Pick<MenuItem, "id" | "name" | "price">,
+    item: Pick<MenuItem, "id" | "name" | "price"> & {
+      ingredients?: string | null;
+    },
     modifiers?: SelectedModifier[],
   ) => void;
   removeItem: (lineId: string) => void;
@@ -218,6 +227,7 @@ export const useTicketStore = create<TicketState>((set) => ({
             lineId: nextLineId(),
             menuItemId: item.id,
             name: item.name,
+            ingredients: item.ingredients ?? null,
             unitPrice: item.price,
             quantity: 1,
             modifiers,

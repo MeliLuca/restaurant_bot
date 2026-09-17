@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ChefHat, Printer, TriangleAlert, Users, Wallet } from "lucide-react";
+import { ChefHat, Plus, Printer, TriangleAlert, Users, Wallet } from "lucide-react";
 import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
 import { useOrderActions } from "@/hooks/use-order-actions";
 import { updateOrderCovers } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
+import { orderItemLabel } from "@/lib/menu-display";
 import { useT } from "@/lib/i18n/use-translation";
 import { remainingBalanceCents } from "@/lib/money";
 import { calcTotals, lineUnitPrice, useTicketStore } from "@/stores/ticket-store";
@@ -138,6 +139,16 @@ export function BillView({ orderId }: { orderId: string }) {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {canTakeOrders && order.table_id && (
+          <Link
+            href={mRoutes.order(order.table_id, order.subtable)}
+            className="mb-3 flex min-h-14 items-center justify-center gap-2 rounded-xl bg-primary text-base font-semibold text-primary-foreground"
+          >
+            <Plus className="h-5 w-5" />
+            {t("m.addOrder")}
+          </Link>
+        )}
+
         {blockedByPending && (
           <div className="mb-3 flex flex-col gap-3 rounded-xl border border-amber-500/60 bg-amber-500/10 p-3">
             <p className="flex items-start gap-2 text-sm">
@@ -167,9 +178,11 @@ export function BillView({ orderId }: { orderId: string }) {
 
         <ul className="flex flex-col gap-2">
           {items.map((i) => {
+            // labelled the same way the menu labelled it: pizze and bruschette
+            // by codice, with the toppings on the line underneath
+            const label = orderItemLabel(i.menu_items, t("floor.itemFallback"));
             const name =
-              (i.menu_items?.name ?? t("floor.itemFallback")) +
-              (i.fraction_of ? ` (1/${i.fraction_of})` : "");
+              label.title + (i.fraction_of ? ` (1/${i.fraction_of})` : "");
             const paid = i.paid_by_payment_id !== null;
             const isCoperto = i.menu_items?.is_coperto ?? false;
             // The bill carries no per-line controls, so there is nothing here
@@ -195,11 +208,18 @@ export function BillView({ orderId }: { orderId: string }) {
                   <span className="w-7 shrink-0 font-semibold tabular-nums">
                     {i.quantity}×
                   </span>
-                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                    {isCoperto && (
-                      <Users className="h-4 w-4 shrink-0 self-center text-muted-foreground" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex items-baseline gap-1.5">
+                      {isCoperto && (
+                        <Users className="h-4 w-4 shrink-0 self-center text-muted-foreground" />
+                      )}
+                      {name}
+                    </span>
+                    {label.ingredients && (
+                      <span className="text-sm leading-snug text-muted-foreground">
+                        {label.ingredients}
+                      </span>
                     )}
-                    {name}
                   </span>
                   <span className="shrink-0 tabular-nums">
                     {formatMoney(i.unit_price * i.quantity)}

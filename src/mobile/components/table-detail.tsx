@@ -12,6 +12,7 @@ import { useT } from "@/lib/i18n/use-translation";
 import { STATUS_CONFIG, displayStatus } from "@/lib/floor/status";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable } from "@/lib/database.types";
+import { menuLabelText, orderItemLabel } from "@/lib/menu-display";
 import { mRoutes } from "@/mobile/lib/routes";
 import { MHeader } from "./m-header";
 
@@ -117,7 +118,7 @@ export function TableDetail({ tableId }: { tableId: string }) {
             <ul className="text-sm text-muted-foreground">
               {o.order_items.slice(0, 4).map((it) => (
                 <li key={it.id} className="truncate">
-                  {it.quantity}× {it.menu_items?.name ?? "—"}
+                  {it.quantity}× {menuLabelText(orderItemLabel(it.menu_items, "—"))}
                 </li>
               ))}
               {o.order_items.length > 4 && (

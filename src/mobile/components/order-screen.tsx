@@ -5,14 +5,18 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ReceiptText, TriangleAlert } from "lucide-react";
 import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
+import { CategoryJump } from "@/components/menu/category-jump";
+import { MenuList } from "@/components/menu/menu-list";
+import { MenuSearchBar } from "@/components/menu/menu-search-bar";
 import { updateOrderCovers } from "@/lib/api";
 import { useMenuData } from "@/hooks/use-menu-data";
+import { useMenuSearch, useOrderedCounts } from "@/hooks/use-menu-search";
 import { useOpenOrder } from "@/hooks/use-open-order";
 import { useOrderActions } from "@/hooks/use-order-actions";
 import { formatMoney } from "@/lib/constants";
 import { useT } from "@/lib/i18n/use-translation";
 import { calcTotals } from "@/lib/money";
-import type { MenuItem } from "@/lib/database.types";
+import { makeMenuLabeller, type MenuItemView } from "@/lib/menu-display";
 import { usePermission } from "@/stores/auth-store";
 import {
   lineUnitPrice,
@@ -20,9 +24,9 @@ import {
   type TicketLine,
 } from "@/stores/ticket-store";
 import { mRoutes } from "@/mobile/lib/routes";
+import { useKeyboardInset } from "@/mobile/hooks/use-keyboard-inset";
 import { useTicketTarget } from "@/mobile/hooks/use-ticket-target";
 import { MHeader } from "./m-header";
-import { MenuBrowser } from "./menu-browser";
 import { ModifierScreen } from "./modifier-screen";
 import { TicketLinesSheet } from "./ticket-lines";
 
@@ -61,6 +65,20 @@ export function OrderScreen({
   const [ticketOpen, setTicketOpen] = useState(false);
   const [editLine, setEditLine] = useState<TicketLine | null>(null);
   const [coversOpen, setCoversOpen] = useState(false);
+
+  const {
+    query,
+    setQuery,
+    results,
+    categoryCounts,
+    jumpOpen,
+    setJumpOpen,
+    scrollToCategoryId,
+    jumpTo,
+    onScrolledToCategory,
+  } = useMenuSearch(items, categories);
+  const orderedCounts = useOrderedCounts();
+  const keyboardInset = useKeyboardInset();
 
   const pendingCount = lines.reduce((n, l) => n + l.quantity, 0);
   const pendingTotal = calcTotals(
@@ -102,10 +120,14 @@ export function OrderScreen({
     setCoversOpen(false);
   }
 
-  function handleAdd(item: MenuItem) {
+  const labelOf = makeMenuLabeller(categories);
+
+  function handleAdd(item: MenuItemView) {
     // straight onto the ticket at base price; ingredients are added after, on
-    // demand, from the line itself — same rule as the desktop till
-    addItem(item);
+    // demand, from the line itself — same rule as the desktop till. The menu
+    // label rides along so a pizza stays "1202" once it is on the ticket.
+    const label = labelOf(item);
+    addItem({ ...item, name: label.title, ingredients: label.ingredients });
   }
 
   async function handleSend() {
@@ -119,56 +141,90 @@ export function OrderScreen({
 
   return (
     <>
-      <MHeader
-        title={subtable ? `${table?.name ?? ""}/${subtable}` : (table?.name ?? "…")}
-        backHref={mRoutes.table(tableId)}
-        action={
-          <CoversChip
-            covers={covers}
-            onClick={() => setCoversOpen(true)}
-            className="mr-2"
+      {/* The keyboard inset shrinks this column rather than scrolling it, which
+          is what keeps the bottom search bar above an open keyboard. */}
+      <div
+        className="flex min-h-0 flex-1 flex-col"
+        style={keyboardInset ? { paddingBottom: keyboardInset } : undefined}
+      >
+        <MHeader
+          title={subtable ? `${table?.name ?? ""}/${subtable}` : (table?.name ?? "…")}
+          backHref={mRoutes.table(tableId)}
+          action={
+            <CoversChip
+              covers={covers}
+              onClick={() => setCoversOpen(true)}
+              className="mr-2"
+            />
+          }
+        />
+
+        {error && (
+          <p className="p-4 text-sm text-destructive">{t("m.loadFailed")}</p>
+        )}
+        {loading ? (
+          <p className="p-4 text-muted-foreground">{t("common.loading")}</p>
+        ) : (
+          <MenuList
+            categories={categories}
+            items={results}
+            counts={orderedCounts}
+            query={query}
+            variant="rows"
+            onAdd={handleAdd}
+            scrollToCategoryId={scrollToCategoryId}
+            onScrolledToCategory={onScrolledToCategory}
           />
-        }
-      />
+        )}
 
-      {error && (
-        <p className="p-4 text-sm text-destructive">{t("m.loadFailed")}</p>
-      )}
-      {loading ? (
-        <p className="p-4 text-muted-foreground">{t("common.loading")}</p>
-      ) : (
-        <MenuBrowser categories={categories} items={items} onAdd={handleAdd} />
-      )}
-
-      {/* Persistent cart bar — always visible while browsing, so the waiter
-          never loses track of what is about to be sent. */}
-      {pendingCount > 0 && (
-        <div className="shrink-0 border-t bg-card p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setTicketOpen(true)}
-              className="flex min-h-14 flex-1 items-center justify-between gap-2 rounded-xl border px-4"
-            >
-              <span className="flex items-center gap-2 text-base font-medium">
-                <ReceiptText className="h-5 w-5" />
-                {t("m.itemsPending", { count: pendingCount })}
-              </span>
-              <span className="text-base font-semibold tabular-nums">
-                {formatMoney(pendingTotal)}
-              </span>
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleSend()}
-              className="min-h-14 rounded-xl bg-primary px-6 text-base font-semibold text-primary-foreground disabled:opacity-50"
-            >
-              {t("m.sendRound")}
-            </button>
+        {/* Persistent cart bar — always visible while browsing, so the waiter
+            never loses track of what is about to be sent. The search bar below
+            is the bottom-most thing on the screen, so it owns the safe area. */}
+        {pendingCount > 0 && (
+          <div className="shrink-0 border-t bg-card p-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTicketOpen(true)}
+                className="flex min-h-14 flex-1 items-center justify-between gap-2 rounded-xl border px-4"
+              >
+                <span className="flex items-center gap-2 text-base font-medium">
+                  <ReceiptText className="h-5 w-5" />
+                  {t("m.itemsPending", { count: pendingCount })}
+                </span>
+                <span className="text-base font-semibold tabular-nums">
+                  {formatMoney(pendingTotal)}
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleSend()}
+                className="min-h-14 rounded-xl bg-primary px-6 text-base font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {t("m.sendRound")}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        <MenuSearchBar
+          query={query}
+          onQueryChange={setQuery}
+          resultCount={results.length}
+          onBrowse={() => setJumpOpen(true)}
+          className="pb-[env(safe-area-inset-bottom)]"
+        />
+      </div>
+
+      <CategoryJump
+        open={jumpOpen}
+        onOpenChange={setJumpOpen}
+        categories={categories}
+        counts={categoryCounts}
+        onPick={jumpTo}
+        variant="sheet"
+      />
 
       {ticketOpen && (
         <TicketLinesSheet

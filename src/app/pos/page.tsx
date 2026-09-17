@@ -5,12 +5,14 @@ import { toast } from "sonner";
 import { ReceiptText, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { ItemSearch } from "@/components/pos/item-search";
-import { MenuPanel } from "@/components/pos/menu-panel";
+import { CategoryJump } from "@/components/menu/category-jump";
+import { MenuList } from "@/components/menu/menu-list";
+import { MenuSearchBar } from "@/components/menu/menu-search-bar";
 import { TicketPanel } from "@/components/pos/ticket-panel";
 import { useMenuData } from "@/hooks/use-menu-data";
+import { useMenuSearch, useOrderedCounts } from "@/hooks/use-menu-search";
 import { useOpenOrder } from "@/hooks/use-open-order";
-import type { MenuItem } from "@/lib/database.types";
+import { makeMenuLabeller, type MenuItemView } from "@/lib/menu-display";
 import { formatMoney } from "@/lib/constants";
 import { calcTotals } from "@/lib/money";
 import { useT } from "@/lib/i18n/use-translation";
@@ -41,6 +43,19 @@ export default function PosPage() {
     openTakeaways,
     refresh: refreshOrder,
   } = useOpenOrder();
+  const {
+    query,
+    setQuery,
+    results,
+    categoryCounts,
+    jumpOpen,
+    setJumpOpen,
+    scrollToCategoryId,
+    jumpTo,
+    onScrolledToCategory,
+  } = useMenuSearch(items, categories);
+  const orderedCounts = useOrderedCounts();
+
   // Phone layout: the ticket lives in a bottom sheet instead of the sidebar
   const [ticketOpen, setTicketOpen] = useState(false);
 
@@ -52,7 +67,9 @@ export default function PosPage() {
     prevLineCount.current = lines.length;
   }, [lines.length]);
 
-  function handleAdd(item: MenuItem): boolean {
+  const labelOf = makeMenuLabeller(categories);
+
+  function handleAdd(item: MenuItemView): boolean {
     const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
     if (!hasTarget) {
       toast.error(
@@ -64,7 +81,10 @@ export default function PosPage() {
     }
     // The dish goes straight onto the ticket at its base price. Ingredients are
     // added later, on demand, from the line itself (no forced selection).
-    addItem(item);
+    // It carries the label it had in the menu, so a pizza tapped as "1202"
+    // does not reappear on the ticket as its topping list.
+    const label = labelOf(item);
+    addItem({ ...item, name: label.title, ingredients: label.ingredients });
     return true;
   }
 
@@ -114,16 +134,15 @@ export default function PosPage() {
 
   return (
     <div className="flex h-full flex-col lg:flex-row">
-      <div className="flex min-w-0 flex-1 flex-col gap-4 p-4">
-        {!loading && (
-          <ItemSearch
-            items={items}
-            categories={categories}
-            onAdd={handleAdd}
-          />
-        )}
+      {/* Menu column: the list takes the height, the search bar pins to the
+          bottom of it — under the hand, and next to the ticket rather than a
+          screen away from it. */}
+      {/* min-h-0: without it this column's automatic minimum is its content
+          height, so below lg it outgrows the page and the search bar scrolls
+          away with the menu instead of staying pinned to the bottom. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {loading ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto p-4 md:grid-cols-3 2xl:grid-cols-4">
             {Array.from({ length: 9 }).map((_, i) => (
               <div
                 key={i}
@@ -132,15 +151,35 @@ export default function PosPage() {
             ))}
           </div>
         ) : (
-          <div className="min-h-0 flex-1">
-            <MenuPanel
-              categories={categories}
-              items={items}
-              onAdd={handleAdd}
-            />
-          </div>
+          <MenuList
+            categories={categories}
+            items={results}
+            counts={orderedCounts}
+            query={query}
+            variant="grid"
+            onAdd={handleAdd}
+            scrollToCategoryId={scrollToCategoryId}
+            onScrolledToCategory={onScrolledToCategory}
+          />
+        )}
+        {!loading && (
+          <MenuSearchBar
+            query={query}
+            onQueryChange={setQuery}
+            resultCount={results.length}
+            onBrowse={() => setJumpOpen(true)}
+          />
         )}
       </div>
+
+      <CategoryJump
+        open={jumpOpen}
+        onOpenChange={setJumpOpen}
+        categories={categories}
+        counts={categoryCounts}
+        onPick={jumpTo}
+        variant="dialog"
+      />
 
       {/* Phone / small tablet: in-flow summary bar opening the ticket sheet */}
       <div className="shrink-0 border-t bg-card p-2 lg:hidden">

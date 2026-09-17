@@ -28,6 +28,7 @@ import type {
   RestaurantTable,
   TableStatus,
 } from "@/lib/database.types";
+import type { MenuItemView } from "@/lib/menu-display";
 
 export async function fetchTables(): Promise<RestaurantTable[]> {
   const { data, error } = await getSupabase()
@@ -121,17 +122,19 @@ export async function fetchCategories(): Promise<Category[]> {
  * The only other consumer of this list is the dead-stock report, where a cover
  * charge would be noise — it is not an item anyone is deciding whether to cull.
  */
-export async function fetchMenuItems(): Promise<MenuItem[]> {
+export async function fetchMenuItems(): Promise<MenuItemView[]> {
   const { data, error } = await getSupabase()
     .from("menu_items")
-    .select("*, ingredients(is_available)")
+    .select("*, ingredients(name, is_available)")
     .eq("is_available", true)
     .eq("is_coperto", false)
     .order("sort_order");
   if (error) throw new Error(error.message);
-  return (data as unknown as (MenuItem & { ingredients: { is_available: boolean }[] })[])
+  return (data as unknown as (MenuItem & {
+    ingredients: { name: string; is_available: boolean }[];
+  })[])
     .filter((item) => item.ingredients.every((i) => i.is_available))
-    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice, is_coperto }) => ({
+    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice, is_coperto, ingredients }) => ({
       id,
       category_id,
       name,
@@ -141,6 +144,8 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
       target_printer_id,
       codice,
       is_coperto,
+      // the listino's ingredienti column, for the caption under the dish name
+      ingredients: ingredients.map((i) => i.name),
     }));
 }
 
@@ -186,8 +191,17 @@ export async function fetchMenuModifierGroups(): Promise<
 
 export type OrderItemWithName = OrderItem & {
   /** `is_coperto` rides along so the bill can render the cover charge as the
-   * derived line it is, rather than one more thing to delete by accident */
-  menu_items: { name: string; is_coperto: boolean } | null;
+   * derived line it is, rather than one more thing to delete by accident.
+   * `codice` and the category name let a bill line label itself the same way
+   * the menu did — a pizza reads as its number here too, not as its toppings. */
+  menu_items:
+    | {
+        name: string;
+        is_coperto: boolean;
+        codice: string | null;
+        categories: { name: string } | null;
+      }
+    | null;
   order_item_modifiers: OrderItemModifier[];
 };
 
@@ -201,7 +215,7 @@ export interface OpenOrder {
 async function fetchOrderItems(orderId: string): Promise<OrderItemWithName[]> {
   const { data, error } = await getSupabase()
     .from("order_items")
-    .select("*, menu_items(name, is_coperto), order_item_modifiers(*)")
+    .select("*, menu_items(name, is_coperto, codice, categories(name)), order_item_modifiers(*)")
     .eq("order_id", orderId)
     .order("created_at");
   if (error) throw new Error(error.message);
@@ -278,7 +292,7 @@ export async function fetchOpenOrdersWithItems(
 ): Promise<OrderWithItems[]> {
   const { data, error } = await getSupabase()
     .from("orders")
-    .select("*, order_items(*, menu_items(name, is_coperto), order_item_modifiers(*))")
+    .select("*, order_items(*, menu_items(name, is_coperto, codice, categories(name)), order_item_modifiers(*))")
     .eq("table_id", tableId)
     .eq("status", "open")
     .order("opened_at");
