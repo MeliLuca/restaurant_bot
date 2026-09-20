@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+#
+# Avvia/ferma l'intero stack di Trattoria RMS (Supabase locale + Next.js).
+#
+# Uso:
+#   ./rms start     Avvia Supabase e il server Next.js (accessibile da desktop e da mobile in LAN)
+#   ./rms stop       Ferma il server Next.js e Supabase
+#   ./rms restart    Ferma e riavvia tutto
+#   ./rms status      Mostra se il sistema è acceso e l'indirizzo da usare da mobile
+#   ./rms logs        Mostra i log live del server Next.js
+#
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+RUN_DIR=".rms"
+PID_FILE="$RUN_DIR/next.pid"
+LOG_FILE="$RUN_DIR/next.log"
+PORT=3000
+
+mkdir -p "$RUN_DIR"
+
+# Carica nvm se presente, cosi da usare la versione di Node richiesta dal progetto
+load_nvm() {
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    # shellcheck disable=SC1091
+    source "$NVM_DIR/nvm.sh"
+    nvm use 18 >/dev/null 2>&1 || nvm use --lts >/dev/null 2>&1 || true
+  fi
+}
+
+get_lan_ip() {
+  ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "IP non trovato"
+}
+
+is_next_running() {
+  [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
+}
+
+is_supabase_running() {
+  npx supabase status >/dev/null 2>&1
+}
+
+cmd_start() {
+  load_nvm
+
+  echo "→ Avvio Supabase locale..."
+  if is_supabase_running; then
+    echo "  già in esecuzione."
+  else
+    npx supabase start
+  fi
+
+  if is_next_running; then
+    echo "→ Il server Next.js è già in esecuzione (PID $(cat "$PID_FILE"))."
+  else
+    echo "→ Avvio server Next.js (dev, accessibile anche da rete locale)..."
+    nohup npx next dev -H 0.0.0.0 -p "$PORT" > "$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+    sleep 2
+  fi
+
+  echo ""
+  echo "✅ Sistema acceso."
+  echo "   Desktop: http://localhost:$PORT"
+  echo "   Mobile (stessa Wi-Fi): http://$(get_lan_ip):$PORT"
+  echo ""
+  echo "   Log del server: ./rms logs"
+}
+
+cmd_stop() {
+  echo "→ Arresto server Next.js..."
+  if is_next_running; then
+    PID="$(cat "$PID_FILE")"
+    kill "$PID" 2>/dev/null || true
+    # aspetta la chiusura, poi forza se serve
+    for _ in 1 2 3 4 5; do
+      kill -0 "$PID" 2>/dev/null || break
+      sleep 1
+    done
+    kill -9 "$PID" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    echo "  fermato."
+  else
+    echo "  non era in esecuzione."
+    rm -f "$PID_FILE"
+  fi
+
+  echo "→ Arresto Supabase locale..."
+  npx supabase stop || true
+
+  echo ""
+  echo "🛑 Sistema spento."
+}
+
+cmd_status() {
+  if is_next_running; then
+    echo "Next.js: ✅ acceso (PID $(cat "$PID_FILE"))"
+    echo "  Desktop: http://localhost:$PORT"
+    echo "  Mobile (stessa Wi-Fi): http://$(get_lan_ip):$PORT"
+  else
+    echo "Next.js: 🛑 spento"
+  fi
+
+  if is_supabase_running; then
+    echo "Supabase: ✅ acceso"
+  else
+    echo "Supabase: 🛑 spento"
+  fi
+}
+
+cmd_logs() {
+  touch "$LOG_FILE"
+  tail -f "$LOG_FILE"
+}
+
+case "${1:-}" in
+  start)
+    cmd_start
+    ;;
+  stop)
+    cmd_stop
+    ;;
+  restart)
+    cmd_stop
+    cmd_start
+    ;;
+  status)
+    cmd_status
+    ;;
+  logs)
+    cmd_logs
+    ;;
+  *)
+    echo "Uso: ./rms {start|stop|restart|status|logs}"
+    exit 1
+    ;;
+esac
