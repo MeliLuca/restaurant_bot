@@ -3,7 +3,7 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useT } from "@/lib/i18n/use-translation";
-import { categoryIcon } from "@/lib/category-icons";
+import { categoryEmoji } from "@/lib/category-icons";
 import type { Category } from "@/lib/database.types";
 
 /**
@@ -54,7 +54,6 @@ export function CategoryJump({
       {sorted.map((c) => {
         const count = counts.get(c.id) ?? 0;
         if (count === 0) return null;
-        const Icon = categoryIcon(c.name);
         return (
           <li key={c.id}>
             <button
@@ -69,11 +68,10 @@ export function CategoryJump({
                   : "flex min-h-14 w-full items-center justify-between gap-2 px-4 text-left active:bg-accent"
               }
             >
-              <span className="flex min-w-0 items-center gap-3">
-                <Icon
-                  aria-hidden
-                  className="size-5 shrink-0 text-muted-foreground"
-                />
+              <span className="flex min-w-0 items-center gap-2">
+                <span aria-hidden className="shrink-0 text-3xl leading-none">
+                  {categoryEmoji(c.name)}
+                </span>
                 <span className="min-w-0 truncate text-base font-medium">
                   {c.name}
                 </span>
@@ -91,7 +89,7 @@ export function CategoryJump({
   if (variant === "dialog") {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogTitle>{title}</DialogTitle>
           {list}
         </DialogContent>
