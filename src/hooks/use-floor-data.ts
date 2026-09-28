@@ -7,9 +7,15 @@ import {
   fetchTodayReservations,
 } from "@/lib/api";
 import { fetchTableLinks } from "@/lib/floor/links";
+import { fetchFloorMaps } from "@/lib/floor/maps";
 import { fetchTablesWithTags, type TableWithTags } from "@/lib/settings-api";
 import { getSupabase } from "@/lib/supabase/client";
-import type { Order, Reservation, TableLink } from "@/lib/database.types";
+import type {
+  FloorMap,
+  Order,
+  Reservation,
+  TableLink,
+} from "@/lib/database.types";
 
 /** Poll cadence when the realtime websocket is down (mirrors chat-store) */
 const POLL_INTERVAL_MS = 15_000;
@@ -25,6 +31,8 @@ interface FloorData {
   openOrders: Order[];
   /** Linked-table members (🔗 badges) */
   links: TableLink[];
+  /** Drawn floor maps (rooms), in display order */
+  maps: FloorMap[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -36,23 +44,26 @@ export function useFloorData(): FloorData {
   const [takeaways, setTakeaways] = useState<Order[]>([]);
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
   const [links, setLinks] = useState<TableLink[]>([]);
+  const [maps, setMaps] = useState<FloorMap[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [t, r, ta, oo, li] = await Promise.all([
+      const [t, r, ta, oo, li, fm] = await Promise.all([
         fetchTablesWithTags(),
         fetchTodayReservations(),
         fetchOpenTakeaways(),
         fetchOpenDineInOrders(),
         fetchTableLinks(),
+        fetchFloorMaps(),
       ]);
       setTables(t);
       setReservations(r);
       setTakeaways(ta);
       setOpenOrders(oo);
       setLinks(li);
+      setMaps(fm);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load floor data");
@@ -123,6 +134,7 @@ export function useFloorData(): FloorData {
     takeaways,
     openOrders,
     links,
+    maps,
     loading,
     error,
     refresh,

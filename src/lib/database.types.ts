@@ -11,6 +11,35 @@ export type PaperSize = "80mm" | "58mm";
 export type PrintJobStatus = "queued" | "sent" | "failed" | "held" | "discarded";
 export type PrintJobKind = "comanda" | "cambio_tavolo" | "conto" | "test" | "other";
 export type PrintTemplateKind = "COMANDA" | "CONTO";
+export type TableShape = "rect" | "circle" | "path";
+
+/** Scenery drawn on a floor map (walls, stages, labels…), in map units.
+ * Mirrors the jsonb contract documented in the floor_maps migration. */
+export type FloorMapElementStyle = "wall" | "area" | "arrow";
+export type FloorMapElement =
+  | { kind: "rect"; x: number; y: number; w: number; h: number; style?: FloorMapElementStyle }
+  | { kind: "circle"; cx: number; cy: number; r: number; style?: FloorMapElementStyle }
+  | {
+      kind: "ellipse";
+      cx: number;
+      cy: number;
+      rx: number;
+      ry: number;
+      rotate?: number;
+      label?: string;
+      style?: FloorMapElementStyle;
+    }
+  | { kind: "path"; d: string; style?: FloorMapElementStyle }
+  | {
+      kind: "text";
+      x: number;
+      y: number;
+      text: string;
+      size?: number;
+      rotate?: number;
+      anchor?: "start" | "middle" | "end";
+      font?: "serif" | "hand";
+    };
 
 export interface Database {
   public: {
@@ -22,6 +51,14 @@ export interface Database {
           capacity: number;
           status: TableStatus;
           created_at: string;
+          map_id: string | null;
+          shape: TableShape;
+          x: number | null;
+          y: number | null;
+          w: number | null;
+          h: number | null;
+          rotation: number;
+          path: string | null;
         };
         Insert: {
           id?: string;
@@ -29,12 +66,58 @@ export interface Database {
           capacity: number;
           status?: TableStatus;
           created_at?: string;
+          map_id?: string | null;
+          shape?: TableShape;
+          x?: number | null;
+          y?: number | null;
+          w?: number | null;
+          h?: number | null;
+          rotation?: number;
+          path?: string | null;
         };
         Update: {
           id?: string;
           name?: string;
           capacity?: number;
           status?: TableStatus;
+          created_at?: string;
+          map_id?: string | null;
+          shape?: TableShape;
+          x?: number | null;
+          y?: number | null;
+          w?: number | null;
+          h?: number | null;
+          rotation?: number;
+          path?: string | null;
+        };
+        Relationships: [];
+      };
+      floor_maps: {
+        Row: {
+          id: string;
+          name: string;
+          width: number;
+          height: number;
+          elements: FloorMapElement[];
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          width: number;
+          height: number;
+          elements?: FloorMapElement[];
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          width?: number;
+          height?: number;
+          elements?: FloorMapElement[];
+          sort_order?: number;
           created_at?: string;
         };
         Relationships: [];
@@ -905,6 +988,7 @@ export interface Database {
 
 // Convenience row aliases for app code
 export type RestaurantTable = Database["public"]["Tables"]["tables"]["Row"];
+export type FloorMap = Database["public"]["Tables"]["floor_maps"]["Row"];
 export type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];

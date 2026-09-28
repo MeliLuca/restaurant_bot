@@ -7,7 +7,14 @@ export type TableDisplayStatus = TableStatus | "ordered";
 
 export const STATUS_CONFIG: Record<
   TableDisplayStatus,
-  { labelKey: TranslationKey; card: string; badge: string; dot: string }
+  {
+    labelKey: TranslationKey;
+    card: string;
+    badge: string;
+    dot: string;
+    /** fill/stroke for the table's shape on the drawn floor map */
+    shape: string;
+  }
 > = {
   // Free table — blue.
   available: {
@@ -15,6 +22,7 @@ export const STATUS_CONFIG: Record<
     card: "border-blue-600/50 bg-blue-500/10 hover:bg-blue-500/20",
     badge: "bg-blue-600 text-white",
     dot: "bg-blue-600",
+    shape: "fill-blue-500/15 stroke-blue-600 group-hover:fill-blue-500/30",
   },
   // Seated but nothing ordered yet — yellow.
   occupied: {
@@ -22,6 +30,7 @@ export const STATUS_CONFIG: Record<
     card: "border-yellow-500/60 bg-yellow-400/15 hover:bg-yellow-400/25",
     badge: "bg-yellow-400 text-black",
     dot: "bg-yellow-400",
+    shape: "fill-yellow-400/40 stroke-yellow-500 group-hover:fill-yellow-400/60",
   },
   // Has at least one open order — red.
   ordered: {
@@ -29,6 +38,7 @@ export const STATUS_CONFIG: Record<
     card: "border-red-600/50 bg-red-500/10 hover:bg-red-500/20",
     badge: "bg-red-600 text-white",
     dot: "bg-red-600",
+    shape: "fill-red-500/25 stroke-red-600 group-hover:fill-red-500/40",
   },
   // Needs clearing — muddy brown to read as "dirty".
   dirty: {
@@ -36,6 +46,7 @@ export const STATUS_CONFIG: Record<
     card: "border-amber-800/50 bg-amber-800/15 hover:bg-amber-800/25",
     badge: "bg-amber-800 text-white",
     dot: "bg-amber-800",
+    shape: "fill-amber-800/30 stroke-amber-800 group-hover:fill-amber-800/45",
   },
 };
 

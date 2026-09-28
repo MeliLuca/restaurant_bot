@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -8,6 +8,8 @@ import {
   CalendarClock,
   CalendarPlus,
   ChevronDown,
+  LayoutGrid,
+  Map as MapIcon,
   RotateCcw,
   Search,
   ShoppingBag,
@@ -18,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NewDeliveryDialog } from "@/components/floor-plan/new-delivery-dialog";
 import { ReservationDialog } from "@/components/floor-plan/reservation-dialog";
+import { FloorMapView } from "@/components/floor-plan/floor-map-view";
 import { ReservationsPanel } from "@/components/floor-plan/reservations-panel";
 import { STATUS_CONFIG, type TableDisplayStatus } from "@/lib/floor/status";
 import { TableActionsDialog } from "@/components/floor-plan/table-actions-dialog";
@@ -41,6 +44,19 @@ const LEGEND: TableDisplayStatus[] = [
 ];
 
 // Status quick-filters (by stored status; "occupied" covers ordered tables too).
+/** Map vs grid is a per-device preference (a phone may prefer the grid). */
+const VIEW_STORAGE_KEY = "rms.floor.view";
+type FloorView = "map" | "grid";
+
+function readStoredView(): FloorView | null {
+  try {
+    const v = localStorage.getItem(VIEW_STORAGE_KEY);
+    return v === "map" || v === "grid" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 const STATUS_FILTERS: { value: TableStatus; labelKey: TranslationKey }[] = [
   { value: "available", labelKey: "floor.status.available" },
   { value: "occupied", labelKey: "floor.status.occupied" },
@@ -58,6 +74,7 @@ export default function FloorPlanPage() {
     takeaways,
     openOrders,
     links,
+    maps,
     loading,
     error,
     refresh,
@@ -83,6 +100,9 @@ export default function FloorPlanPage() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TableStatus | null>(null);
+  const [storedView, setStoredView] = useState<FloorView | null>(null);
+  const [activeMapId, setActiveMapId] = useState<string | null>(null);
+  useEffect(() => setStoredView(readStoredView()), []);
   const canReserve = usePermission("manage_reservations");
   const canTakeOrders = usePermission("take_orders");
 
@@ -104,6 +124,30 @@ export default function FloorPlanPage() {
       (statusFilter === null || t.status === statusFilter) &&
       selectedTagIds.every((id) => t.table_tags.some((tag) => tag.id === id)),
   );
+
+  // Default to the map whenever one exists; fall back to the grid otherwise.
+  const view: FloorView = maps.length === 0 ? "grid" : (storedView ?? "map");
+  const activeMap = maps.find((m) => m.id === activeMapId) ?? maps[0] ?? null;
+  const visibleIds = new Set(visibleTables.map((tb) => tb.id));
+  const mapTables = activeMap
+    ? tables.filter((tb) => tb.map_id === activeMap.id)
+    : [];
+  const dimmedOnMap = new Set(
+    mapTables.filter((tb) => !visibleIds.has(tb.id)).map((tb) => tb.id),
+  );
+  // Tables no map places (new ones, or a map was deleted) stay reachable.
+  const offMapTables = visibleTables.filter(
+    (tb) => tb.map_id === null || !maps.some((m) => m.id === tb.map_id),
+  );
+
+  function chooseView(v: FloorView) {
+    setStoredView(v);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, v);
+    } catch {
+      // private mode / blocked storage: the choice just won't persist
+    }
+  }
 
   function toggleTag(id: string) {
     setSelectedTagIds((ids) =>
@@ -185,6 +229,36 @@ export default function FloorPlanPage() {
             <div className="flex min-h-0 flex-1 flex-col gap-3">
               {/* Search + status filters + reservation actions */}
               <div className="flex flex-wrap items-center gap-2">
+                {maps.length > 0 && (
+                  <div
+                    role="group"
+                    aria-label={t("floor.viewAria")}
+                    className="flex h-11 items-center rounded-lg border p-1"
+                  >
+                    {(
+                      [
+                        ["map", MapIcon, "floor.viewMap"],
+                        ["grid", LayoutGrid, "floor.viewGrid"],
+                      ] as const
+                    ).map(([v, Icon, labelKey]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        aria-pressed={view === v}
+                        onClick={() => chooseView(v)}
+                        className={cn(
+                          "flex h-full items-center gap-1.5 rounded-md px-3 text-sm transition-colors",
+                          view === v
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-accent",
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {t(labelKey)}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -268,34 +342,89 @@ export default function FloorPlanPage() {
                 </div>
               )}
 
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                {loading ? (
-                  <div className="flex flex-wrap content-start gap-4">
-                    {Array.from({ length: 12 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="h-36 w-36 animate-pulse rounded-xl bg-muted"
-                      />
-                    ))}
+              {view === "map" && activeMap ? (
+                <div className="flex min-h-0 flex-1 flex-col gap-3">
+                  <div className="min-h-[320px] flex-1">
+                    <FloorMapView
+                      map={activeMap}
+                      tables={mapTables}
+                      splitsByTable={splitsByTable}
+                      linkedByTable={linkedByTable}
+                      dimmed={dimmedOnMap}
+                      onSelect={handleTableClick}
+                      toolbar={
+                        maps.length > 1 && (
+                          <div className="flex flex-wrap gap-2">
+                            {maps.map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                aria-pressed={m.id === activeMap.id}
+                                onClick={() => setActiveMapId(m.id)}
+                                className={cn(
+                                  "flex h-9 items-center rounded-full border px-3 text-sm transition-colors",
+                                  m.id === activeMap.id
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "text-muted-foreground hover:bg-accent",
+                                )}
+                              >
+                                {m.name}
+                              </button>
+                            ))}
+                          </div>
+                        )
+                      }
+                    />
                   </div>
-                ) : visibleTables.length === 0 ? (
-                  <p className="py-6 text-sm text-muted-foreground">
-                    {t("floor.noTablesMatch")}
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap content-start gap-4">
-                    {visibleTables.map((t) => (
-                      <TableCard
-                        key={t.id}
-                        table={t}
-                        splits={splitsByTable.get(t.id) ?? []}
-                        linkedTo={linkedByTable.get(t.id)}
-                        onSelect={handleTableClick}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+                  {offMapTables.length > 0 && (
+                    <div className="flex shrink-0 flex-col gap-2">
+                      <h2 className="text-sm font-medium text-muted-foreground">
+                        {t("floor.offMap")}
+                      </h2>
+                      <div className="flex gap-4 overflow-x-auto pb-1">
+                        {offMapTables.map((tb) => (
+                          <TableCard
+                            key={tb.id}
+                            table={tb}
+                            splits={splitsByTable.get(tb.id) ?? []}
+                            linkedTo={linkedByTable.get(tb.id)}
+                            onSelect={handleTableClick}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                  {loading ? (
+                    <div className="flex flex-wrap content-start gap-4">
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-36 w-36 animate-pulse rounded-xl bg-muted"
+                        />
+                      ))}
+                    </div>
+                  ) : visibleTables.length === 0 ? (
+                    <p className="py-6 text-sm text-muted-foreground">
+                      {t("floor.noTablesMatch")}
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap content-start gap-4">
+                      {visibleTables.map((t) => (
+                        <TableCard
+                          key={t.id}
+                          table={t}
+                          splits={splitsByTable.get(t.id) ?? []}
+                          linkedTo={linkedByTable.get(t.id)}
+                          onSelect={handleTableClick}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {reservationsExpanded && (

@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase/client";
+import { compareTableNames } from "@/lib/floor/maps";
 import type {
   Database,
   Ingredient,
@@ -52,10 +53,11 @@ export type TableWithTags = RestaurantTable & { table_tags: TableTag[] };
 export async function fetchTablesWithTags(): Promise<TableWithTags[]> {
   const { data, error } = await getSupabase()
     .from("tables")
-    .select("*, table_tags(*)")
-    .order("name");
+    .select("*, table_tags(*)");
   if (error) throw new Error(error.message);
-  return data as unknown as TableWithTags[];
+  return (data as unknown as TableWithTags[]).sort((a, b) =>
+    compareTableNames(a.name, b.name),
+  );
 }
 
 export async function createTable(

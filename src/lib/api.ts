@@ -13,6 +13,7 @@ import {
   previewItemsPaymentCents,
 } from "@/lib/pos/bill-preview";
 import type { VariationOption } from "@/lib/pos/variation-selection";
+import { compareTableNames } from "@/lib/floor/maps";
 import { getSupabase } from "@/lib/supabase/client";
 import type {
   Category,
@@ -34,10 +35,9 @@ import type { PrinterQueue, ReprintResult } from "@/lib/printing/queue";
 export async function fetchTables(): Promise<RestaurantTable[]> {
   const { data, error } = await getSupabase()
     .from("tables")
-    .select("*")
-    .order("name");
+    .select("*");
   if (error) throw new Error(error.message);
-  return data;
+  return data.sort((a, b) => compareTableNames(a.name, b.name));
 }
 
 export async function updateTableStatus(
