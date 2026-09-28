@@ -66,7 +66,7 @@ export async function createTable(
   tagIds: string[],
   /** Put the new table straight onto a floor map */
   placement?: { map_id: string } & MapTableGeometry,
-): Promise<void> {
+): Promise<string> {
   const { data, error } = await getSupabase()
     .from("tables")
     .insert({ name: name.trim(), capacity, ...placement })
@@ -74,6 +74,7 @@ export async function createTable(
     .single();
   if (error) throw new Error(error.message);
   if (tagIds.length > 0) await setTableTags(data.id, tagIds);
+  return data.id;
 }
 
 export async function updateTable(

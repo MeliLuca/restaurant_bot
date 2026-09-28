@@ -4,9 +4,17 @@
 // (floor-map-editor.tsx holds the state, gestures and toolbar).
 
 import { useEffect, useState } from "react";
-import { Copy, Trash2 } from "lucide-react";
+import { Copy, ImagePlus, Trash2 } from "lucide-react";
 import { Scenery } from "@/components/floor-map/floor-map-view";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type {
   FloorMapElement,
@@ -436,5 +444,191 @@ export function ElementPanel({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tracing photo + SVG import
+// ---------------------------------------------------------------------------
+
+export interface TracePhoto {
+  url: string;
+  /** natural pixel size, for fitting the sheet to the photo */
+  w: number;
+  h: number;
+}
+
+/**
+ * A photo of a paper plan shown under the drawing while editing. It lives
+ * only in this browser tab (an object URL) and is never saved.
+ */
+export function TracePanel({
+  photo,
+  opacity,
+  onPhoto,
+  onOpacity,
+  onFitSheet,
+}: {
+  photo: TracePhoto | null;
+  opacity: number;
+  onPhoto: (p: TracePhoto | null) => void;
+  onOpacity: (o: number) => void;
+  onFitSheet: () => void;
+}) {
+  const t = useT();
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = url;
+    try {
+      await img.decode();
+    } catch {
+      URL.revokeObjectURL(url);
+      return;
+    }
+    if (photo) URL.revokeObjectURL(photo.url);
+    onPhoto({ url, w: img.naturalWidth, h: img.naturalHeight });
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t pt-3">
+      <h3 className="text-sm font-medium">{t("floorMapEditor.traceTitle")}</h3>
+      {!photo ? (
+        <>
+          <p className="text-xs text-muted-foreground">{t("floorMapEditor.traceHelp")}</p>
+          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border text-sm hover:bg-accent">
+            <ImagePlus className="h-4 w-4" />
+            {t("floorMapEditor.tracePick")}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="sr-only"
+              onChange={(e) => {
+                void pick(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </>
+      ) : (
+        <>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {t("floorMapEditor.traceOpacity", { value: Math.round(opacity * 100) })}
+            <input
+              type="range"
+              min={10}
+              max={90}
+              step={5}
+              value={Math.round(opacity * 100)}
+              onChange={(e) => onOpacity(Number(e.target.value) / 100)}
+              className="h-8 accent-primary"
+            />
+          </label>
+          <Button variant="outline" className="h-10" onClick={onFitSheet}>
+            {t("floorMapEditor.traceFit")}
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-10"
+            onClick={() => {
+              URL.revokeObjectURL(photo.url);
+              onPhoto(null);
+            }}
+          >
+            {t("floorMapEditor.traceRemove")}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+export interface ImportOptions {
+  replaceScenery: boolean;
+  createMissing: boolean;
+  removeOthers: boolean;
+  fitSheet: boolean;
+}
+
+/** Summary of an SVG about to be imported, with what to do about it. */
+export function ImportDialog({
+  open,
+  summary,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  summary: {
+    tables: number;
+    matched: number;
+    missing: string[];
+    others: number;
+    elements: number;
+    size: string;
+    sizeDiffers: boolean;
+  } | null;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (o: ImportOptions) => void;
+}) {
+  const t = useT();
+  const [opts, setOpts] = useState<ImportOptions>({
+    replaceScenery: true,
+    createMissing: true,
+    removeOthers: false,
+    fitSheet: true,
+  });
+  const check = (key: keyof ImportOptions, labelKey: TranslationKey, vars?: Record<string, string | number>) => (
+    <label className="flex items-start gap-2 text-sm">
+      <input
+        type="checkbox"
+        checked={opts[key]}
+        onChange={(e) => setOpts((o) => ({ ...o, [key]: e.target.checked }))}
+        className="mt-0.5 h-4 w-4 accent-primary"
+      />
+      <span>{t(labelKey, vars)}</span>
+    </label>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("floorMapEditor.importTitle")}</DialogTitle>
+          <DialogDescription>{t("floorMapEditor.importDraftNote")}</DialogDescription>
+        </DialogHeader>
+        {summary && (
+          <div className="flex flex-col gap-3">
+            <ul className="list-disc space-y-1 pl-5 text-sm">
+              <li>{t("floorMapEditor.importTables", { count: summary.tables, matched: summary.matched })}</li>
+              {summary.missing.length > 0 && (
+                <li>
+                  {t("floorMapEditor.importMissing", { count: summary.missing.length })}{" "}
+                  <span className="text-muted-foreground">{summary.missing.slice(0, 12).join(", ")}{summary.missing.length > 12 ? "…" : ""}</span>
+                </li>
+              )}
+              <li>{t("floorMapEditor.importElements", { count: summary.elements })}</li>
+            </ul>
+            <div className="flex flex-col gap-2 rounded-lg border p-3">
+              {check("replaceScenery", "floorMapEditor.importReplaceScenery")}
+              {summary.missing.length > 0 && check("createMissing", "floorMapEditor.importCreateMissing")}
+              {summary.others > 0 && check("removeOthers", "floorMapEditor.importRemoveOthers", { count: summary.others })}
+              {summary.sizeDiffers && check("fitSheet", "floorMapEditor.importFitSheet", { size: summary.size })}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={busy}>
+            {t("common.cancel")}
+          </Button>
+          <Button onClick={() => onConfirm(opts)} disabled={busy}>
+            {busy ? t("floorMapEditor.importing") : t("floorMapEditor.importApply")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

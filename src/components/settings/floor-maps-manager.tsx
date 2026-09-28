@@ -346,11 +346,12 @@ export function FloorMapsManager({
             busy={busy}
             onCreate={(name, capacity, tagIds, shape) =>
               run(
-                () =>
-                  createTable(name, capacity, tagIds, {
+                async () => {
+                  await createTable(name, capacity, tagIds, {
                     map_id: map.id,
                     ...defaultPlacement(map, onMap, shape),
-                  }),
+                  });
+                },
                 t("floorMapsMgr.tableAddedToMap", { name, map: map.name }),
               )
             }

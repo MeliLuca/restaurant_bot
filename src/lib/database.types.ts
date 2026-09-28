@@ -972,6 +972,8 @@ export interface Database {
             path: string | null;
           }>)[];
           p_elements?: FloorMapElement[] | null;
+          p_width?: number | null;
+          p_height?: number | null;
         };
         Returns: undefined;
       };

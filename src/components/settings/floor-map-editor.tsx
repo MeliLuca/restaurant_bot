@@ -32,7 +32,10 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Circle,
+  FileDown,
+  FileUp,
   Grid3x3,
+  ImageDown,
   MapPinOff,
   Maximize,
   Minus,
@@ -55,7 +58,11 @@ import {
   EditorTable,
   ElementPanel,
   GeometryFields,
+  ImportDialog,
   SelectionHandles,
+  TracePanel,
+  type ImportOptions,
+  type TracePhoto,
 } from "@/components/settings/floor-map-editor-parts";
 import { TableRow, runAction } from "@/components/settings/tables-manager";
 import { Button } from "@/components/ui/button";
@@ -77,6 +84,8 @@ import {
   type Handle,
 } from "@/lib/floor/geometry";
 import {
+  MAP_MAX_SIZE,
+  MAP_MIN_SIZE,
   compareTableNames,
   defaultPlacement,
   geomOf,
@@ -91,9 +100,18 @@ import {
   resizeElement,
   type Box,
 } from "@/lib/floor/scenery";
+import {
+  downloadBlob,
+  estimateSeats,
+  mapToSvg,
+  parseMapSvg,
+  svgToPng,
+  type ImportedMap,
+} from "@/lib/floor/svg-io";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import {
+  createTable,
   setTableTags,
   updateTable,
   type TableWithTags,
@@ -106,6 +124,9 @@ type TablesDraft = Record<string, Geom | null>;
 interface Doc {
   tables: TablesDraft;
   elements: FloorMapElement[];
+  /** sheet size in map units (fit to a traced photo or an imported SVG) */
+  width: number;
+  height: number;
 }
 type Layer = "tables" | "scenery";
 type Tool = "select" | "wall" | "rect" | "circle" | "arrow" | "text";
@@ -137,7 +158,7 @@ interface FloorMapEditorProps {
 function initialDoc(map: FloorMap, tables: TableWithTags[]): Doc {
   const t: TablesDraft = {};
   for (const tb of tables) if (tb.map_id === map.id) t[tb.id] = geomOf(tb);
-  return { tables: t, elements: map.elements };
+  return { tables: t, elements: map.elements, width: map.width, height: map.height };
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -164,6 +185,10 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
   const [fit, setFit] = useState(0);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [photo, setPhoto] = useState<TracePhoto | null>(null);
+  const [photoOpacity, setPhotoOpacity] = useState(0.4);
+  const [imported, setImported] = useState<ImportedMap | null>(null);
+  const [importing, setImporting] = useState(false);
   const [gesture, setGestureState] = useState<Gesture | null>(null);
   // Pointer handlers read the ref: a move can arrive before React re-renders
   // with the gesture that pointerdown just started.
@@ -177,6 +202,8 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
 
   const draft = doc.tables;
   const elements = doc.elements;
+  const W = doc.width;
+  const H = doc.height;
   const byId = useMemo(() => new Map(tables.map((tb) => [tb.id, tb])), [tables]);
   const placedIds = Object.keys(draft)
     .filter((id) => draft[id] && byId.has(id))
@@ -272,14 +299,14 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
   const nudge = useCallback(
     (dx: number, dy: number) => {
       if (layer === "tables") {
-        updateSelected((g) => clampToMap(moveGeom(g, dx, dy), map.width, map.height));
+        updateSelected((g) => clampToMap(moveGeom(g, dx, dy), W, H));
       } else {
         applyElements((els) =>
           els.map((el, i) => (elSel.includes(i) ? moveElement(el, dx, dy) : el)),
         );
       }
     },
-    [layer, updateSelected, applyElements, elSel, map.width, map.height],
+    [layer, updateSelected, applyElements, elSel, W, H],
   );
 
   function align(mode: AlignMode) {
@@ -301,7 +328,7 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
       const prev = saved.tables[id] ?? (tb.map_id === map.id ? geomOf(tb) : null);
       const g =
         prev ??
-        (defaultPlacement(map, others, tb.shape === "circle" ? "circle" : "rect") as Geom);
+        (defaultPlacement({ width: W, height: H }, others, tb.shape === "circle" ? "circle" : "rect") as Geom);
       return { ...d, [id]: g };
     });
     setSelection([id]);
@@ -345,12 +372,12 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
     const el = boxRef.current;
     if (!el) return;
     const measure = () =>
-      setFit(0.98 * Math.min(el.clientWidth / map.width, el.clientHeight / map.height));
+      setFit(0.98 * Math.min(el.clientWidth / W, el.clientHeight / H));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [map.width, map.height]);
+  }, [W, H]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -633,10 +660,128 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
       const ids = gesture.kind === "move" ? gesture.ids : [gesture.id];
       for (const id of ids) {
         const g = next.tables[id];
-        if (g) next.tables[id] = clampToMap(g, map.width, map.height);
+        if (g) next.tables[id] = clampToMap(g, W, H);
       }
     }
     commit(gesture.start, next);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tracing photo, SVG import / export
+  // ---------------------------------------------------------------------------
+
+  const clampSize = (v: number) => Math.min(MAP_MAX_SIZE, Math.max(MAP_MIN_SIZE, Math.round(v)));
+
+  /** Give the sheet the photo's proportions (keeping its width). */
+  function fitSheetToPhoto() {
+    if (!photo) return;
+    apply((d) => ({ ...d, height: clampSize((d.width * photo.h) / photo.w) }));
+  }
+
+  async function pickSvg(file: File | undefined) {
+    if (!file) return;
+    try {
+      const parsed = parseMapSvg(await file.text());
+      if (parsed.tables.length === 0 && parsed.elements.length === 0) {
+        toast.error(t("floorMapEditor.importEmpty"));
+        return;
+      }
+      setImported(parsed);
+    } catch {
+      toast.error(t("floorMapEditor.importInvalid"));
+    }
+  }
+
+  const byName = useMemo(
+    () => new Map(tables.map((tb) => [tb.name.trim().toLowerCase(), tb])),
+    [tables],
+  );
+  const importSummary = useMemo(() => {
+    if (!imported) return null;
+    const names = new Set(imported.tables.map((it) => it.name.trim().toLowerCase()));
+    const missing = imported.tables.filter((it) => !byName.has(it.name.trim().toLowerCase())).map((it) => it.name);
+    return {
+      tables: imported.tables.length,
+      matched: imported.tables.length - missing.length,
+      missing,
+      others: placedIds.filter((id) => !names.has(byId.get(id)!.name.trim().toLowerCase())).length,
+      elements: imported.elements.length,
+      size: `${imported.width} × ${imported.height}`,
+      sizeDiffers: imported.width !== W || imported.height !== H,
+    };
+  }, [imported, byName, placedIds, byId, W, H]);
+
+  async function applyImport(o: ImportOptions) {
+    if (!imported) return;
+    setImporting(true);
+    try {
+      // Missing tables must exist before the draft can place them: create
+      // them now (off the map), the layout itself still waits for "Salva".
+      const ids = new Map<string, string>();
+      const seen = new Set<string>();
+      let created = 0;
+      for (const it of imported.tables) {
+        const key = it.name.trim().toLowerCase();
+        if (seen.has(key)) continue; // first occurrence wins
+        seen.add(key);
+        const existing = byName.get(key);
+        if (existing) ids.set(key, existing.id);
+        else if (o.createMissing) {
+          const seats = it.seats ?? estimateSeats(it.geom.shape, it.geom.w, it.geom.h);
+          ids.set(key, await createTable(it.name.trim(), seats, []));
+          created++;
+        }
+      }
+      if (created > 0) await onChanged();
+
+      const width = o.fitSheet ? clampSize(imported.width) : W;
+      const height = o.fitSheet ? clampSize(imported.height) : H;
+      apply((d) => {
+        const next: TablesDraft = { ...d.tables };
+        if (o.removeOthers) for (const id of Object.keys(next)) next[id] = null;
+        for (const it of imported.tables) {
+          const id = ids.get(it.name.trim().toLowerCase());
+          if (id) next[id] = clampToMap(it.geom, width, height);
+        }
+        return {
+          tables: next,
+          elements: o.replaceScenery ? imported.elements : [...d.elements, ...imported.elements],
+          width,
+          height,
+        };
+      });
+      setImported(null);
+      setSelection([]);
+      setElSel([]);
+      toast.success(t("floorMapEditor.imported"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function exportTables() {
+    return placedIds.map((id) => ({
+      name: byId.get(id)!.name,
+      capacity: byId.get(id)!.capacity,
+      geom: draft[id]!,
+    }));
+  }
+  const fileBase = map.name.trim().replace(/[^\w-]+/g, "_") || "mappa";
+
+  function exportSvg() {
+    const svg = mapToSvg({ name: map.name, width: W, height: H }, elements, exportTables());
+    downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${fileBase}.svg`);
+  }
+
+  async function exportPng() {
+    try {
+      const svg = mapToSvg({ name: map.name, width: W, height: H }, elements, exportTables());
+      downloadBlob(await svgToPng(svg, W, H, 2), `${fileBase}.png`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -649,13 +794,21 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
       .filter((id) => !same(saved.tables[id] ?? null, draft[id] ?? null))
       .map((id) => ({ id, geom: draft[id] ?? null }));
     const sceneryChanged = !same(saved.elements, elements);
-    if (changes.length === 0 && !sceneryChanged) return;
+    const sizeChanged = saved.width !== W || saved.height !== H;
+    if (changes.length === 0 && !sceneryChanged && !sizeChanged) return;
     setSaving(true);
     try {
-      await saveFloorMapLayout(map.id, changes, sceneryChanged ? elements : undefined);
+      await saveFloorMapLayout(
+        map.id,
+        changes,
+        sceneryChanged ? elements : undefined,
+        sizeChanged ? { width: W, height: H } : undefined,
+      );
       const clean: Doc = {
         tables: Object.fromEntries(Object.entries(draft).filter(([, g]) => g !== null)),
         elements,
+        width: W,
+        height: H,
       };
       setSaved(clean);
       setDoc(clean);
@@ -809,6 +962,25 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
             </span>
           ))
         )}
+        {divider}
+        <label
+          title={t("floorMapEditor.importSvg")}
+          aria-label={t("floorMapEditor.importSvg")}
+          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
+        >
+          <FileUp className="h-4 w-4" />
+          <input
+            type="file"
+            accept=".svg,image/svg+xml"
+            className="sr-only"
+            onChange={(e) => {
+              void pickSvg(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {toolButton("floorMapEditor.exportSvg", <FileDown className="h-4 w-4" />, exportSvg)}
+        {toolButton("floorMapEditor.exportPng", <ImageDown className="h-4 w-4" />, () => void exportPng())}
         <div className="ml-auto flex gap-1">
           {toolButton("floorMap.zoomOut", <Minus className="h-4 w-4" />, () => setStep((s) => Math.max(0, s - 1)), step === 0)}
           {toolButton("floorMap.zoomFit", <Maximize className="h-4 w-4" />, () => setStep(0), step === 0)}
@@ -822,9 +994,9 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
           {fit > 0 && (
             <svg
               ref={svgRef}
-              viewBox={`0 0 ${map.width} ${map.height}`}
-              width={map.width * scale}
-              height={map.height * scale}
+              viewBox={`0 0 ${W} ${H}`}
+              width={W * scale}
+              height={H * scale}
               className={cn(
                 "mx-auto block touch-none select-none",
                 !onTables && tool !== "select" && "cursor-crosshair",
@@ -840,9 +1012,19 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
                 </pattern>
               </defs>
               {/* sheet: marquee selection, or drawing with a scenery tool */}
-              <rect width={map.width} height={map.height} className="fill-background" onPointerDown={onSheetDown} />
+              <rect width={W} height={H} className="fill-background" onPointerDown={onSheetDown} />
+              {photo && (
+                <image
+                  href={photo.url}
+                  width={W}
+                  height={H}
+                  preserveAspectRatio="xMidYMid meet"
+                  opacity={photoOpacity}
+                  className="pointer-events-none"
+                />
+              )}
               {snap && (
-                <rect width={map.width} height={map.height} fill="url(#editor-grid)" className="pointer-events-none" />
+                <rect width={W} height={H} fill="url(#editor-grid)" className="pointer-events-none" />
               )}
 
               <g className={cn(onTables && "opacity-70")}>
@@ -1044,8 +1226,23 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
               </ul>
             </div>
           )}
+          <TracePanel
+            photo={photo}
+            opacity={photoOpacity}
+            onPhoto={setPhoto}
+            onOpacity={setPhotoOpacity}
+            onFitSheet={fitSheetToPhoto}
+          />
         </aside>
       </div>
+      <ImportDialog
+        key={imported ? "open" : "closed"}
+        open={!!imported}
+        summary={importSummary}
+        busy={importing}
+        onCancel={() => setImported(null)}
+        onConfirm={(o) => void applyImport(o)}
+      />
     </div>
   );
 
@@ -1060,7 +1257,7 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
             <GeometryFields
               geom={singleGeom}
               onChange={(g) =>
-                applyTables((d) => ({ ...d, [single!]: clampToMap(g, map.width, map.height) }))
+                applyTables((d) => ({ ...d, [single!]: clampToMap(g, W, H) }))
               }
             />
             {singleGeom.shape !== "path" ? (

@@ -158,6 +158,8 @@ export async function saveFloorMapLayout(
   changes: { id: string; geom: Geom | null }[],
   /** The map's whole new scenery; omit to leave it untouched */
   elements?: FloorMapElement[],
+  /** New sheet size; omit to keep it */
+  size?: { width: number; height: number },
 ): Promise<void> {
   const { error } = await getSupabase().rpc("save_floor_map_layout", {
     p_map_id: mapId,
@@ -165,6 +167,8 @@ export async function saveFloorMapLayout(
       geom ? { id, placed: true, ...geom } : { id, placed: false },
     ),
     p_elements: elements ?? null,
+    p_width: size?.width ?? null,
+    p_height: size?.height ?? null,
   });
   if (error) throw new Error(error.message);
 }

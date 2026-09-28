@@ -64,7 +64,9 @@ export function TablesManager({ tables, tags, onChanged }: TablesManagerProps) {
       return;
     }
     await run(
-      () => createTable(name, capacity, []),
+      async () => {
+        await createTable(name, capacity, []);
+      },
       t("tablesMgr.tableAdded", { name }),
     );
     setNewName("");
