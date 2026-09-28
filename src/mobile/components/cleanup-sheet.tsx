@@ -17,8 +17,11 @@ export function CleanupSheet({
   tableName,
   busy,
   onChoose,
+  moved = false,
 }: {
   tableName: string;
+  /** Emptied by a cambio tavolo rather than a checkout */
+  moved?: boolean;
   busy: boolean;
   onChoose: (status: TableStatus) => void;
 }) {
@@ -27,7 +30,7 @@ export function CleanupSheet({
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50">
       <div className="rounded-t-2xl bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <h2 className="text-lg font-semibold">
-          {t("pos.tablePaid", { name: tableName })}
+          {t(moved ? "move.tableEmpty" : "pos.tablePaid", { name: tableName })}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {t("pos.howLeaveTable")}

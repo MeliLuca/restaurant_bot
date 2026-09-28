@@ -3,7 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ChefHat, Plus, Printer, TriangleAlert, Users, Wallet } from "lucide-react";
+import {
+  ArrowRightLeft,
+  ChefHat,
+  Plus,
+  Printer,
+  TriangleAlert,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
 import { useOrderActions } from "@/hooks/use-order-actions";
 import { type OrderItemWithName, updateOrderCovers } from "@/lib/api";
@@ -297,6 +305,16 @@ export function BillView({ orderId }: { orderId: string }) {
             </div>
           )}
         </div>
+
+        {canTakeOrders && order.order_type === "dine_in" && order.table_id && (
+          <Link
+            href={mRoutes.move(orderId)}
+            className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-xl border text-base font-semibold"
+          >
+            <ArrowRightLeft className="h-5 w-5" />
+            {t("move.button")}
+          </Link>
+        )}
       </div>
 
       <div className="relative flex shrink-0 gap-2 border-t bg-card p-3">

@@ -20,6 +20,7 @@ export const mRoutes = {
   bills: () => `${MOBILE_ROOT}/bills`,
   bill: (orderId: string) => `${MOBILE_ROOT}/o/${orderId}`,
   pay: (orderId: string) => `${MOBILE_ROOT}/o/${orderId}/pay`,
+  move: (orderId: string) => `${MOBILE_ROOT}/o/${orderId}/move`,
   takeaway: () => `${MOBILE_ROOT}/takeaway`,
   // take-away order taking is addressed by the order, which always exists by
   // then: a take-away is created the moment it is named

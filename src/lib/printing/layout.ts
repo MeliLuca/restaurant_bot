@@ -83,7 +83,7 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 }
 
-function targetLabel(meta: TicketMeta): string {
+export function targetLabel(meta: TicketMeta): string {
   if (meta.tableName !== null) {
     return `TAVOLO ${meta.tableName}${meta.subtable ? `/${meta.subtable}` : ""}`;
   }
@@ -320,6 +320,15 @@ export function layoutTicket(
   const values = placeholderValues(ticket, company);
   const variant = ticket.kind === "CASSA" ? ticket.variant : null;
   const money = ticket.kind === "CASSA" && template.kind === "CONTO";
+
+  if (ticket.kind !== "CASSA" && ticket.banner?.length) {
+    const [title, ...rest] = ticket.banner;
+    const big: LineStyle = { ...NORMAL, align: "center", width: 2, height: 2, bold: true, invert: true };
+    const sub: LineStyle = { ...NORMAL, align: "center", height: 2, bold: true };
+    b.paragraph(title, big, null);
+    for (const line of rest) b.paragraph(line, sub, null);
+    b.blank(1, null);
+  }
 
   for (const block of template.blocks) {
     if (!isVisible(block, ticket, variant)) continue;

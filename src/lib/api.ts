@@ -788,6 +788,17 @@ export function printPartialReceipt(
   return postPrint("/api/print/partial", { orderId, orderItemIds, total });
 }
 
+/** Fire the kitchen's "CAMBIO TAVOLO" notice: production slips for the moved
+ * lines only, under the target's table, with `from` (e.g. "TAVOLO 3") in the
+ * banner so the runner knows where the dishes used to go. */
+export function printTransferSlips(
+  orderId: string,
+  orderItemIds: string[],
+  from: string,
+): Promise<PrintJobResult[]> {
+  return postPrint("/api/print/transfer", { orderId, orderItemIds, from });
+}
+
 /** Fire a sample ticket at one printer (admin panel "Test print"). With
  * `draft`, the template editor's unsaved template is printed instead of the
  * printer's own one. */
@@ -1137,4 +1148,69 @@ export async function splitCopertoPerGuest(orderId: string): Promise<boolean> {
   // No-op by construction, but keeps stored totals authoritative.
   await recomputeOrderTotals(orderId);
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Cambio tavolo (move a bill, or part of it, to another table / split)
+// ---------------------------------------------------------------------------
+
+export interface MoveResult {
+  /** The bill the lines now live on */
+  orderId: string;
+  /** Moved lines as they sit on the target (for the kitchen notice) */
+  movedItemIds: string[];
+  /** The source bill left its table (moved whole, or merged and cancelled) */
+  sourceClosed: boolean;
+  /** The source table has no open bill left: ask dirty vs available */
+  tableFreed: boolean;
+}
+
+/**
+ * Move `items` (line id → quantity) off an open dine-in bill onto the
+ * (table, split) target, creating its bill if needed. The move itself is one
+ * DB transaction (move_order_items, which holds the rules); what follows here
+ * is the same bookkeeping every other write does — coperto re-sync on a merge
+ * (covers were added up) and stored totals on both bills.
+ */
+export async function moveOrderItems(
+  fromOrderId: string,
+  items: Array<{ id: string; quantity: number }>,
+  toTableId: string,
+  toSubtable: string | null,
+  userId: string | null,
+): Promise<MoveResult> {
+  const sb = getSupabase();
+  const { data: source, error: srcError } = await sb
+    .from("orders")
+    .select("table_id")
+    .eq("id", fromOrderId)
+    .single();
+  if (srcError) throw new Error(srcError.message);
+
+  const { data, error } = await sb.rpc("move_order_items", {
+    p_from_order: fromOrderId,
+    p_items: items,
+    p_to_table: toTableId,
+    p_to_sub: toSubtable,
+    p_user: userId,
+  });
+  if (error) throw new Error(error.message);
+
+  if (data.covers != null) await syncCoperto(data.order_id, data.covers);
+  await recomputeOrderTotals(data.order_id);
+  if (!data.source_closed) await recomputeOrderTotals(fromOrderId);
+
+  const fromTable = source.table_id;
+  const tableFreed =
+    data.source_closed &&
+    fromTable !== null &&
+    fromTable !== toTableId &&
+    (await fetchOpenOrdersForTable(fromTable)).length === 0;
+
+  return {
+    orderId: data.order_id,
+    movedItemIds: data.moved_item_ids,
+    sourceClosed: data.source_closed,
+    tableFreed,
+  };
 }

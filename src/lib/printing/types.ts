@@ -69,6 +69,9 @@ export interface ProductionTicket {
   meta: TicketMeta;
   company: RestaurantSettings; // for company placeholders on the slip
   lines: Array<Pick<TicketLine, "quantity" | "name" | "modifiers">>;
+  /** Printed above the template, whatever the template says — e.g. the
+   * "CAMBIO TAVOLO" notice, which must never be lost to a custom layout */
+  banner?: string[];
 }
 
 export type Ticket = CassaTicket | ProductionTicket;

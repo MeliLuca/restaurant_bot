@@ -863,6 +863,22 @@ export interface Database {
         Args: { p_table: string; p_sub: string | null };
         Returns: undefined;
       };
+      move_order_items: {
+        Args: {
+          p_from_order: string;
+          p_items: { id: string; quantity: number }[];
+          p_to_table: string;
+          p_to_sub: string | null;
+          p_user: string | null;
+        };
+        Returns: {
+          order_id: string;
+          moved_item_ids: string[];
+          merged: boolean;
+          source_closed: boolean;
+          covers: number | null;
+        };
+      };
     };
     Enums: {
       table_status: TableStatus;

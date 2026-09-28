@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
+  ArrowRightLeft,
   Check,
   ChefHat,
   CreditCard,
@@ -35,6 +36,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
+import { MoveBillForm, type MoveDone } from "@/components/order/move-bill-form";
 import {
   createDeliveryOrder,
   fetchDeliveryLabels,
@@ -185,6 +187,8 @@ export function TicketPanel({
   const [cleanup, setCleanup] = useState<{
     tableId: string;
     tableName: string;
+    /** Emptied by a cambio tavolo rather than a checkout */
+    moved?: boolean;
   } | null>(null);
 
   // Send / checkout / amend / price-override / pre-receipt are shared with the
@@ -231,6 +235,24 @@ export function TicketPanel({
   const busy = actionsBusy || panelBusy;
 
   const [linkOpen, setLinkOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const canTakeOrders = usePermission("take_orders");
+
+  // After a cambio tavolo: follow the bill when it left this target entirely,
+  // and ask dirty-vs-available when its table is now empty.
+  async function handleMoved(done: MoveDone) {
+    setMoveOpen(false);
+    const fromTableId = tableId;
+    const fromTableName = tableName;
+    if (done.result.sourceClosed) {
+      setTable(done.tableId, done.tableName);
+      setSubtable(done.subtable);
+    }
+    await onOrderChanged();
+    if (done.result.tableFreed && fromTableId) {
+      setCleanup({ tableId: fromTableId, tableName: fromTableName ?? "", moved: true });
+    }
+  }
   // Open bills on linked tables, found right before a checkout / split:
   // the cashier confirms (or jumps to one of them) before `action` runs.
   const [linkWarning, setLinkWarning] = useState<{
@@ -465,6 +487,17 @@ export function TicketPanel({
                         : t("links.link")}
                     </span>
                   </button>
+                  {openOrder && canTakeOrders && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setMoveOpen(true)}
+                      className="flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium hover:bg-accent disabled:opacity-50"
+                    >
+                      <ArrowRightLeft className="h-4 w-4 shrink-0" />
+                      {t("move.button")}
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -862,6 +895,7 @@ export function TicketPanel({
                   <Split className="mr-2 h-4 w-4" /> {t("pos.splitBillBtn")}
                 </Button>
               )}
+
             </div>
           )}
           {canCheckout && (
@@ -906,6 +940,29 @@ export function TicketPanel({
           />
         </DialogContent>
       </Dialog>
+
+      {openOrder && mode === "table" && (
+        <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
+          <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col">
+            <DialogHeader>
+              <DialogTitle>
+                {t("move.title", { name: targetLabel ?? "" })}
+              </DialogTitle>
+              <DialogDescription>{t("move.desc")}</DialogDescription>
+            </DialogHeader>
+            {moveOpen && (
+              <MoveBillForm
+                bill={openOrder}
+                tableName={tableName ?? ""}
+                tables={tables}
+                pendingCount={lines.length}
+                onDone={(d) => void handleMoved(d)}
+                onCancel={() => setMoveOpen(false)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
 
       <PriceEditDialog
         target={priceEdit}
@@ -974,7 +1031,9 @@ export function TicketPanel({
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              {t("pos.tablePaid", { name: cleanup?.tableName ?? "" })}
+              {t(cleanup?.moved ? "move.tableEmpty" : "pos.tablePaid", {
+                name: cleanup?.tableName ?? "",
+              })}
             </DialogTitle>
             <DialogDescription>{t("pos.howLeaveTable")}</DialogDescription>
           </DialogHeader>
