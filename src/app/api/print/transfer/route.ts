@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     ).map((p) =>
       p.ticket.kind === "CASSA" ? p : { ...p, ticket: { ...p.ticket, banner } },
     );
-    const jobs = await dispatchPayloads(ctx.order.id, payloads);
+    const jobs = await dispatchPayloads(ctx.order.id, payloads, "cambio_tavolo");
     return NextResponse.json({ jobs });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Print dispatch failed";

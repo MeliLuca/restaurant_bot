@@ -8,7 +8,8 @@ export type ReservationStatus = "booked" | "seated" | "cancelled" | "no_show";
 export type PrinterType = "CASSA" | "CUCINA" | "BAR";
 export type PaymentKind = "even" | "items";
 export type PaperSize = "80mm" | "58mm";
-export type PrintJobStatus = "queued" | "sent" | "failed";
+export type PrintJobStatus = "queued" | "sent" | "failed" | "held" | "discarded";
+export type PrintJobKind = "comanda" | "cambio_tavolo" | "conto" | "test" | "other";
 export type PrintTemplateKind = "COMANDA" | "CONTO";
 
 export interface Database {
@@ -757,6 +758,9 @@ export interface Database {
           last_error: string | null;
           created_at: string;
           sent_at: string | null;
+          kind: PrintJobKind;
+          label: string | null;
+          hold_reason: string | null;
         };
         Insert: {
           id?: string;
@@ -768,6 +772,9 @@ export interface Database {
           last_error?: string | null;
           created_at?: string;
           sent_at?: string | null;
+          kind?: PrintJobKind;
+          label?: string | null;
+          hold_reason?: string | null;
         };
         Update: {
           id?: string;
@@ -779,6 +786,9 @@ export interface Database {
           last_error?: string | null;
           created_at?: string;
           sent_at?: string | null;
+          kind?: PrintJobKind;
+          label?: string | null;
+          hold_reason?: string | null;
         };
         Relationships: [
           {

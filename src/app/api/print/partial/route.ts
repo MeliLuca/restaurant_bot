@@ -64,7 +64,7 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    const jobs = await dispatchPayloads(ctx.order.id, [payload]);
+    const jobs = await dispatchPayloads(ctx.order.id, [payload], "conto");
     return NextResponse.json({ jobs });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Print dispatch failed";

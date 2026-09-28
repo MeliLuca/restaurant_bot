@@ -10,6 +10,7 @@ import {
   type MoveResult,
   type OpenOrder,
 } from "@/lib/api";
+import { warnOnSlipFailures } from "@/components/printing/print-warnings";
 import { formatMoney } from "@/lib/constants";
 import type { Order, RestaurantTable } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
@@ -159,14 +160,7 @@ export function MoveBillForm({
             jobs.reason instanceof Error ? jobs.reason.message : t("pos.printingFailed"),
           );
         } else {
-          const failed = jobs.value.filter((j) => !j.ok);
-          if (failed.length > 0) {
-            toast.warning(
-              t("pos.printerOffline", {
-                printers: failed.map((f) => f.printerName).join(", "),
-              }),
-            );
-          }
+          warnOnSlipFailures(jobs.value, t);
         }
       }
       toast.success(t("move.moved", { count: selectedCount, name: destLabel }));

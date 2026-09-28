@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       ctx.settings,
       ctx.meta,
     );
-    const jobs = await dispatchPayloads(ctx.order.id, payloads);
+    const jobs = await dispatchPayloads(ctx.order.id, payloads, "comanda");
     return NextResponse.json({ jobs });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Print dispatch failed";

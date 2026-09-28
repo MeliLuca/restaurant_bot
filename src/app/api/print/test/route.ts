@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       service,
     });
 
-    const jobs = await dispatchPayloads(null, [{ printer, ticket, template }]);
+    const jobs = await dispatchPayloads(null, [{ printer, ticket, template }], "test");
     return NextResponse.json({ jobs });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Print dispatch failed";

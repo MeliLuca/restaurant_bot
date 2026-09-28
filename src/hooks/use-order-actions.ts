@@ -15,6 +15,7 @@ import {
   type PrintJobResult,
   type SentRound,
 } from "@/lib/api";
+import { warnOnSlipFailures } from "@/components/printing/print-warnings";
 import { formatMoney } from "@/lib/constants";
 import { fetchLinkedOpenBills, type LinkedBill } from "@/lib/floor/links";
 import { useT } from "@/lib/i18n/use-translation";
@@ -122,14 +123,7 @@ export function useOrderActions({
       );
       return;
     }
-    const failed = jobs.value.filter((j) => !j.ok);
-    if (failed.length > 0) {
-      toast.warning(
-        t("pos.printerOffline", {
-          printers: failed.map((f) => f.printerName).join(", "),
-        }),
-      );
-    }
+    warnOnSlipFailures(jobs.value, t);
   }
 
   async function printRound(round: SentRound) {

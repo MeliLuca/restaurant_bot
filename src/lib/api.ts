@@ -28,6 +28,8 @@ import type {
   TableStatus,
 } from "@/lib/database.types";
 import type { MenuItemView } from "@/lib/menu-display";
+import type { HoldReason } from "@/lib/printing/dispatch";
+import type { PrinterQueue, ReprintResult } from "@/lib/printing/queue";
 
 export async function fetchTables(): Promise<RestaurantTable[]> {
   const { data, error } = await getSupabase()
@@ -741,6 +743,8 @@ export interface PrintJobResult {
   printerName: string;
   ok: boolean;
   error?: string;
+  /** Set when a comanda couldn't print and was parked in the printer's queue */
+  held?: HoldReason;
 }
 
 async function postPrint(
@@ -811,6 +815,44 @@ export function printTest(
   },
 ): Promise<PrintJobResult[]> {
   return postPrint("/api/print/test", { printerId, ...draft });
+}
+
+/** Held comande per printer; `probe` also asks each printer if it's back. */
+export async function fetchPrintQueues(probe: boolean): Promise<PrinterQueue[]> {
+  const res = await fetch(`/api/print/queue${probe ? "?probe=1" : ""}`, {
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error ?? "Print service unavailable");
+  return data.queues;
+}
+
+/** Reprint the given held comande of one printer, oldest first. */
+export async function reprintHeldJobs(
+  printerId: string,
+  jobIds: string[],
+): Promise<ReprintResult> {
+  const res = await fetch("/api/print/queue/reprint", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ printerId, jobIds }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error ?? "Print service unavailable");
+  return data;
+}
+
+/** Drop held comande without printing them. */
+export async function discardHeldJobs(jobIds: string[]): Promise<void> {
+  const res = await fetch("/api/print/queue/discard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobIds }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ?? "Print service unavailable");
+  }
 }
 
 /**

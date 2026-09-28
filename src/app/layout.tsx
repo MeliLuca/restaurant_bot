@@ -6,6 +6,7 @@ import { ChatListener } from "@/components/chat/chat-listener";
 import { LangSync } from "@/components/layout/lang-sync";
 import { DeviceRedirect } from "@/components/layout/device-redirect";
 import { AppShell } from "@/components/layout/app-shell";
+import { PrintQueueWatcher } from "@/components/printing/print-queue-watcher";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -50,6 +51,7 @@ export default function RootLayout({
         <DeviceRedirect />
         <AuthGate>
           <ChatListener />
+          <PrintQueueWatcher />
           <AppShell>{children}</AppShell>
         </AuthGate>
         <Toaster richColors position="top-center" />
