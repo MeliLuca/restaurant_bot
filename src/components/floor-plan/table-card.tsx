@@ -1,6 +1,6 @@
 "use client";
 
-import { Users } from "lucide-react";
+import { Link2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
@@ -10,13 +10,20 @@ interface TableCardProps {
   table: RestaurantTable;
   /** Labels of this table's open orders: split names, null = whole table */
   splits: (string | null)[];
+  /** Names of linked tables/splits (empty = not linked) */
+  linkedTo?: string[];
   onSelect: (table: RestaurantTable) => void;
 }
 
 /** Max split chips shown before collapsing the rest into an "…" chip */
 const MAX_SPLIT_CHIPS = 2;
 
-export function TableCard({ table, splits, onSelect }: TableCardProps) {
+export function TableCard({
+  table,
+  splits,
+  linkedTo = [],
+  onSelect,
+}: TableCardProps) {
   const t = useT();
   // An occupied table with an open order reads as "ordered" (red).
   const status = STATUS_CONFIG[displayStatus(table.status, splits.length > 0)];
@@ -28,11 +35,21 @@ export function TableCard({ table, splits, onSelect }: TableCardProps) {
       type="button"
       onClick={() => onSelect(table)}
       className={cn(
-        "flex h-36 w-36 shrink-0 grow-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 p-3 transition-colors",
+        "relative flex h-36 w-36 shrink-0 grow-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 p-3 transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         status.card,
       )}
     >
+      {linkedTo.length > 0 && (
+        <span
+          title={linkedTo.join(", ")}
+          aria-label={`${t("links.badgeAria")}: ${linkedTo.join(", ")}`}
+          className="absolute right-1.5 top-1.5 flex max-w-[5.5rem] items-center gap-0.5 rounded-full bg-background/80 px-1.5 py-px text-[10px] font-semibold text-foreground/80"
+        >
+          <Link2 className="h-3 w-3 shrink-0" />
+          <span className="truncate">{linkedTo.join(", ")}</span>
+        </span>
+      )}
       <span className="text-2xl font-bold">{table.name}</span>
       <span className="flex items-center gap-1 text-sm text-muted-foreground">
         <Users className="h-4 w-4" />

@@ -6,9 +6,10 @@ import {
   fetchOpenTakeaways,
   fetchTodayReservations,
 } from "@/lib/api";
+import { fetchTableLinks } from "@/lib/floor/links";
 import { fetchTablesWithTags, type TableWithTags } from "@/lib/settings-api";
 import { getSupabase } from "@/lib/supabase/client";
-import type { Order, Reservation } from "@/lib/database.types";
+import type { Order, Reservation, TableLink } from "@/lib/database.types";
 
 /** Poll cadence when the realtime websocket is down (mirrors chat-store) */
 const POLL_INTERVAL_MS = 15_000;
@@ -22,6 +23,8 @@ interface FloorData {
   takeaways: Order[];
   /** Open dine-in orders across all tables (split badges) */
   openOrders: Order[];
+  /** Linked-table members (🔗 badges) */
+  links: TableLink[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -32,21 +35,24 @@ export function useFloorData(): FloorData {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [takeaways, setTakeaways] = useState<Order[]>([]);
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
+  const [links, setLinks] = useState<TableLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [t, r, ta, oo] = await Promise.all([
+      const [t, r, ta, oo, li] = await Promise.all([
         fetchTablesWithTags(),
         fetchTodayReservations(),
         fetchOpenTakeaways(),
         fetchOpenDineInOrders(),
+        fetchTableLinks(),
       ]);
       setTables(t);
       setReservations(r);
       setTakeaways(ta);
       setOpenOrders(oo);
+      setLinks(li);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load floor data");
@@ -83,6 +89,11 @@ export function useFloorData(): FloorData {
         { event: "*", schema: "public", table: "orders" },
         debouncedRefresh,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "table_links" },
+        debouncedRefresh,
+      )
       .subscribe((status) => {
         realtimeUp.current = status === "SUBSCRIBED";
       });
@@ -106,5 +117,14 @@ export function useFloorData(): FloorData {
     };
   }, [refresh]);
 
-  return { tables, reservations, takeaways, openOrders, loading, error, refresh };
+  return {
+    tables,
+    reservations,
+    takeaways,
+    openOrders,
+    links,
+    loading,
+    error,
+    refresh,
+  };
 }

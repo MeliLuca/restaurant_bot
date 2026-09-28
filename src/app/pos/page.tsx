@@ -12,6 +12,7 @@ import { TicketPanel } from "@/components/pos/ticket-panel";
 import { useMenuData } from "@/hooks/use-menu-data";
 import { useMenuSearch, useOrderedCounts } from "@/hooks/use-menu-search";
 import { useOpenOrder } from "@/hooks/use-open-order";
+import { useTableLinks } from "@/hooks/use-table-links";
 import { makeMenuLabeller, type MenuItemView } from "@/lib/menu-display";
 import { formatMoney } from "@/lib/constants";
 import { calcTotals } from "@/lib/money";
@@ -55,6 +56,7 @@ export default function PosPage() {
     onScrolledToCategory,
   } = useMenuSearch(items, categories);
   const orderedCounts = useOrderedCounts();
+  const { links, refresh: refreshLinks } = useTableLinks();
 
   // Phone layout: the ticket lives in a bottom sheet instead of the sidebar
   const [ticketOpen, setTicketOpen] = useState(false);
@@ -208,6 +210,8 @@ export default function PosPage() {
             openTakeaways={openTakeaways}
             variations={variations}
             onOrderChanged={refreshOrder}
+            links={links}
+            onLinksChanged={refreshLinks}
           />
         </SheetContent>
       </Sheet>
@@ -221,6 +225,8 @@ export default function PosPage() {
           openTakeaways={openTakeaways}
           variations={variations}
           onOrderChanged={refreshOrder}
+          links={links}
+          onLinksChanged={refreshLinks}
         />
       </div>
     </div>

@@ -16,6 +16,7 @@ import {
   type SentRound,
 } from "@/lib/api";
 import { formatMoney } from "@/lib/constants";
+import { fetchLinkedOpenBills, type LinkedBill } from "@/lib/floor/links";
 import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -47,6 +48,9 @@ interface OrderActions {
   needsCovers: boolean;
   send: () => Promise<boolean>;
   checkout: () => Promise<CheckoutOutcome>;
+  /** Open bills on tables linked to this one — asked right before paying, so
+   * the UI can warn. Empty for take-aways, unlinked tables, or on error. */
+  linkedOpenBills: () => Promise<LinkedBill[]>;
   amendSentItem: (orderItemId: string, quantity: number) => Promise<void>;
   setSentPrice: (
     orderItemId: string,
@@ -230,6 +234,19 @@ export function useOrderActions({
     }
   }
 
+  async function linkedOpenBills(): Promise<LinkedBill[]> {
+    if (mode !== "table" || !tableId) return [];
+    try {
+      return await fetchLinkedOpenBills(
+        { tableId, subtable },
+        openOrder?.order.id ?? null,
+      );
+    } catch {
+      // the warning is advisory — never let it block a payment
+      return [];
+    }
+  }
+
   async function amendSentItem(orderItemId: string, quantity: number) {
     if (!openOrder) return;
     setBusy(true);
@@ -290,6 +307,7 @@ export function useOrderActions({
     needsCovers,
     send,
     checkout,
+    linkedOpenBills,
     amendSentItem,
     setSentPrice,
     preReceipt,

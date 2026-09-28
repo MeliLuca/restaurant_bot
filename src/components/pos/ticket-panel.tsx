@@ -6,6 +6,7 @@ import {
   Check,
   ChefHat,
   CreditCard,
+  Link2,
   Minus,
   Pencil,
   Plus,
@@ -46,7 +47,17 @@ import { formatMoney } from "@/lib/constants";
 import { orderItemLabel } from "@/lib/menu-display";
 import { calcTotals, toCents } from "@/lib/money";
 import { collapseCoperto } from "@/lib/pos/coperto";
-import type { Order, RestaurantTable, TableStatus } from "@/lib/database.types";
+import type {
+  Order,
+  RestaurantTable,
+  TableLink,
+  TableStatus,
+} from "@/lib/database.types";
+import {
+  linkPartners,
+  targetLabel as linkLabel,
+  type LinkedBill,
+} from "@/lib/floor/links";
 import {
   lineUnitPrice,
   useTicketStore,
@@ -60,6 +71,8 @@ import { VariationDialog } from "./variation-dialog";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
 import { SplitBillDialog } from "./split-bill-dialog";
 import { SplitPicker } from "./split-picker";
+import { LinkTablesDialog } from "./link-tables-dialog";
+import { LinkedBillsDialog } from "./linked-bills-dialog";
 import { createFollowUpOrder } from "@/lib/takeaway/api";
 import { TakeawayCapacityBanner } from "@/components/takeaway/capacity-banner";
 import { TakeawayCaption } from "@/components/takeaway/takeaway-caption";
@@ -115,6 +128,9 @@ interface TicketPanelProps {
   /** Pantry + per-dish ingredients; key presence in `byItem` gates the editor */
   variations: VariationData;
   onOrderChanged: () => Promise<void>;
+  /** Linked-table members (live), for the 🔗 chip and link dialog */
+  links: TableLink[];
+  onLinksChanged: () => Promise<void>;
 }
 
 export function TicketPanel({
@@ -124,6 +140,8 @@ export function TicketPanel({
   openTakeaways,
   variations,
   onOrderChanged,
+  links,
+  onLinksChanged,
 }: TicketPanelProps) {
   const {
     mode,
@@ -177,6 +195,7 @@ export function TicketPanel({
     targetLabel,
     send: handleSend,
     checkout: runCheckout,
+    linkedOpenBills,
     amendSentItem,
     setSentPrice,
     preReceipt: handlePreReceipt,
@@ -210,6 +229,47 @@ export function TicketPanel({
   // its own flows for both), so they carry their own busy flag.
   const [panelBusy, setPanelBusy] = useState(false);
   const busy = actionsBusy || panelBusy;
+
+  const [linkOpen, setLinkOpen] = useState(false);
+  // Open bills on linked tables, found right before a checkout / split:
+  // the cashier confirms (or jumps to one of them) before `action` runs.
+  const [linkWarning, setLinkWarning] = useState<{
+    bills: LinkedBill[];
+    action: "checkout" | "split";
+  } | null>(null);
+  const linkNames =
+    mode === "table" && tableId
+      ? linkPartners(links, { tableId, subtable }).map((m) =>
+          linkLabel(
+            tables.find((tb) => tb.id === m.table_id)?.name ?? "?",
+            m.subtable,
+          ),
+        )
+      : [];
+
+  async function guardLinked(action: "checkout" | "split") {
+    const bills = await linkedOpenBills();
+    if (bills.length > 0) {
+      setLinkWarning({ bills, action });
+      return;
+    }
+    if (action === "split") setSplitOpen(true);
+    else await handleCheckout();
+  }
+
+  function confirmLinked() {
+    const action = linkWarning?.action;
+    setLinkWarning(null);
+    if (action === "split") setSplitOpen(true);
+    else if (action === "checkout") void handleCheckout();
+  }
+
+  function openLinkedBill(bill: LinkedBill) {
+    setLinkWarning(null);
+    const tbl = tables.find((tb) => tb.id === bill.tableId);
+    setTable(bill.tableId, tbl?.name ?? bill.label);
+    setSubtable(bill.subtable);
+  }
 
   async function handleCheckout() {
     const outcome = await runCheckout();
@@ -384,11 +444,28 @@ export function TicketPanel({
                   subtable={subtable}
                   onSelect={setSubtable}
                 />
-                <CoversChip
-                  covers={covers}
-                  onClick={() => setCoversOpen(true)}
-                  className="self-start"
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <CoversChip
+                    covers={covers}
+                    onClick={() => setCoversOpen(true)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLinkOpen(true)}
+                    className={
+                      linkNames.length > 0
+                        ? "flex h-9 max-w-full items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/20"
+                        : "flex h-9 items-center gap-1.5 rounded-full border border-dashed px-3 text-sm font-medium text-muted-foreground hover:bg-accent"
+                    }
+                  >
+                    <Link2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {linkNames.length > 0
+                        ? linkNames.join(", ")
+                        : t("links.link")}
+                    </span>
+                  </button>
+                </div>
               </>
             )}
           </>
@@ -780,7 +857,7 @@ export function TicketPanel({
                   variant="outline"
                   className="h-12 flex-1 text-sm"
                   disabled={busy}
-                  onClick={() => setSplitOpen(true)}
+                  onClick={() => void guardLinked("split")}
                 >
                   <Split className="mr-2 h-4 w-4" /> {t("pos.splitBillBtn")}
                 </Button>
@@ -793,7 +870,7 @@ export function TicketPanel({
               variant="secondary"
               className="h-14 text-base"
               disabled={busy || !hasTarget || (!openOrder && lines.length === 0)}
-              onClick={handleCheckout}
+              onClick={() => void guardLinked("checkout")}
             >
               <CreditCard className="mr-2 h-5 w-5" />{" "}
               {t("pos.checkoutBtn", { amount: formatMoney(balanceCents / 100) })}
@@ -867,6 +944,30 @@ export function TicketPanel({
           onOrderClosed={handleSplitOrderClosed}
         />
       )}
+
+      {mode === "table" && tableId && (
+        <LinkTablesDialog
+          open={linkOpen}
+          onOpenChange={setLinkOpen}
+          target={{ tableId, subtable }}
+          label={linkLabel(tableName ?? "", subtable)}
+          tables={tables}
+          links={links}
+          onChanged={onLinksChanged}
+        />
+      )}
+      <LinkedBillsDialog
+        bills={linkWarning?.bills ?? null}
+        label={targetLabel ?? ""}
+        confirmLabel={
+          linkWarning?.action === "split"
+            ? t("links.splitAnyway")
+            : t("links.payAnyway")
+        }
+        onConfirm={confirmLinked}
+        onOpenBill={openLinkedBill}
+        onCancel={() => setLinkWarning(null)}
+      />
 
       {/* Post-checkout: how should the freed table be left? */}
       <Dialog open={!!cleanup} onOpenChange={(o) => !o && setCleanup(null)}>

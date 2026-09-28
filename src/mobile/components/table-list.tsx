@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Users, X } from "lucide-react";
+import { Link2, Search, Users, X } from "lucide-react";
 import { useFloorData } from "@/hooks/use-floor-data";
 import { useT } from "@/lib/i18n/use-translation";
 import { STATUS_CONFIG, displayStatus } from "@/lib/floor/status";
+import { linkedNamesByTable } from "@/lib/floor/links";
 import { cn } from "@/lib/utils";
 import { mRoutes } from "@/mobile/lib/routes";
 import { MHeader, DesktopSwitch } from "./m-header";
@@ -22,7 +23,7 @@ import { MHeader, DesktopSwitch } from "./m-header";
  */
 export function TableList() {
   const t = useT();
-  const { tables, openOrders, loading, error } = useFloorData();
+  const { tables, openOrders, links, loading, error } = useFloorData();
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -39,6 +40,12 @@ export function TableList() {
     }
     return m;
   }, [openOrders]);
+
+  const linkedByTable = useMemo(
+    () =>
+      linkedNamesByTable(links, new Map(tables.map((tb) => [tb.id, tb.name]))),
+    [links, tables],
+  );
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -95,6 +102,7 @@ export function TableList() {
         <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-4">
         {visible.map((table) => {
           const open = byTable.get(table.id);
+          const linked = linkedByTable.get(table.id);
           const status =
             STATUS_CONFIG[displayStatus(table.status, (open?.splits ?? 0) > 0)];
           return (
@@ -102,10 +110,19 @@ export function TableList() {
               key={table.id}
               href={mRoutes.table(table.id)}
               className={cn(
-                "flex min-h-[104px] flex-col items-center justify-center gap-1 rounded-xl border-2 p-3 transition-colors",
+                "relative flex min-h-[104px] flex-col items-center justify-center gap-1 rounded-xl border-2 p-3 transition-colors",
                 status.card,
               )}
             >
+              {linked && (
+                <span
+                  aria-label={`${t("links.badgeAria")}: ${linked.join(", ")}`}
+                  className="absolute right-1.5 top-1.5 flex max-w-[60%] items-center gap-0.5 rounded-full bg-background/80 px-1.5 py-px text-[11px] font-semibold text-foreground/80"
+                >
+                  <Link2 className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{linked.join(", ")}</span>
+                </span>
+              )}
               <span className="text-2xl font-bold">{table.name}</span>
               <span className="flex items-center gap-1 text-sm text-muted-foreground">
                 <Users className="h-4 w-4" />

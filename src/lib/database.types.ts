@@ -608,6 +608,32 @@ export interface Database {
         };
         Relationships: [];
       };
+      table_links: {
+        Row: {
+          id: string;
+          /** Members sharing a group are linked bills */
+          group_id: string;
+          table_id: string;
+          /** null = whole-table member (covers every open bill on the table) */
+          subtable: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          table_id: string;
+          subtable?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          table_id?: string;
+          subtable?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       print_templates: {
         Row: {
           id: string;
@@ -829,6 +855,14 @@ export interface Database {
         Args: { p_user_id: string; p_pin: string };
         Returns: undefined;
       };
+      link_tables: {
+        Args: { a_table: string; a_sub: string | null; b_table: string; b_sub: string | null };
+        Returns: undefined;
+      };
+      unlink_table: {
+        Args: { p_table: string; p_sub: string | null };
+        Returns: undefined;
+      };
     };
     Enums: {
       table_status: TableStatus;
@@ -863,6 +897,7 @@ export type Printer = Database["public"]["Tables"]["printers"]["Row"];
 export type RestaurantSettings =
   Database["public"]["Tables"]["restaurant_settings"]["Row"];
 export type PrintJob = Database["public"]["Tables"]["print_jobs"]["Row"];
+export type TableLink = Database["public"]["Tables"]["table_links"]["Row"];
 export type PrintTemplateRow =
   Database["public"]["Tables"]["print_templates"]["Row"];
 export type TakeawayCategoryLimit =

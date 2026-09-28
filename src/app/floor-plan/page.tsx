@@ -24,6 +24,7 @@ import { TableActionsDialog } from "@/components/floor-plan/table-actions-dialog
 import { TableCard } from "@/components/floor-plan/table-card";
 import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
 import { resetDeliveryCounter } from "@/lib/api";
+import { linkedNamesByTable } from "@/lib/floor/links";
 import { useFloorData } from "@/hooks/use-floor-data";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
@@ -51,8 +52,20 @@ export default function FloorPlanPage() {
   const t = useT();
   const setTicketTable = useTicketStore((s) => s.setTable);
   const setSubtable = useTicketStore((s) => s.setSubtable);
-  const { tables, reservations, takeaways, openOrders, loading, error, refresh } =
-    useFloorData();
+  const {
+    tables,
+    reservations,
+    takeaways,
+    openOrders,
+    links,
+    loading,
+    error,
+    refresh,
+  } = useFloorData();
+  const linkedByTable = linkedNamesByTable(
+    links,
+    new Map(tables.map((tb) => [tb.id, tb.name])),
+  );
 
   const splitsByTable = new Map<string, (string | null)[]>();
   for (const o of openOrders) {
@@ -276,6 +289,7 @@ export default function FloorPlanPage() {
                         key={t.id}
                         table={t}
                         splits={splitsByTable.get(t.id) ?? []}
+                        linkedTo={linkedByTable.get(t.id)}
                         onSelect={handleTableClick}
                       />
                     ))}

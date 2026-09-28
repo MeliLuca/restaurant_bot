@@ -1,10 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Divide, Minus, Plus, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  Divide,
+  Link2,
+  Minus,
+  Plus,
+  TriangleAlert,
+} from "lucide-react";
 import {
   payEvenShare,
   payForItems,
@@ -17,6 +24,7 @@ import {
 } from "@/lib/api";
 import { useOrderActions } from "@/hooks/use-order-actions";
 import { formatMoney } from "@/lib/constants";
+import { fetchLinkedOpenBills, type LinkedBill } from "@/lib/floor/links";
 import { menuLabelText, orderItemLabel } from "@/lib/menu-display";
 import { useT, type TFn } from "@/lib/i18n/use-translation";
 import { remainingBalanceCents } from "@/lib/money";
@@ -83,6 +91,25 @@ export function PayScreen({ orderId }: { orderId: string }) {
     tableName: string;
   } | null>(null);
 
+  // Open bills on linked tables: a banner while paying, and a confirm before
+  // "pay all" settles this one (the phone mirror of the desktop dialog).
+  const [linked, setLinked] = useState<LinkedBill[]>([]);
+  const [confirmLinked, setConfirmLinked] = useState(false);
+  const billTableId = bill?.order.table_id ?? null;
+  const billSubtable = bill?.order.subtable ?? null;
+  useEffect(() => {
+    if (!billTableId) {
+      setLinked([]);
+      return;
+    }
+    fetchLinkedOpenBills(
+      { tableId: billTableId, subtable: billSubtable },
+      orderId,
+    )
+      .then(setLinked)
+      .catch(() => setLinked([]));
+  }, [billTableId, billSubtable, orderId]);
+
   const backHref = mRoutes.bill(orderId);
 
   /** Where to go once this bill is settled. Never back to the bill: the order
@@ -115,6 +142,11 @@ export function PayScreen({ orderId }: { orderId: string }) {
   }
 
   async function payAll() {
+    if (linked.length > 0 && !confirmLinked) {
+      setConfirmLinked(true);
+      return;
+    }
+    setConfirmLinked(false);
     const outcome = await checkout();
     if (outcome.kind === "table-freed") {
       setCleanup({ tableId: outcome.tableId, tableName: outcome.tableName });
@@ -356,6 +388,27 @@ export function PayScreen({ orderId }: { orderId: string }) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {linked.length > 0 && (
+          <div className="mb-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3">
+            <p className="flex items-center gap-1.5 text-sm font-semibold">
+              <Link2 className="h-4 w-4 text-amber-500" /> {t("links.banner")}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {linked.map((b) => (
+                <Link
+                  key={b.orderId}
+                  href={mRoutes.bill(b.orderId)}
+                  className="flex min-h-10 items-center gap-2 rounded-lg border bg-background px-3 text-sm"
+                >
+                  <span className="font-semibold">{b.label}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {formatMoney(b.total)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
         {mode === "all" && (
           <p className="text-sm text-muted-foreground">{t("m.payAllHelp")}</p>
         )}
@@ -491,6 +544,53 @@ export function PayScreen({ orderId }: { orderId: string }) {
           </div>
         )}
       </div>
+
+      {confirmLinked && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50">
+          <div className="rounded-t-2xl bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <Link2 className="h-5 w-5 text-amber-500" /> {t("links.warnTitle")}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("links.warnBody", { name: label })}
+            </p>
+            <ul className="mt-3 flex flex-col gap-2">
+              {linked.map((b) => (
+                <li key={b.orderId}>
+                  <Link
+                    href={mRoutes.bill(b.orderId)}
+                    className="flex min-h-12 items-center gap-2 rounded-xl border px-3"
+                  >
+                    <span className="font-semibold">
+                      {t("links.openBill", { name: b.label })}
+                    </span>
+                    <span className="ml-auto tabular-nums">
+                      {formatMoney(b.total)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void payAll()}
+                className="flex min-h-14 items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {t("links.payAnyway")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmLinked(false)}
+                className="flex min-h-12 items-center justify-center rounded-xl text-base font-medium text-muted-foreground"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="shrink-0 border-t bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {mode === "all" && (
