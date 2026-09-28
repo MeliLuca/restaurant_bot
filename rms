@@ -16,7 +16,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 RUN_DIR=".rms"
 PID_FILE="$RUN_DIR/next.pid"
 LOG_FILE="$RUN_DIR/next.log"
-PORT=3000
+PORT="${RMS_PORT:-3000}"
 
 mkdir -p "$RUN_DIR"
 
@@ -34,8 +34,28 @@ get_lan_ip() {
   ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "IP non trovato"
 }
 
+# PID dei processi Next.js (node / next-server) in ascolto sulla porta, anche se
+# orfani di un avvio precedente il cui PID file non è più valido
+next_port_pids() {
+  local pid
+  for pid in $(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true); do
+    if ps -o command= -p "$pid" 2>/dev/null | grep -qE 'next|node'; then
+      echo "$pid"
+    fi
+  done
+}
+
 is_next_running() {
-  [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
+  { [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; } || [ -n "$(next_port_pids)" ]
+}
+
+# PID da mostrare: quello del PID file se vivo, altrimenti quello in ascolto sulla porta
+next_pid() {
+  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+    cat "$PID_FILE"
+  else
+    next_port_pids | head -1
+  fi
 }
 
 is_supabase_running() {
@@ -53,11 +73,19 @@ cmd_start() {
   fi
 
   if is_next_running; then
-    echo "→ Il server Next.js è già in esecuzione (PID $(cat "$PID_FILE"))."
+    echo "→ Il server Next.js è già in esecuzione (PID $(next_pid))."
+  elif lsof -tiTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "❌ La porta $PORT è occupata da un altro programma:"
+    lsof -iTCP:"$PORT" -sTCP:LISTEN
+    exit 1
   else
     echo "→ Avvio server Next.js (dev, accessibile anche da rete locale)..."
+    # set -m: il server parte in un proprio gruppo di processi (PGID = PID),
+    # così lo stop può chiudere npx, next e next-server tutti insieme
+    set -m
     nohup npx next dev -H 0.0.0.0 -p "$PORT" > "$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
+    set +m
     sleep 2
   fi
 
@@ -72,16 +100,46 @@ cmd_start() {
 cmd_stop() {
   echo "→ Arresto server Next.js..."
   if is_next_running; then
-    PID="$(cat "$PID_FILE")"
-    kill "$PID" 2>/dev/null || true
+    local pid=""
+    [ -f "$PID_FILE" ] && pid="$(cat "$PID_FILE")"
+    # l'intero gruppo di processi avviato da start, più chiunque sia rimasto
+    # in ascolto sulla porta (es. next-server orfano di una versione precedente)
+    targets() {
+      local p pp
+      if [ -n "$pid" ]; then
+        if kill -0 -- "-$pid" 2>/dev/null; then
+          echo "-$pid"
+        elif kill -0 "$pid" 2>/dev/null; then
+          # avviato da una versione precedente dello script: niente gruppo proprio
+          echo "$pid"
+        fi
+      fi
+      for p in $(next_port_pids); do
+        echo "$p"
+        # anche il processo "next dev" che ha lanciato il next-server
+        pp="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')"
+        if [ -n "$pp" ] && ps -o command= -p "$pp" 2>/dev/null | grep -q 'next dev'; then
+          echo "$pp"
+        fi
+      done
+    }
+    kill -TERM -- $(targets) 2>/dev/null || true
     # aspetta la chiusura, poi forza se serve
-    for _ in 1 2 3 4 5; do
-      kill -0 "$PID" 2>/dev/null || break
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      [ -z "$(targets)" ] && break
       sleep 1
     done
-    kill -9 "$PID" 2>/dev/null || true
+    if [ -n "$(targets)" ]; then
+      kill -KILL -- $(targets) 2>/dev/null || true
+      sleep 1
+    fi
     rm -f "$PID_FILE"
-    echo "  fermato."
+    if [ -n "$(next_port_pids)" ]; then
+      echo "  ⚠️ qualcosa è ancora in ascolto sulla porta $PORT:"
+      lsof -iTCP:"$PORT" -sTCP:LISTEN || true
+    else
+      echo "  fermato."
+    fi
   else
     echo "  non era in esecuzione."
     rm -f "$PID_FILE"
@@ -96,7 +154,7 @@ cmd_stop() {
 
 cmd_status() {
   if is_next_running; then
-    echo "Next.js: ✅ acceso (PID $(cat "$PID_FILE"))"
+    echo "Next.js: ✅ acceso (PID $(next_pid))"
     echo "  Desktop: http://localhost:$PORT"
     echo "  Mobile (stessa Wi-Fi): http://$(get_lan_ip):$PORT"
   else
