@@ -1,4 +1,5 @@
 import type { FloorMap, RestaurantTable } from "@/lib/database.types";
+import { toShape, type Geom } from "@/lib/floor/geometry";
 import { getSupabase } from "@/lib/supabase/client";
 
 /** Table names are mostly numbers ("2", "10", "102/1"): sort them the way a
@@ -126,20 +127,37 @@ export async function setTableShape(
   table: RestaurantTable,
   shape: "rect" | "circle",
 ): Promise<void> {
-  const cx = Number(table.x) + Number(table.w) / 2;
-  const cy = Number(table.y) + Number(table.h) / 2;
-  const { w, h } =
-    shape === "circle"
-      ? (() => {
-          const d = Math.min(Number(table.w), Number(table.h));
-          return { w: d, h: d };
-        })()
-      : table.shape === "circle"
-        ? DEFAULT_TABLE_SIZE.rect
-        : { w: Number(table.w), h: Number(table.h) };
+  const g = toShape(geomOf(table), shape);
   const { error } = await getSupabase()
     .from("tables")
-    .update({ shape, w, h, x: cx - w / 2, y: cy - h / 2, path: null })
+    .update({ shape: g.shape, x: g.x, y: g.y, w: g.w, h: g.h, path: g.path })
     .eq("id", table.id);
+  if (error) throw new Error(error.message);
+}
+
+/** A placed table's geometry as plain numbers (PostgREST numerics). */
+export function geomOf(table: RestaurantTable): Geom {
+  return {
+    shape: table.shape,
+    x: Number(table.x),
+    y: Number(table.y),
+    w: Number(table.w),
+    h: Number(table.h),
+    rotation: Number(table.rotation) || 0,
+    path: table.path,
+  };
+}
+
+/** Write an editor draft in one transaction (see save_floor_map_layout). */
+export async function saveFloorMapLayout(
+  mapId: string,
+  changes: { id: string; geom: Geom | null }[],
+): Promise<void> {
+  const { error } = await getSupabase().rpc("save_floor_map_layout", {
+    p_map_id: mapId,
+    p_tables: changes.map(({ id, geom }) =>
+      geom ? { id, placed: true, ...geom } : { id, placed: false },
+    ),
+  });
   if (error) throw new Error(error.message);
 }

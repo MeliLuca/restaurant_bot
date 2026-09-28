@@ -2,16 +2,18 @@
 
 // Settings → Mappe sala: the rooms (maps) themselves, plus what sits on each
 // one — which tables, their name, seats (coperti), tags and shape. Moving and
-// resizing tables by hand is the visual editor's job (next phase); here new
-// tables land on a default spot of the map.
+// resizing tables by hand is the layout editor's job (floor-map-editor.tsx,
+// "Modifica disposizione"); here new tables land on a default spot.
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   ArrowDown,
   ArrowUp,
   Circle,
   Map as MapIcon,
   MapPinOff,
+  Move,
   Plus,
   RectangleHorizontal,
   Trash2,
@@ -215,9 +217,17 @@ export function FloorMapsManager({
                   setSelectedTableId((cur) => (cur === tb.id ? null : tb.id))
                 }
                 toolbar={
-                  <p className="truncate text-sm text-muted-foreground">
-                    {t("floorMapsMgr.tapToEdit")}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <Button asChild className="h-11 shrink-0">
+                      <Link href={`/settings/floor-maps/${map.id}/edit`}>
+                        <Move className="mr-2 h-4 w-4" />
+                        {t("floorMapsMgr.editLayout")}
+                      </Link>
+                    </Button>
+                    <p className="hidden truncate text-sm text-muted-foreground sm:block">
+                      {t("floorMapsMgr.tapToEdit")}
+                    </p>
+                  </div>
                 }
               />
             </CardContent>

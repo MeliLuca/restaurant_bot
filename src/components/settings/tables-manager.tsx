@@ -155,7 +155,8 @@ export function TableRow({
   busy: boolean;
   onSave: (fields: { name?: string; capacity?: number }) => Promise<void>;
   onToggleTag: (tagId: string) => void;
-  onDelete: () => Promise<void>;
+  /** Omit to hide the delete button */
+  onDelete?: () => Promise<void>;
 }) {
   const t = useT();
   const [name, setName] = useState(table.name);
@@ -220,16 +221,18 @@ export function TableRow({
           );
         })}
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-10 w-10 shrink-0 text-muted-foreground"
-        aria-label={t("tablesMgr.deleteTableAria", { name: table.name })}
-        disabled={busy}
-        onClick={() => void onDelete()}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {onDelete && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0 text-muted-foreground"
+          aria-label={t("tablesMgr.deleteTableAria", { name: table.name })}
+          disabled={busy}
+          onClick={() => void onDelete()}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 }

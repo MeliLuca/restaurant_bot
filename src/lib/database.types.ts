@@ -956,6 +956,24 @@ export interface Database {
         Args: { p_table: string; p_sub: string | null };
         Returns: undefined;
       };
+      save_floor_map_layout: {
+        Args: {
+          p_map_id: string;
+          p_tables: ({
+            id: string;
+            placed: boolean;
+          } & Partial<{
+            shape: TableShape;
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            rotation: number;
+            path: string | null;
+          }>)[];
+        };
+        Returns: undefined;
+      };
       move_order_items: {
         Args: {
           p_from_order: string;

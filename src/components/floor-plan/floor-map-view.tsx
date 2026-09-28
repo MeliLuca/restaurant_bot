@@ -14,13 +14,13 @@ import type {
   FloorMapElement,
   RestaurantTable,
 } from "@/lib/database.types";
+import { labelFontSize } from "@/lib/floor/geometry";
 import { STATUS_CONFIG, displayStatus } from "@/lib/floor/status";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
 /** Zoom steps on top of "fit to screen" (1 = whole map visible) */
 const ZOOM_STEPS = [1, 1.5, 2, 3];
-const MAX_LABEL_SIZE = 20;
 
 interface FloorMapViewProps {
   map: FloorMap;
@@ -69,6 +69,7 @@ export function FloorMapView({
   }, [map.width, map.height]);
 
   const scale = fit * ZOOM_STEPS[step];
+  useKeepCenterOnZoom(containerRef, scale);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
@@ -145,6 +146,25 @@ export function FloorMapView({
   );
 }
 
+/** Keep the point at the centre of a scroll box in place when zooming. */
+export function useKeepCenterOnZoom(
+  boxRef: React.RefObject<HTMLElement>,
+  scale: number,
+) {
+  const prev = useRef(scale);
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    const old = prev.current;
+    prev.current = scale;
+    if (!el || !old || old === scale) return;
+    const k = scale / old;
+    const cx = el.scrollLeft + el.clientWidth / 2;
+    const cy = el.scrollTop + el.clientHeight / 2;
+    el.scrollLeft = cx * k - el.clientWidth / 2;
+    el.scrollTop = cy * k - el.clientHeight / 2;
+  }, [boxRef, scale]);
+}
+
 const SCENERY_STYLE = {
   // Theme colours are plain CSS vars, so no /opacity modifiers here.
   wall: "fill-none stroke-muted-foreground",
@@ -152,7 +172,7 @@ const SCENERY_STYLE = {
   arrow: "fill-none stroke-foreground",
 } as const;
 
-function Scenery({ el }: { el: FloorMapElement }) {
+export function Scenery({ el }: { el: FloorMapElement }) {
   if (el.kind === "text") {
     return (
       <text
@@ -250,11 +270,7 @@ function MapTable({
 
   const status = STATUS_CONFIG[displayStatus(table.status, splits.length > 0)];
   const shapeClass = cn("table-shape transition-colors", status.shape);
-  const fontSize = Math.min(
-    MAX_LABEL_SIZE,
-    h * 0.55,
-    (w * 0.9) / (table.name.length * 0.55),
-  );
+  const fontSize = labelFontSize(table.name, w, h);
   const rotate = Number(table.rotation) || 0;
   const label =
     table.shape === "path" && pathCenter
