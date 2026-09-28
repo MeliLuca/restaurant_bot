@@ -38,6 +38,8 @@ CIRCLES = [  # name, cx, cy, r
 ROTATED = [  # name, cx, cy, side, degrees
     ("102/3", 570, 318, 40, -12), ("102/2", 594, 367, 38, 8), ("102/1", 584, 418, 38, -10),
 ]
+# 102/4: the tall oval table by the 102s (rx 17, ry 30 around 556,265, tilted -20°)
+PATH_102_4 = "M556 235 A17 30 0 0 1 556 295 A17 30 0 0 1 556 235 Z"
 # 101: the curved counter by the take-away corner (bbox 172..224 x 302..464)
 PATH_101 = "M172 310 L198 302 Q244 382 205 460 L178 464 Q217 386 172 310 Z"
 
@@ -76,9 +78,6 @@ def elements():
     rect(318, 922, 332, 238)                                        # palco 60
     path("M725 848 H870 M725 932 V1085 M725 1143 V1200")            # palco 3
     path("M37 183 H117 M40 357 H93 V470 M95 555 V740 M38 935 H67 M95 935 H117")
-    # tavolo alto (oval by the 102s, not a numbered table)
-    e.append({"kind": "ellipse", "cx": 556, "cy": 265, "rx": 17, "ry": 30,
-              "rotate": -20, "style": "area", "label": "ALTO"})
     # labels + arrows
     text(78, 150, "ENTRATA", 20, rotate=-40)
     path("M83 162 L150 108")
@@ -110,6 +109,7 @@ def rows():
     for n, cx, cy, s, a in ROTATED:
         out.append((n, 2, "rect", cx - s / 2, cy - s / 2, s, s, a, None))
     out.append(("101", 4, "path", 172, 302, 52, 162, 0, PATH_101))
+    out.append(("102/4", 4, "path", 539, 235, 34, 60, -20, PATH_102_4))
     return out
 
 
