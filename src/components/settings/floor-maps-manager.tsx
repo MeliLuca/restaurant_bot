@@ -18,7 +18,7 @@ import {
   RectangleHorizontal,
   Trash2,
 } from "lucide-react";
-import { FloorMapView } from "@/components/floor-plan/floor-map-view";
+import { FloorMapView } from "@/components/floor-map/floor-map-view";
 import { TableRow, runAction } from "@/components/settings/tables-manager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

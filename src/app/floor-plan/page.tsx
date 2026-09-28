@@ -20,13 +20,18 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NewDeliveryDialog } from "@/components/floor-plan/new-delivery-dialog";
 import { ReservationDialog } from "@/components/floor-plan/reservation-dialog";
-import { FloorMapView } from "@/components/floor-plan/floor-map-view";
+import { FloorMapView } from "@/components/floor-map/floor-map-view";
 import { ReservationsPanel } from "@/components/floor-plan/reservations-panel";
 import { STATUS_CONFIG, type TableDisplayStatus } from "@/lib/floor/status";
 import { TableActionsDialog } from "@/components/floor-plan/table-actions-dialog";
 import { TableCard } from "@/components/floor-plan/table-card";
 import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
 import { resetDeliveryCounter } from "@/lib/api";
+import {
+  readStoredView,
+  storeView,
+  type FloorView,
+} from "@/lib/floor/view-pref";
 import { linkedNamesByTable } from "@/lib/floor/links";
 import { useFloorData } from "@/hooks/use-floor-data";
 import type { RestaurantTable, TableStatus } from "@/lib/database.types";
@@ -44,19 +49,6 @@ const LEGEND: TableDisplayStatus[] = [
 ];
 
 // Status quick-filters (by stored status; "occupied" covers ordered tables too).
-/** Map vs grid is a per-device preference (a phone may prefer the grid). */
-const VIEW_STORAGE_KEY = "rms.floor.view";
-type FloorView = "map" | "grid";
-
-function readStoredView(): FloorView | null {
-  try {
-    const v = localStorage.getItem(VIEW_STORAGE_KEY);
-    return v === "map" || v === "grid" ? v : null;
-  } catch {
-    return null;
-  }
-}
-
 const STATUS_FILTERS: { value: TableStatus; labelKey: TranslationKey }[] = [
   { value: "available", labelKey: "floor.status.available" },
   { value: "occupied", labelKey: "floor.status.occupied" },
@@ -142,11 +134,7 @@ export default function FloorPlanPage() {
 
   function chooseView(v: FloorView) {
     setStoredView(v);
-    try {
-      localStorage.setItem(VIEW_STORAGE_KEY, v);
-    } catch {
-      // private mode / blocked storage: the choice just won't persist
-    }
+    storeView(v);
   }
 
   function toggleTag(id: string) {

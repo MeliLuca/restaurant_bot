@@ -44,7 +44,7 @@ import {
 import {
   Scenery,
   useKeepCenterOnZoom,
-} from "@/components/floor-plan/floor-map-view";
+} from "@/components/floor-map/floor-map-view";
 import { TableRow, runAction } from "@/components/settings/tables-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link2, Maximize, Minus, Plus } from "lucide-react";
+import { Link2, Maximize, Minus, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
   FloorMap,
@@ -19,8 +19,37 @@ import { STATUS_CONFIG, displayStatus } from "@/lib/floor/status";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
-/** Zoom steps on top of "fit to screen" (1 = whole map visible) */
-const ZOOM_STEPS = [1, 1.5, 2, 3];
+/** Zoom on top of "fit to screen" (1 = whole map visible) */
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 5;
+const ZOOM_STEP = 1.5;
+/** Per device and per map: how far the map is turned (0/90/180/270). */
+const rotationKey = (mapId: string) => `rms.floor.rotation.${mapId}`;
+
+type ViewRotation = 0 | 90 | 180 | 270;
+
+function readRotation(mapId: string): ViewRotation {
+  try {
+    const v = Number(localStorage.getItem(rotationKey(mapId)));
+    return v === 90 || v === 180 || v === 270 ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Content transform + outer size for a map turned clockwise by `rot`. */
+function turned(rot: ViewRotation, w: number, h: number) {
+  switch (rot) {
+    case 90:
+      return { vw: h, vh: w, transform: `translate(${h} 0) rotate(90)` };
+    case 180:
+      return { vw: w, vh: h, transform: `translate(${w} ${h}) rotate(180)` };
+    case 270:
+      return { vw: h, vh: w, transform: `translate(0 ${w}) rotate(270)` };
+    default:
+      return { vw: w, vh: h, transform: undefined };
+  }
+}
 
 interface FloorMapViewProps {
   map: FloorMap;
@@ -50,95 +79,162 @@ export function FloorMapView({
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(0);
-  const [step, setStep] = useState(0);
+  const [zoom, setZoom] = useState(MIN_ZOOM);
+  const [rotation, setRotation] = useState<ViewRotation>(0);
+  const anchor = useRef<{ x: number; y: number } | null>(null);
+  const { vw, vh, transform } = turned(rotation, map.width, map.height);
 
-  // "Fit" = largest scale at which the whole map fits the available box.
+  useEffect(() => setRotation(readRotation(map.id)), [map.id]);
+
+  function rotate() {
+    const next = ((rotation + 90) % 360) as ViewRotation;
+    setRotation(next);
+    setZoom(MIN_ZOOM);
+    try {
+      localStorage.setItem(rotationKey(map.id), String(next));
+    } catch {
+      // blocked storage: the turn just won't be remembered
+    }
+  }
+
+  // "Fit" = largest scale at which the whole (turned) map fits the box.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     // A hair under the exact fit so sub-pixel rounding never adds scrollbars.
     const measure = () =>
-      setFit(
-        0.995 *
-          Math.min(el.clientWidth / map.width, el.clientHeight / map.height),
-      );
+      setFit(0.995 * Math.min(el.clientWidth / vw, el.clientHeight / vh));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [map.width, map.height]);
+  }, [vw, vh]);
 
-  const scale = fit * ZOOM_STEPS[step];
-  useKeepCenterOnZoom(containerRef, scale);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
+  // Two-finger pinch. Phones run with page zoom disabled, so the map zooms
+  // itself; one finger still scrolls natively.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let start: { dist: number; zoom: number } | null = null;
+    const dist = (e: TouchEvent) =>
+      Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        start = { dist: dist(e), zoom: zoomRef.current };
+      }
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || e.touches.length !== 2) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      anchor.current = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top,
+      };
+      const z = (start.zoom * dist(e)) / start.dist;
+      setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)));
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) start = null;
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
+  const scale = fit * zoom;
+  useKeepCenterOnZoom(containerRef, scale, anchor);
+
+  const iconButton = (
+    label: string,
+    icon: ReactNode,
+    onClick: () => void,
+    disabled = false,
+  ) => (
+    <Button
+      size="icon"
+      variant="ghost"
+      className="h-10 w-10"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {icon}
+    </Button>
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">{toolbar}</div>
         <div className="flex shrink-0 gap-1 rounded-lg border p-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-10 w-10"
-            aria-label={t("floorMap.zoomOut")}
-            disabled={step === 0}
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-10 w-10"
-            aria-label={t("floorMap.zoomFit")}
-            disabled={step === 0}
-            onClick={() => setStep(0)}
-          >
-            <Maximize className="h-4 w-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-10 w-10"
-            aria-label={t("floorMap.zoomIn")}
-            disabled={step === ZOOM_STEPS.length - 1}
-            onClick={() =>
-              setStep((s) => Math.min(ZOOM_STEPS.length - 1, s + 1))
-            }
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          {iconButton(t("floorMap.rotate"), <RotateCw className="h-4 w-4" />, rotate)}
+          {iconButton(
+            t("floorMap.zoomOut"),
+            <Minus className="h-4 w-4" />,
+            () => setZoom((z) => Math.max(MIN_ZOOM, z / ZOOM_STEP)),
+            zoom <= MIN_ZOOM,
+          )}
+          {iconButton(
+            t("floorMap.zoomFit"),
+            <Maximize className="h-4 w-4" />,
+            () => setZoom(MIN_ZOOM),
+            zoom <= MIN_ZOOM,
+          )}
+          {iconButton(
+            t("floorMap.zoomIn"),
+            <Plus className="h-4 w-4" />,
+            () => setZoom((z) => Math.min(MAX_ZOOM, z * ZOOM_STEP)),
+            zoom >= MAX_ZOOM,
+          )}
         </div>
       </div>
       <div
         ref={containerRef}
-        className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card"
+        className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border bg-card"
       >
         {fit > 0 && (
           <svg
-            viewBox={`0 0 ${map.width} ${map.height}`}
-            width={map.width * scale}
-            height={map.height * scale}
+            viewBox={`0 0 ${vw} ${vh}`}
+            width={vw * scale}
+            height={vh * scale}
             className="mx-auto block select-none"
             role="group"
             aria-label={map.name}
           >
-            <g aria-hidden>
-              {map.elements.map((el, i) => (
-                <Scenery key={i} el={el} />
+            <g transform={transform}>
+              <g aria-hidden>
+                {map.elements.map((el, i) => (
+                  <Scenery key={i} el={el} viewRotation={rotation} />
+                ))}
+              </g>
+              {tables.map((tb) => (
+                <MapTable
+                  key={tb.id}
+                  table={tb}
+                  splits={splitsByTable.get(tb.id) ?? []}
+                  linkedTo={linkedByTable.get(tb.id) ?? []}
+                  dimmed={dimmed.has(tb.id)}
+                  selected={tb.id === selectedId}
+                  viewRotation={rotation}
+                  onSelect={onSelect}
+                />
               ))}
             </g>
-            {tables.map((tb) => (
-              <MapTable
-                key={tb.id}
-                table={tb}
-                splits={splitsByTable.get(tb.id) ?? []}
-                linkedTo={linkedByTable.get(tb.id) ?? []}
-                dimmed={dimmed.has(tb.id)}
-                selected={tb.id === selectedId}
-                onSelect={onSelect}
-              />
-            ))}
           </svg>
         )}
       </div>
@@ -146,23 +242,31 @@ export function FloorMapView({
   );
 }
 
-/** Keep the point at the centre of a scroll box in place when zooming. */
+/**
+ * Keep a point of a scroll box in place when zooming: the pinch midpoint when
+ * `anchor` holds one (box-relative px, consumed once), else the box centre.
+ */
 export function useKeepCenterOnZoom(
   boxRef: React.RefObject<HTMLElement>,
   scale: number,
+  anchor?: React.MutableRefObject<{ x: number; y: number } | null>,
 ) {
   const prev = useRef(scale);
   useLayoutEffect(() => {
     const el = boxRef.current;
     const old = prev.current;
     prev.current = scale;
+    const at = anchor?.current ?? null;
+    if (anchor) anchor.current = null;
     if (!el || !old || old === scale) return;
     const k = scale / old;
-    const cx = el.scrollLeft + el.clientWidth / 2;
-    const cy = el.scrollTop + el.clientHeight / 2;
-    el.scrollLeft = cx * k - el.clientWidth / 2;
-    el.scrollTop = cy * k - el.clientHeight / 2;
-  }, [boxRef, scale]);
+    const ax = at?.x ?? el.clientWidth / 2;
+    const ay = at?.y ?? el.clientHeight / 2;
+    const cx = el.scrollLeft + ax;
+    const cy = el.scrollTop + ay;
+    el.scrollLeft = cx * k - ax;
+    el.scrollTop = cy * k - ay;
+  }, [boxRef, scale, anchor]);
 }
 
 const SCENERY_STYLE = {
@@ -172,17 +276,33 @@ const SCENERY_STYLE = {
   arrow: "fill-none stroke-foreground",
 } as const;
 
-export function Scenery({ el }: { el: FloorMapElement }) {
+/** Would text at this on-screen angle read upside down? */
+function upsideDown(deg: number): boolean {
+  const d = ((deg % 360) + 360) % 360;
+  return d > 90.5 && d < 269.5;
+}
+
+const FLIP_ANCHOR = { start: "end", middle: "middle", end: "start" } as const;
+
+export function Scenery({
+  el,
+  viewRotation = 0,
+}: {
+  el: FloorMapElement;
+  /** Map turn in the view: text flips so it never reads upside down */
+  viewRotation?: number;
+}) {
   if (el.kind === "text") {
+    const flip = upsideDown((el.rotate ?? 0) + viewRotation);
+    const rotate = (el.rotate ?? 0) + (flip ? 180 : 0);
+    const anchor = el.anchor ?? "start";
     return (
       <text
         x={el.x}
         y={el.y}
         fontSize={el.size ?? 18}
-        textAnchor={el.anchor ?? "start"}
-        transform={
-          el.rotate ? `rotate(${el.rotate} ${el.x} ${el.y})` : undefined
-        }
+        textAnchor={flip ? FLIP_ANCHOR[anchor] : anchor}
+        transform={rotate ? `rotate(${rotate} ${el.x} ${el.y})` : undefined}
         className={cn(
           "fill-muted-foreground",
           el.font === "hand" ? "italic" : "font-serif",
@@ -213,7 +333,11 @@ export function Scenery({ el }: { el: FloorMapElement }) {
               fontSize={11}
               textAnchor="middle"
               dominantBaseline="central"
-              transform="rotate(90)"
+              transform={
+                upsideDown((el.rotate ?? 0) + 90 + viewRotation)
+                  ? "rotate(270)"
+                  : "rotate(90)"
+              }
               className="fill-muted-foreground"
             >
               {el.label}
@@ -230,6 +354,8 @@ interface MapTableProps {
   linkedTo: string[];
   dimmed: boolean;
   selected?: boolean;
+  /** How far the whole map is turned: labels counter-rotate to stay upright */
+  viewRotation?: number;
   onSelect: (table: RestaurantTable) => void;
 }
 
@@ -239,6 +365,7 @@ function MapTable({
   linkedTo,
   dimmed,
   selected = false,
+  viewRotation = 0,
   onSelect,
 }: MapTableProps) {
   const t = useT();
@@ -270,8 +397,18 @@ function MapTable({
 
   const status = STATUS_CONFIG[displayStatus(table.status, splits.length > 0)];
   const shapeClass = cn("table-shape transition-colors", status.shape);
-  const fontSize = labelFontSize(table.name, w, h);
   const rotate = Number(table.rotation) || 0;
+  // Numbers read upright whatever the table's and the view's rotation; a
+  // table that ends up standing on screen sizes its label on swapped sides.
+  const onScreen = (((rotate + viewRotation) % 180) + 180) % 180;
+  const standing = onScreen > 45 && onScreen < 135;
+  const fontSize = standing
+    ? labelFontSize(table.name, h, w)
+    : labelFontSize(table.name, w, h);
+  const upright = (px: number, py: number) =>
+    rotate + viewRotation
+      ? `rotate(${-(rotate + viewRotation)} ${px} ${py})`
+      : undefined;
   const label =
     table.shape === "path" && pathCenter
       ? pathCenter
@@ -344,6 +481,7 @@ function MapTable({
       <text
         x={label.x}
         y={label.y}
+        transform={upright(label.x, label.y)}
         fontSize={fontSize}
         textAnchor="middle"
         dominantBaseline="central"
@@ -358,6 +496,7 @@ function MapTable({
           <text
             x={x + w}
             y={y}
+            transform={upright(x + w, y)}
             fontSize={10}
             textAnchor="middle"
             dominantBaseline="central"

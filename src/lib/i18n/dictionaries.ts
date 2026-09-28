@@ -39,6 +39,8 @@ export const it = {
     brand: "Trattoria",
   },
   m: {
+    showMap: "Mostra la mappa",
+    showList: "Mostra la lista",
     tabTables: "Tavoli",
     tabBills: "Conti",
     tabTakeaway: "Asporti",
@@ -493,6 +495,7 @@ export const it = {
     zoomIn: "Ingrandisci mappa",
     zoomOut: "Riduci mappa",
     zoomFit: "Adatta allo schermo",
+    rotate: "Ruota la mappa di 90°",
     tableAria: "Tavolo {name}",
   },
   links: {
@@ -1318,6 +1321,8 @@ export const en: typeof it = {
     brand: "Trattoria",
   },
   m: {
+    showMap: "Show the map",
+    showList: "Show the list",
     tabTables: "Tables",
     tabBills: "Bills",
     tabTakeaway: "Take-away",
@@ -1752,6 +1757,7 @@ export const en: typeof it = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     zoomFit: "Fit to screen",
+    rotate: "Rotate map 90°",
     tableAria: "Table {name}",
   },
   links: {
