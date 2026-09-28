@@ -33,6 +33,8 @@ interface FloorMapViewProps {
   onSelect: (table: RestaurantTable) => void;
   /** Extra controls shown left of the zoom buttons (e.g. room picker) */
   toolbar?: ReactNode;
+  /** Table outlined as selected (Settings → Mappe sala) */
+  selectedId?: string | null;
 }
 
 export function FloorMapView({
@@ -43,6 +45,7 @@ export function FloorMapView({
   dimmed,
   onSelect,
   toolbar,
+  selectedId = null,
 }: FloorMapViewProps) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -131,6 +134,7 @@ export function FloorMapView({
                 splits={splitsByTable.get(tb.id) ?? []}
                 linkedTo={linkedByTable.get(tb.id) ?? []}
                 dimmed={dimmed.has(tb.id)}
+                selected={tb.id === selectedId}
                 onSelect={onSelect}
               />
             ))}
@@ -205,6 +209,7 @@ interface MapTableProps {
   splits: (string | null)[];
   linkedTo: string[];
   dimmed: boolean;
+  selected?: boolean;
   onSelect: (table: RestaurantTable) => void;
 }
 
@@ -213,6 +218,7 @@ function MapTable({
   splits,
   linkedTo,
   dimmed,
+  selected = false,
   onSelect,
 }: MapTableProps) {
   const t = useT();
@@ -305,6 +311,18 @@ function MapTable({
           rx={2}
           strokeWidth={1.75}
           className={shapeClass}
+        />
+      )}
+      {selected && (
+        <rect
+          x={x - 5}
+          y={y - 5}
+          width={w + 10}
+          height={h + 10}
+          rx={4}
+          strokeWidth={2}
+          strokeDasharray="5 3"
+          className="pointer-events-none fill-none stroke-primary"
         />
       )}
       <text

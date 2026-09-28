@@ -26,7 +26,7 @@ interface TablesManagerProps {
   onChanged: () => Promise<void>;
 }
 
-async function runAction(
+export async function runAction(
   setBusy: (b: boolean) => void,
   action: () => Promise<void>,
   success: string,
@@ -142,7 +142,7 @@ export function TablesManager({ tables, tags, onChanged }: TablesManagerProps) {
   );
 }
 
-function TableRow({
+export function TableRow({
   table,
   tags,
   busy,

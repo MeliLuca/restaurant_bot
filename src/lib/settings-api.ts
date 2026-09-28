@@ -1,5 +1,5 @@
 import { getSupabase } from "@/lib/supabase/client";
-import { compareTableNames } from "@/lib/floor/maps";
+import { compareTableNames, type MapTableGeometry } from "@/lib/floor/maps";
 import type {
   Database,
   Ingredient,
@@ -64,10 +64,12 @@ export async function createTable(
   name: string,
   capacity: number,
   tagIds: string[],
+  /** Put the new table straight onto a floor map */
+  placement?: { map_id: string } & MapTableGeometry,
 ): Promise<void> {
   const { data, error } = await getSupabase()
     .from("tables")
-    .insert({ name: name.trim(), capacity })
+    .insert({ name: name.trim(), capacity, ...placement })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
