@@ -1,4 +1,8 @@
-import type { FloorMap, RestaurantTable } from "@/lib/database.types";
+import type {
+  FloorMap,
+  FloorMapElement,
+  RestaurantTable,
+} from "@/lib/database.types";
 import { toShape, type Geom } from "@/lib/floor/geometry";
 import { getSupabase } from "@/lib/supabase/client";
 
@@ -152,12 +156,15 @@ export function geomOf(table: RestaurantTable): Geom {
 export async function saveFloorMapLayout(
   mapId: string,
   changes: { id: string; geom: Geom | null }[],
+  /** The map's whole new scenery; omit to leave it untouched */
+  elements?: FloorMapElement[],
 ): Promise<void> {
   const { error } = await getSupabase().rpc("save_floor_map_layout", {
     p_map_id: mapId,
     p_tables: changes.map(({ id, geom }) =>
       geom ? { id, placed: true, ...geom } : { id, placed: false },
     ),
+    p_elements: elements ?? null,
   });
   if (error) throw new Error(error.message);
 }

@@ -971,6 +971,7 @@ export interface Database {
             rotation: number;
             path: string | null;
           }>)[];
+          p_elements?: FloorMapElement[] | null;
         };
         Returns: undefined;
       };
