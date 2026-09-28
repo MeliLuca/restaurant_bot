@@ -5,6 +5,7 @@
 
 const ESC = 0x1b;
 const GS = 0x1d;
+const FS = 0x1c;
 
 // Character size argument for GS ! n
 export const SIZE_NORMAL = 0x00;
@@ -51,9 +52,13 @@ export class EscPos {
     return this;
   }
 
-  /** Reset the printer and select code page PC858 (ESC @, ESC t 19) */
+  /**
+   * Reset the printer, leave Chinese/Kanji mode (FS .) and select code page
+   * PC858 (ESC t 19). Printers shipped with Chinese mode on read bytes >0x7F
+   * as GB18030 pairs and ignore the code page, turning accents into hanzi.
+   */
   init(): this {
-    return this.raw(ESC, 0x40, ESC, 0x74, 19);
+    return this.raw(ESC, 0x40, FS, 0x2e, ESC, 0x74, 19);
   }
 
   align(a: "left" | "center" | "right"): this {
