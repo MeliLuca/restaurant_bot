@@ -8,9 +8,14 @@ import { PrintersManager } from "@/components/settings/printers-manager";
 import { SettingsNav } from "@/components/settings/settings-nav";
 import {
   fetchPrinters,
+  fetchPrintTemplates,
   fetchRestaurantSettings,
 } from "@/lib/settings-api";
-import type { Printer, RestaurantSettings } from "@/lib/database.types";
+import type {
+  Printer,
+  PrintTemplateRow,
+  RestaurantSettings,
+} from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
 import { usePermission } from "@/stores/auth-store";
 
@@ -18,6 +23,7 @@ export default function PrintersSettingsPage() {
   const t = useT();
   const canManage = usePermission("manage_printers");
   const [printers, setPrinters] = useState<Printer[]>([]);
+  const [templates, setTemplates] = useState<PrintTemplateRow[]>([]);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,11 +34,13 @@ export default function PrintersSettingsPage() {
       return;
     }
     try {
-      const [p, s] = await Promise.all([
+      const [p, tpl, s] = await Promise.all([
         fetchPrinters(),
+        fetchPrintTemplates(),
         fetchRestaurantSettings(),
       ]);
       setPrinters(p);
+      setTemplates(tpl);
       setSettings(s);
       setError(null);
     } catch (e) {
@@ -68,6 +76,7 @@ export default function PrintersSettingsPage() {
       ) : (
         <PrintersManager
           printers={printers}
+          templates={templates}
           settings={settings}
           onChanged={refresh}
         />

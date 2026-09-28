@@ -7,7 +7,12 @@ import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore } from "@/stores/auth-store";
 
-const LINKS: { href: string; labelKey: TranslationKey; permission: string | null }[] = [
+// permission: null = everyone; an array = any one of them
+const LINKS: {
+  href: string;
+  labelKey: TranslationKey;
+  permission: string | string[] | null;
+}[] = [
   { href: "/settings", labelKey: "settings.navGeneral", permission: null },
   { href: "/settings/menu", labelKey: "settings.navMenu", permission: "manage_menu" },
   { href: "/settings/tables", labelKey: "settings.navTablesTags", permission: "manage_floor" },
@@ -18,6 +23,16 @@ const LINKS: { href: string; labelKey: TranslationKey; permission: string | null
   },
   { href: "/settings/takeaway", labelKey: "settings.navTakeaway", permission: "manage_menu" },
   { href: "/settings/printers", labelKey: "settings.navPrinters", permission: "manage_printers" },
+  {
+    href: "/settings/print-templates",
+    labelKey: "settings.navPrintTemplates",
+    permission: "manage_printers",
+  },
+  {
+    href: "/settings/print-texts",
+    labelKey: "settings.navPrintTexts",
+    permission: ["edit_print_texts", "manage_printers"],
+  },
 ];
 
 export function SettingsNav() {
@@ -28,7 +43,9 @@ export function SettingsNav() {
   return (
     <nav className="flex flex-wrap gap-2">
       {LINKS.filter(
-        (l) => l.permission === null || permissions.includes(l.permission),
+        (l) =>
+          l.permission === null ||
+          [l.permission].flat().some((p) => permissions.includes(p)),
       ).map((l) => (
         <Link
           key={l.href}

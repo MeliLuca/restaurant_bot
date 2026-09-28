@@ -788,9 +788,18 @@ export function printPartialReceipt(
   return postPrint("/api/print/partial", { orderId, orderItemIds, total });
 }
 
-/** Fire a sample ticket at one printer (admin panel "Test print"). */
-export function printTest(printerId: string): Promise<PrintJobResult[]> {
-  return postPrint("/api/print/test", { printerId });
+/** Fire a sample ticket at one printer (admin panel "Test print"). With
+ * `draft`, the template editor's unsaved template is printed instead of the
+ * printer's own one. */
+export function printTest(
+  printerId: string,
+  draft?: {
+    template: unknown;
+    variant?: "CONTO" | "PRECONTO" | "PARZIALE";
+    service?: "table" | "takeaway";
+  },
+): Promise<PrintJobResult[]> {
+  return postPrint("/api/print/test", { printerId, ...draft });
 }
 
 /**

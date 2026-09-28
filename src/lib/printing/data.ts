@@ -2,7 +2,12 @@
 // for one order. Used by the /api/print/* route handlers.
 
 import { getSupabase } from "@/lib/supabase/client";
-import type { Order, Printer, RestaurantSettings } from "@/lib/database.types";
+import type {
+  Order,
+  Printer,
+  PrintTemplateRow,
+  RestaurantSettings,
+} from "@/lib/database.types";
 import type { TicketMeta } from "./types";
 import type { RoutableItem } from "./route-order";
 
@@ -10,6 +15,7 @@ export interface OrderPrintContext {
   order: Order;
   items: RoutableItem[];
   printers: Printer[];
+  templates: PrintTemplateRow[];
   settings: RestaurantSettings;
   meta: TicketMeta;
 }
@@ -65,12 +71,17 @@ export async function loadOrderPrintContext(
     await itemQuery.returns<ItemRow[]>();
   if (itemsError) throw new Error(itemsError.message);
 
-  const [{ data: printers, error: printersError }, settingsResult] =
-    await Promise.all([
-      sb.from("printers").select("*"),
-      sb.from("restaurant_settings").select("*").single(),
-    ]);
+  const [
+    { data: printers, error: printersError },
+    { data: templates, error: templatesError },
+    settingsResult,
+  ] = await Promise.all([
+    sb.from("printers").select("*"),
+    sb.from("print_templates").select("*"),
+    sb.from("restaurant_settings").select("*").single(),
+  ]);
   if (printersError) throw new Error(printersError.message);
+  if (templatesError) throw new Error(templatesError.message);
   if (settingsResult.error) throw new Error(settingsResult.error.message);
 
   const { tables, app_users, ...orderFields } = order;
@@ -89,6 +100,7 @@ export async function loadOrderPrintContext(
       target_printer_id: i.menu_items?.target_printer_id ?? null,
     })),
     printers,
+    templates,
     settings: settingsResult.data,
     meta: {
       ticketNumber: order.ticket_number,
@@ -97,6 +109,8 @@ export async function loadOrderPrintContext(
       customerName: order.customer_name,
       serverName: app_users?.name ?? null,
       openedAt: new Date().toISOString(), // slips/receipts show firing time
+      covers: order.covers,
+      pickupAt: order.pickup_at,
     },
   };
 }

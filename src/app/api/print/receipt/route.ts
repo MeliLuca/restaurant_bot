@@ -27,9 +27,10 @@ export async function POST(request: Request) {
       ctx.order,
       ctx.items,
       ctx.printers,
+      ctx.templates,
       ctx.settings,
       ctx.meta,
-      preconto ? ["PRE-CONTO", "NON FISCALE"] : undefined,
+      preconto ? "PRECONTO" : "CONTO",
     );
     if (!payload) {
       return NextResponse.json(

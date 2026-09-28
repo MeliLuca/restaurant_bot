@@ -4,6 +4,7 @@ import type {
   Ingredient,
   MenuItem,
   Printer,
+  PrintTemplateRow,
   RestaurantSettings,
   RestaurantTable,
   TableTag,
@@ -348,6 +349,88 @@ export async function deletePrinter(printerId: string): Promise<void> {
     .delete()
     .eq("id", printerId);
   if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// Print templates (layouts in src/lib/printing/template.ts)
+// ---------------------------------------------------------------------------
+
+export type PrintTemplateInput =
+  Database["public"]["Tables"]["print_templates"]["Insert"];
+
+export async function fetchPrintTemplates(): Promise<PrintTemplateRow[]> {
+  const { data, error } = await getSupabase()
+    .from("print_templates")
+    .select("*")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function fetchPrintTemplate(id: string): Promise<PrintTemplateRow | null> {
+  const { data, error } = await getSupabase()
+    .from("print_templates")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Postgres unique violation on the name → a readable message */
+function templateError(error: { code?: string; message: string }, name: string): Error {
+  return new Error(
+    error.code === "23505" ? `A template named "${name}" already exists` : error.message,
+  );
+}
+
+export async function createPrintTemplate(tpl: PrintTemplateInput): Promise<string> {
+  const { data, error } = await getSupabase()
+    .from("print_templates")
+    .insert(tpl)
+    .select("id")
+    .single();
+  if (error) throw templateError(error, tpl.name);
+  return data.id;
+}
+
+export async function updatePrintTemplate(
+  id: string,
+  fields: Partial<PrintTemplateInput>,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from("print_templates")
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw templateError(error, fields.name ?? "");
+}
+
+/** Blocked by the FK while a printer still uses the template */
+export async function deletePrintTemplate(id: string): Promise<void> {
+  const { error } = await getSupabase().from("print_templates").delete().eq("id", id);
+  if (error) {
+    throw friendly(error, "A printer still uses this template: assign another one first.");
+  }
+}
+
+/**
+ * "Testi di stampa": replace the text of some text blocks, and nothing else.
+ * Goes through a server route that re-reads the template and refuses any
+ * change outside its text blocks.
+ */
+export async function savePrintTexts(
+  templateId: string,
+  texts: Record<string, string>,
+): Promise<void> {
+  const res = await fetch("/api/print-templates/texts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ templateId, texts }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ?? "Could not save the texts");
+  }
 }
 
 export async function fetchRestaurantSettings(): Promise<RestaurantSettings> {

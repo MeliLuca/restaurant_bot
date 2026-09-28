@@ -53,9 +53,10 @@ export async function POST(request: Request) {
       },
       ctx.items,
       ctx.printers,
+      ctx.templates,
       ctx.settings,
       ctx.meta,
-      ["PAGAMENTO PARZIALE"],
+      "PARZIALE",
     );
     if (!payload) {
       return NextResponse.json(

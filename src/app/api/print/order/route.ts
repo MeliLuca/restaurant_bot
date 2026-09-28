@@ -29,7 +29,13 @@ export async function POST(request: Request) {
     if (!ctx) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
-    const payloads = buildProductionPayloads(ctx.items, ctx.printers, ctx.meta);
+    const payloads = buildProductionPayloads(
+      ctx.items,
+      ctx.printers,
+      ctx.templates,
+      ctx.settings,
+      ctx.meta,
+    );
     const jobs = await dispatchPayloads(ctx.order.id, payloads);
     return NextResponse.json({ jobs });
   } catch (e) {

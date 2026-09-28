@@ -2,7 +2,12 @@
 // per-destination payloads. Production slips go wherever the items'
 // target_printer_id points; the CASSA receipt always carries the whole order.
 
-import type { Order, Printer, RestaurantSettings } from "@/lib/database.types";
+import type {
+  Order,
+  Printer,
+  PrintTemplateRow,
+  RestaurantSettings,
+} from "@/lib/database.types";
 import { formatEuro } from "./escpos";
 import type {
   CassaTicket,
@@ -11,6 +16,8 @@ import type {
   TicketLine,
   TicketMeta,
 } from "./types";
+import type { ContoVariant } from "./template";
+import { resolveTemplate } from "./template";
 
 // One structured modifier on an order line (order_item_modifiers snapshot).
 export interface RoutableModifier {
@@ -76,11 +83,13 @@ function toTicketLine(item: RoutableItem): TicketLine {
  * Group items by destination and build one production slip per printer.
  * Items with no target, or whose target is inactive, print nowhere — they
  * only ever appear on the receipt. A CASSA-typed target still gets a slip
- * (admin chose to route there) rendered in the CUCINA style.
+ * (admin chose to route there) rendered with its COMANDA template.
  */
 export function buildProductionPayloads(
   items: RoutableItem[],
   printers: Printer[],
+  templates: PrintTemplateRow[],
+  company: RestaurantSettings,
   meta: TicketMeta,
 ): PrintPayload[] {
   const active = new Map(
@@ -101,6 +110,7 @@ export function buildProductionPayloads(
     const ticket: ProductionTicket = {
       kind: printer.printer_type === "BAR" ? "BAR" : "CUCINA",
       meta,
+      company,
       // production slips show the variation, not its price — the kitchen only
       // needs WHAT to make. modifierLabel signs paid additions/removals
       // (+ Bufala / - Acciughe); the renderer uppercases + asterisks them.
@@ -110,22 +120,23 @@ export function buildProductionPayloads(
         modifiers: itemModifiers(i, modifierLabel),
       })),
     };
-    return { printer, ticket };
+    return { printer, ticket, template: resolveTemplate(printer, "COMANDA", templates) };
   });
 }
 
 /**
  * The full customer receipt, bound to the first active CASSA printer.
- * Returns null when no CASSA printer is configured. `banner` marks the
+ * Returns null when no CASSA printer is configured. `variant` marks the
  * non-fiscal variants (pre-conto, partial payment).
  */
 export function buildCassaPayload(
   order: Order,
   items: RoutableItem[],
   printers: Printer[],
+  templates: PrintTemplateRow[],
   company: RestaurantSettings,
   meta: TicketMeta,
-  banner?: string[],
+  variant: ContoVariant = "CONTO",
 ): PrintPayload | null {
   const cassa = printers.find(
     (p) => p.is_active && p.printer_type === "CASSA",
@@ -136,12 +147,12 @@ export function buildCassaPayload(
     kind: "CASSA",
     meta,
     company,
-    banner,
+    variant,
     lines: items.map(toTicketLine),
     subtotal: order.subtotal,
     taxRate: order.tax_rate,
     tax: order.tax,
     total: order.total,
   };
-  return { printer: cassa, ticket };
+  return { printer: cassa, ticket, template: resolveTemplate(cassa, "CONTO", templates) };
 }

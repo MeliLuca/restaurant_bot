@@ -1,8 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Pencil, Plus, Printer as PrinterIcon, Receipt, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  LayoutTemplate,
+  Pencil,
+  Plus,
+  Printer as PrinterIcon,
+  Receipt,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +44,8 @@ import type {
   PaperSize,
   Printer,
   PrinterType,
+  PrintTemplateKind,
+  PrintTemplateRow,
   RestaurantSettings,
 } from "@/lib/database.types";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
@@ -49,12 +60,14 @@ const PRINTER_TYPES: { value: PrinterType; hintKey: TranslationKey }[] = [
 
 interface PrintersManagerProps {
   printers: Printer[];
+  templates: PrintTemplateRow[];
   settings: RestaurantSettings;
   onChanged: () => Promise<void>;
 }
 
 export function PrintersManager({
   printers,
+  templates,
   settings,
   onChanged,
 }: PrintersManagerProps) {
@@ -195,10 +208,52 @@ export function PrintersManager({
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-2 pb-2">
+                <TemplateSelect
+                  kind="COMANDA"
+                  printer={p}
+                  templates={templates}
+                  disabled={busy}
+                  onChange={(id) =>
+                    run(
+                      () => updatePrinter(p.id, { comanda_template_id: id }),
+                      t("printers.templateAssigned", { name: p.name }),
+                    )
+                  }
+                />
+                {p.printer_type === "CASSA" && (
+                  <TemplateSelect
+                    kind="CONTO"
+                    printer={p}
+                    templates={templates}
+                    disabled={busy}
+                    onChange={(id) =>
+                      run(
+                        () => updatePrinter(p.id, { conto_template_id: id }),
+                        t("printers.templateAssigned", { name: p.name }),
+                      )
+                    }
+                  />
+                )}
+              </div>
             </div>
           ))}
         </CardContent>
       </Card>
+
+      <Link
+        href="/settings/print-templates"
+        className="flex items-center gap-3 rounded-xl border bg-card p-4 transition-colors hover:bg-accent"
+      >
+        <LayoutTemplate className="h-5 w-5 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">{t("printers.manageTemplates")}</span>
+          <span className="block text-sm text-muted-foreground">
+            {t("printers.manageTemplatesHint")}
+          </span>
+        </span>
+        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+      </Link>
 
       <ReceiptIdentityCard settings={settings} onChanged={onChanged} />
 
@@ -209,6 +264,54 @@ export function PrintersManager({
         onSaved={onChanged}
       />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Which print template a printer uses (null = built-in standard layout)
+// ---------------------------------------------------------------------------
+
+const STANDARD = "__standard";
+
+function TemplateSelect({
+  kind,
+  printer,
+  templates,
+  disabled,
+  onChange,
+}: {
+  kind: PrintTemplateKind;
+  printer: Printer;
+  templates: PrintTemplateRow[];
+  disabled: boolean;
+  onChange: (templateId: string | null) => void;
+}) {
+  const t = useT();
+  const current =
+    (kind === "COMANDA" ? printer.comanda_template_id : printer.conto_template_id) ?? STANDARD;
+  return (
+    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+      {kind === "COMANDA" ? t("printers.comandaTemplate") : t("printers.contoTemplate")}
+      <Select
+        value={current}
+        disabled={disabled}
+        onValueChange={(v) => v !== current && onChange(v === STANDARD ? null : v)}
+      >
+        <SelectTrigger className="h-9 w-48 text-sm text-foreground">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={STANDARD}>{t("printers.standardOption")}</SelectItem>
+          {templates
+            .filter((tpl) => tpl.kind === kind)
+            .map((tpl) => (
+              <SelectItem key={tpl.id} value={tpl.id}>
+                {tpl.name}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+    </label>
   );
 }
 
@@ -484,6 +587,7 @@ function PrinterDialog({
 
           <div className="grid gap-2">
             <Label>{t("printers.printOptions")}</Label>
+            <p className="text-xs text-muted-foreground">{t("printers.legacyHint")}</p>
             <div className="flex flex-col gap-1 rounded-lg border p-3">
               <OptionCheckbox
                 id="opt-prices"

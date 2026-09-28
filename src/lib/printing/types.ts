@@ -10,19 +10,18 @@ import type {
   PrinterType,
   RestaurantSettings,
 } from "@/lib/database.types";
+import type { ContoVariant, PrintTemplate } from "./template";
 
-// Printable columns per paper width (Font A on standard Epson-compatible
-// thermal heads). All wrapping/truncation math keys off this single map.
+// Printable columns per paper width and font (Font A 12×24, Font B 9×17 on
+// standard Epson-compatible thermal heads). All wrapping/truncation math keys
+// off this single map; a magnified line gets columns / width multiplier.
 export const PAPER_WIDTH_CHARS: Record<PaperSize, number> = {
   "80mm": 48,
   "58mm": 32,
 };
-
-// Production slips double the character size (ESC/POS GS ! 0x11), so kitchen
-// body lines get half the columns of the same paper.
-export const PRODUCTION_BODY_CHARS: Record<PaperSize, number> = {
-  "80mm": 24,
-  "58mm": 16,
+export const PAPER_WIDTH_CHARS_FONT_B: Record<PaperSize, number> = {
+  "80mm": 64,
+  "58mm": 42,
 };
 
 export const DEFAULT_PRINTER_PORT = 9100;
@@ -45,6 +44,8 @@ export interface TicketMeta {
   customerName: string | null; // takeaway pickup name
   serverName: string | null; // from orders.opened_by
   openedAt: string; // ISO timestamp
+  covers: number | null; // coperti
+  pickupAt: string | null; // take-away pickup time, ISO
 }
 
 // Full customer receipt for the CASSA printer.
@@ -52,9 +53,9 @@ export interface CassaTicket {
   kind: "CASSA";
   meta: TicketMeta;
   company: RestaurantSettings;
-  // Prominent double-size lines under the company header marking non-fiscal
-  // variants: ["PRE-CONTO", "NON FISCALE"] or ["PAGAMENTO PARZIALE"].
-  banner?: string[];
+  // Which receipt this is: the pre-conto and partial-payment variants print
+  // a banner ({variante}) and can show/hide blocks of the template.
+  variant: ContoVariant;
   lines: TicketLine[];
   subtotal: number;
   taxRate: number; // aliquota IVA, e.g. 0.08
@@ -66,6 +67,7 @@ export interface CassaTicket {
 export interface ProductionTicket {
   kind: "CUCINA" | "BAR";
   meta: TicketMeta;
+  company: RestaurantSettings; // for company placeholders on the slip
   lines: Array<Pick<TicketLine, "quantity" | "name" | "modifiers">>;
 }
 
@@ -75,6 +77,7 @@ export type Ticket = CassaTicket | ProductionTicket;
 export interface PrintPayload {
   printer: Printer;
   ticket: Ticket;
+  template: PrintTemplate;
 }
 
 export function isProductionType(

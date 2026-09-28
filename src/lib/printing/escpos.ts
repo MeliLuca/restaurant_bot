@@ -7,10 +7,6 @@ const ESC = 0x1b;
 const GS = 0x1d;
 const FS = 0x1c;
 
-// Character size argument for GS ! n
-export const SIZE_NORMAL = 0x00;
-export const SIZE_DOUBLE = 0x11; // double width + double height
-
 // Non-ASCII characters we can represent in PC858. Anything else degrades to
 // its base letter (accent stripped) or '?'.
 const CP858: Record<string, number> = {
@@ -69,9 +65,24 @@ export class EscPos {
     return this.raw(ESC, 0x45, on ? 1 : 0);
   }
 
-  /** Character size via GS ! n — see SIZE_NORMAL / SIZE_DOUBLE */
-  size(n: number): this {
-    return this.raw(GS, 0x21, n);
+  /** Character magnification 1–8 per axis via GS ! n (width high nibble) */
+  size(width: number, height: number): this {
+    const clamp = (v: number) => Math.min(8, Math.max(1, Math.round(v))) - 1;
+    return this.raw(GS, 0x21, (clamp(width) << 4) | clamp(height));
+  }
+
+  /** Font A (12×24, the default) or the smaller Font B (9×17) via ESC M */
+  font(f: "A" | "B"): this {
+    return this.raw(ESC, 0x4d, f === "B" ? 1 : 0);
+  }
+
+  underline(on: boolean): this {
+    return this.raw(ESC, 0x2d, on ? 1 : 0);
+  }
+
+  /** White-on-black reverse printing via GS B */
+  invert(on: boolean): this {
+    return this.raw(GS, 0x42, on ? 1 : 0);
   }
 
   text(s: string): this {
@@ -90,6 +101,11 @@ export class EscPos {
   /** Feed the printed tail past the blade, then partial-cut (GS V 66) */
   cut(): this {
     return this.raw(ESC, 0x64, 4, GS, 0x56, 0x42, 0x00);
+  }
+
+  /** Same tail feed as cut(), without cutting (tear-off by hand) */
+  tearOff(): this {
+    return this.raw(ESC, 0x64, 4);
   }
 
   build(): Buffer {

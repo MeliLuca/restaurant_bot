@@ -9,6 +9,7 @@ export type PrinterType = "CASSA" | "CUCINA" | "BAR";
 export type PaymentKind = "even" | "items";
 export type PaperSize = "80mm" | "58mm";
 export type PrintJobStatus = "queued" | "sent" | "failed";
+export type PrintTemplateKind = "COMANDA" | "CONTO";
 
 export interface Database {
   public: {
@@ -564,6 +565,9 @@ export interface Database {
           header_text: string;
           footer_text: string;
           extra_feed_lines: number;
+          /** null = built-in standard layout from the legacy options above */
+          comanda_template_id: string | null;
+          conto_template_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -580,6 +584,8 @@ export interface Database {
           header_text?: string;
           footer_text?: string;
           extra_feed_lines?: number;
+          comanda_template_id?: string | null;
+          conto_template_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -596,7 +602,43 @@ export interface Database {
           header_text?: string;
           footer_text?: string;
           extra_feed_lines?: number;
+          comanda_template_id?: string | null;
+          conto_template_id?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      print_templates: {
+        Row: {
+          id: string;
+          name: string;
+          kind: PrintTemplateKind;
+          paper_size: PaperSize;
+          /** Block list — shape in src/lib/printing/template.ts */
+          blocks: unknown;
+          feed_lines: number;
+          cut: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          kind: PrintTemplateKind;
+          paper_size?: PaperSize;
+          blocks?: unknown;
+          feed_lines?: number;
+          cut?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          kind?: PrintTemplateKind;
+          paper_size?: PaperSize;
+          blocks?: unknown;
+          feed_lines?: number;
+          cut?: boolean;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -821,5 +863,7 @@ export type Printer = Database["public"]["Tables"]["printers"]["Row"];
 export type RestaurantSettings =
   Database["public"]["Tables"]["restaurant_settings"]["Row"];
 export type PrintJob = Database["public"]["Tables"]["print_jobs"]["Row"];
+export type PrintTemplateRow =
+  Database["public"]["Tables"]["print_templates"]["Row"];
 export type TakeawayCategoryLimit =
   Database["public"]["Tables"]["takeaway_category_limits"]["Row"];

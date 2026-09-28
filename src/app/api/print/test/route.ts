@@ -1,11 +1,33 @@
 // POST /api/print/test — fire a sample ticket at one printer so managers can
-// verify the IP/port/paper configuration from the admin panel.
-// Body: { printerId: string }
+// verify the IP/port/paper configuration and the look of a template.
+// Body: { printerId: string, template?: DraftTemplate, variant?, service? }
+// Without `template` the printer's own template is used (conto on a CASSA,
+// comanda elsewhere); with it, the editor's unsaved draft is printed as-is.
 
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase/client";
 import { dispatchPayloads } from "@/lib/printing/dispatch";
-import type { Ticket, TicketMeta } from "@/lib/printing/types";
+import { sampleTicket } from "@/lib/printing/sample";
+import type { ContoVariant, PrintTemplate } from "@/lib/printing/template";
+import { normalizeBlocks, resolveTemplate } from "@/lib/printing/template";
+
+const VARIANTS: ContoVariant[] = ["CONTO", "PRECONTO", "PARZIALE"];
+
+function draftFromBody(raw: unknown): PrintTemplate | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (r.kind !== "COMANDA" && r.kind !== "CONTO") return null;
+  return {
+    id: null,
+    name: typeof r.name === "string" ? r.name : "Bozza",
+    kind: r.kind,
+    paperSize: r.paperSize === "58mm" ? "58mm" : "80mm",
+    blocks: normalizeBlocks(r.blocks, r.kind),
+    feedLines:
+      typeof r.feedLines === "number" ? Math.min(10, Math.max(0, Math.round(r.feedLines))) : 0,
+    cut: r.cut !== false,
+  };
+}
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -13,49 +35,47 @@ export async function POST(request: Request) {
   if (typeof printerId !== "string") {
     return NextResponse.json({ error: "printerId is required" }, { status: 400 });
   }
+  const draft = body?.template === undefined ? null : draftFromBody(body.template);
+  if (body?.template !== undefined && !draft) {
+    return NextResponse.json({ error: "Invalid template" }, { status: 400 });
+  }
+  const variant: ContoVariant = VARIANTS.includes(body?.variant) ? body.variant : "CONTO";
+  const service = body?.service === "takeaway" ? "takeaway" : "table";
 
   try {
     const sb = getSupabase();
-    const [{ data: printer, error }, settingsResult] = await Promise.all([
+    const [{ data: printer, error }, templatesResult, settingsResult] = await Promise.all([
       sb.from("printers").select("*").eq("id", printerId).maybeSingle(),
+      sb.from("print_templates").select("*"),
       sb.from("restaurant_settings").select("*").single(),
     ]);
     if (error) throw new Error(error.message);
+    if (templatesResult.error) throw new Error(templatesResult.error.message);
     if (settingsResult.error) throw new Error(settingsResult.error.message);
     if (!printer) {
       return NextResponse.json({ error: "Printer not found" }, { status: 404 });
     }
 
-    const meta: TicketMeta = {
-      ticketNumber: 0,
-      tableName: "PROVA",
-      subtable: null,
-      customerName: null,
-      serverName: "Test",
-      openedAt: new Date().toISOString(),
-    };
-    const sampleLines = [
-      { quantity: 1, name: "Stampa di prova", modifiers: ["FUNZIONA"], unitPrice: 0, lineTotal: 0 },
-    ];
-    const ticket: Ticket =
-      printer.printer_type === "CASSA"
-        ? {
-            kind: "CASSA",
-            meta,
-            company: settingsResult.data,
-            lines: sampleLines,
-            subtotal: 0,
-            taxRate: 0,
-            tax: 0,
-            total: 0,
-          }
-        : {
-            kind: printer.printer_type === "BAR" ? "BAR" : "CUCINA",
-            meta,
-            lines: sampleLines,
-          };
+    const template =
+      draft ??
+      resolveTemplate(
+        printer,
+        printer.printer_type === "CASSA" ? "CONTO" : "COMANDA",
+        templatesResult.data,
+      );
+    const ticket = sampleTicket({
+      kind:
+        template.kind === "CONTO"
+          ? "CASSA"
+          : printer.printer_type === "BAR"
+            ? "BAR"
+            : "CUCINA",
+      company: settingsResult.data,
+      variant,
+      service,
+    });
 
-    const jobs = await dispatchPayloads(null, [{ printer, ticket }]);
+    const jobs = await dispatchPayloads(null, [{ printer, ticket, template }]);
     return NextResponse.json({ jobs });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Print dispatch failed";

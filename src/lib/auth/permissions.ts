@@ -58,6 +58,12 @@ export const PERMISSIONS = [
     description: "Configure network printers, ticket layouts, and receipt text",
   },
   {
+    key: "edit_print_texts",
+    label: "Edit print texts",
+    description:
+      "Change the fixed texts of print templates (headers, greeting, notes) without touching the layout",
+  },
+  {
     key: "view_stats",
     label: "View stats",
     description: "See the night's sales totals, items ordered, and past bills",
