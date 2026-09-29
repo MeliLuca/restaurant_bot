@@ -139,6 +139,7 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
             reservations={reservations}
             ctx={floor.ctx}
             tags={floor.tags}
+            maps={maps}
             canPlan={false}
             canEdit={canEdit}
             isToday

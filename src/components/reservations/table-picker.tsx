@@ -151,6 +151,10 @@ export function useTablePicker({
       );
     }
     if (!connected(ctx, picked)) warnings.push(t("reservations.warnNotJoinable"));
+    const closed = picked.filter((id) => ctx.tables.get(id)?.closed);
+    if (closed.length > 0) {
+      warnings.push(t("reservations.warnClosedRoom", { tables: tableNamesOf(ctx, closed) }));
+    }
   }
 
   function setMode(next: TableMode) {
@@ -207,6 +211,9 @@ export function TablePickerSection({
   const t = useT();
   const { mode, options, option, currentTableIds, warnings } = picker;
   const hasCurrent = currentTableIds.length > 0;
+  const closedRoom = ctx
+    ? currentTableIds.map((id) => ctx.tables.get(id)).find((tb) => tb?.closed)?.mapId ?? null
+    : null;
   const tagName = (id: string) => tags.find((tg) => tg.id === id)?.name ?? "?";
   const mapName = (id: string | null) =>
     maps.find((m) => m.id === id)?.name ?? t("reservations.anyRoom");
@@ -223,6 +230,12 @@ export function TablePickerSection({
       {hasCurrent && ctx && (
         <p className="text-sm">
           {t("reservations.currentTables", { tables: tableNamesOf(ctx, currentTableIds) })}
+        </p>
+      )}
+      {closedRoom && (
+        <p className="flex gap-2 text-sm">
+          <TriangleAlert className="h-4 w-4 shrink-0 text-amber-500" />
+          {t("reservations.currentInClosedRoom", { room: mapName(closedRoom) })}
         </p>
       )}
       <div role="group" className="flex rounded-lg border p-1">

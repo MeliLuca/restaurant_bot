@@ -6,6 +6,7 @@ import {
   type TableMark,
 } from "@/components/floor-map/floor-map-view";
 import type { FloorMap, RestaurantTable } from "@/lib/database.types";
+import { bookableMaps } from "@/lib/floor/maps";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +29,9 @@ interface PlanningMapProps {
 
 /**
  * The floor map as Gestione Sala Smart draws it while planning: no live
- * status colours (the time planned for is not now), only the marks.
+ * status colours (the time planned for is not now), only the marks. Rooms
+ * closed to bookings aren't offered; one shows only while a booking there
+ * is in focus.
  */
 export function PlanningMap({
   maps,
@@ -41,7 +44,9 @@ export function PlanningMap({
   header,
 }: PlanningMapProps) {
   const t = useT();
-  const active = maps.find((m) => m.id === activeMapId) ?? maps[0] ?? null;
+  const active =
+    maps.find((m) => m.id === activeMapId) ?? bookableMaps(maps)[0] ?? maps[0] ?? null;
+  const rooms = bookableMaps(maps, active?.id ?? null);
 
   const focusKey = (focusTableIds ?? []).join(",");
   useEffect(() => {
@@ -73,8 +78,8 @@ export function PlanningMap({
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           {header}
-          {maps.length > 1 &&
-            maps.map((m) => (
+          {rooms.length > 1 &&
+            rooms.map((m) => (
               <button
                 key={m.id}
                 type="button"
@@ -87,7 +92,7 @@ export function PlanningMap({
                     : "text-muted-foreground hover:bg-accent",
                 )}
               >
-                {m.name}
+                {m.bookable ? m.name : t("reservations.roomClosed", { room: m.name })}
               </button>
             ))}
         </div>

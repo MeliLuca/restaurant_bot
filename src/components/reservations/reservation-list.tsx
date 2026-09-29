@@ -9,12 +9,13 @@ import {
   Pencil,
   Phone,
   Sparkles,
+  TriangleAlert,
   Users,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { Reservation, TableTag } from "@/lib/database.types";
+import type { FloorMap, Reservation, TableTag } from "@/lib/database.types";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import type { FloorContext } from "@/lib/smart-floor/types";
@@ -40,6 +41,8 @@ interface ReservationListProps {
   reservations: Reservation[];
   ctx: FloorContext;
   tags: TableTag[];
+  /** Rooms, for naming one closed to bookings that still has some */
+  maps: FloorMap[];
   /** May assign tables (plan_floor, on a computer) */
   canPlan: boolean;
   /** May create/edit/seat/cancel (manage_reservations) */
@@ -67,6 +70,7 @@ export function ReservationList({
   reservations,
   ctx,
   tags,
+  maps,
   canPlan,
   canEdit,
   isToday,
@@ -103,6 +107,14 @@ export function ReservationList({
             (r) => r.status === "cancelled" || r.status === "no_show",
           );
   const covers = active.reduce((sum, r) => sum + r.party_size, 0);
+  // booked on tables of a room that takes no bookings any more: to move
+  const closedRoomOf = (r: Reservation): string | null => {
+    if (r.status !== "booked") return null;
+    const closed = r.table_ids.map((id) => ctx.tables.get(id)).find((tb) => tb?.closed);
+    return closed?.mapId ?? null;
+  };
+  const toMove = active.filter((r) => closedRoomOf(r) !== null);
+  const roomName = (id: string) => maps.find((m) => m.id === id)?.name ?? "?";
   const selectable = (r: Reservation) => canPlan && r.status === "booked";
 
   function toggle(id: string) {
@@ -121,6 +133,14 @@ export function ReservationList({
           unassigned: unassigned.length,
         })}
       </p>
+      {toMove.length > 0 && (
+        <p className="flex gap-2 text-sm">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          {t(canPlan ? "reservations.closedRoomSummary" : "reservations.closedRoomSummaryHost", {
+            count: toMove.length,
+          })}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (
@@ -153,6 +173,18 @@ export function ReservationList({
           >
             {t("reservations.selectUnassigned")}
           </Button>
+          {toMove.some((r) => !r.locked) && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() =>
+                onSelectedChange(new Set(toMove.filter((r) => !r.locked).map((r) => r.id)))
+              }
+            >
+              {t("reservations.selectToMove")}
+            </Button>
+          )}
           {selected.size > 0 && (
             <Button
               variant="ghost"
@@ -185,6 +217,7 @@ export function ReservationList({
           {shown.map((r) => {
             const booked = r.status === "booked";
             const hasTables = r.table_ids.length > 0;
+            const closedRoom = closedRoomOf(r);
             const start = Date.parse(r.reserved_at);
             const lateMinutes =
               isToday && booked && start <= now ? Math.floor((now - start) / 60_000) : null;
@@ -270,6 +303,16 @@ export function ReservationList({
                         {t("reservations.unassigned")}
                       </Badge>
                     ) : null}
+                    {closedRoom && (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-500 font-normal text-amber-700 dark:text-amber-400"
+                        title={t("reservations.closedRoomHint")}
+                      >
+                        <TriangleAlert className="mr-1 h-3.5 w-3.5" />
+                        {t("reservations.closedRoomBadge", { room: roomName(closedRoom) })}
+                      </Badge>
+                    )}
                     <div className="ml-auto flex gap-1">
                       {canPlan && booked && hasTables && onChangeTables && (
                         <Button

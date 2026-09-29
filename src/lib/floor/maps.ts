@@ -57,13 +57,21 @@ export async function createFloorMap(
 
 export async function updateFloorMap(
   id: string,
-  fields: { name?: string; width?: number; height?: number },
+  fields: { name?: string; width?: number; height?: number; bookable?: boolean },
 ): Promise<void> {
   const { error } = await getSupabase()
     .from("floor_maps")
     .update(fields)
     .eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * The rooms a booking or a walk-in can be given (or asked for), plus `keep`
+ * — a room already chosen, so a closed one still reads right where it is set.
+ */
+export function bookableMaps(maps: FloorMap[], keep: string | null = null): FloorMap[] {
+  return maps.filter((m) => m.bookable || m.id === keep);
 }
 
 /** Tables on the map are not deleted: the FK un-places them (map_id → null). */

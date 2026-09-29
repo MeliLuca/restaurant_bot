@@ -45,6 +45,8 @@ export interface FloorTable {
   tagIds: string[];
   /** When it was sat (ms), if occupied */
   occupiedAt: number | null;
+  /** Its room takes no bookings for now: never offered to a party */
+  closed: boolean;
 }
 
 /** A party that holds (or wants) tables: a reservation or a walk-in */

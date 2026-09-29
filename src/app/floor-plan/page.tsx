@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   Bike,
   CalendarClock,
+  CalendarOff,
   CalendarPlus,
   ChevronDown,
   LayoutGrid,
@@ -551,14 +552,23 @@ export default function FloorPlanPage() {
                                 type="button"
                                 aria-pressed={m.id === activeMap.id}
                                 onClick={() => setActiveMapId(m.id)}
+                                title={m.bookable ? undefined : t("floor.roomNotBookable")}
                                 className={cn(
-                                  "flex h-9 items-center rounded-full border px-3 text-sm transition-colors",
+                                  "flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors",
                                   m.id === activeMap.id
                                     ? "border-primary bg-primary text-primary-foreground"
                                     : "text-muted-foreground hover:bg-accent",
                                 )}
                               >
                                 {m.name}
+                                {!m.bookable && (
+                                  <>
+                                    <CalendarOff className="h-3.5 w-3.5" aria-hidden />
+                                    <span className="sr-only">
+                                      {t("floor.roomNotBookable")}
+                                    </span>
+                                  </>
+                                )}
                               </button>
                             ))}
                           </div>
@@ -700,7 +710,9 @@ export default function FloorPlanPage() {
       {seatFlow.element}
       <ReservationDialog
         open={reservationOpen}
-        tables={tables}
+        tables={tables.filter(
+          (tb) => !tb.map_id || maps.find((m) => m.id === tb.map_id)?.bookable !== false,
+        )}
         onClose={() => setReservationOpen(false)}
         onCreated={refresh}
       />

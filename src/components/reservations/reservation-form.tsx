@@ -14,6 +14,7 @@ import type {
   TableTag,
 } from "@/lib/database.types";
 import { dayStart } from "@/hooks/use-reservations-day";
+import { bookableMaps } from "@/lib/floor/maps";
 import { useT } from "@/lib/i18n/use-translation";
 import type { Booking, FloorContext } from "@/lib/smart-floor/types";
 import { cn } from "@/lib/utils";
@@ -255,7 +256,7 @@ export function ReservationForm({
           </div>
         )}
 
-        {maps.length > 1 && (
+        {bookableMaps(maps, mapId).length > 1 && (
           <div className="grid gap-2">
             <Label>{t("reservations.room")}</Label>
             <div className="flex flex-wrap gap-2">
@@ -267,7 +268,7 @@ export function ReservationForm({
               >
                 {t("reservations.anyRoom")}
               </button>
-              {maps.map((m) => (
+              {bookableMaps(maps, mapId).map((m) => (
                 <button
                   key={m.id}
                   type="button"
@@ -275,7 +276,7 @@ export function ReservationForm({
                   onClick={() => setMapId(m.id)}
                   className={chip(mapId === m.id)}
                 >
-                  {m.name}
+                  {m.bookable ? m.name : t("reservations.roomClosed", { room: m.name })}
                 </button>
               ))}
             </div>

@@ -272,6 +272,7 @@ export default function ReservationsPage() {
               reservations={reservations}
               ctx={ctx}
               tags={snapshot.tags}
+              maps={maps}
               canPlan={canPlan}
               canEdit={canEdit}
               isToday={isToday}

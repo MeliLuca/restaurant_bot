@@ -20,6 +20,7 @@ import type {
   WaitlistEntry,
 } from "@/lib/database.types";
 import type { Geom } from "@/lib/floor/geometry";
+import { bookableMaps } from "@/lib/floor/maps";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT, type TFn } from "@/lib/i18n/use-translation";
 import type { TableWithTags } from "@/lib/settings-api";
@@ -269,7 +270,7 @@ export function PartyInputs({
         </div>
       )}
 
-      {maps.length > 1 && (
+      {bookableMaps(maps, mapId).length > 1 && (
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium">{t("walkIn.room")}</span>
           <div className="flex flex-wrap gap-2">
@@ -281,7 +282,7 @@ export function PartyInputs({
             >
               {t("reservations.anyRoom")}
             </button>
-            {maps.map((m) => (
+            {bookableMaps(maps, mapId).map((m) => (
               <button
                 key={m.id}
                 type="button"
@@ -289,7 +290,7 @@ export function PartyInputs({
                 onClick={() => onMap(m.id)}
                 className={chipClass(mapId === m.id)}
               >
-                {m.name}
+                {m.bookable ? m.name : t("reservations.roomClosed", { room: m.name })}
               </button>
             ))}
           </div>

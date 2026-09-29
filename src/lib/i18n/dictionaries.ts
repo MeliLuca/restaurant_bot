@@ -93,6 +93,7 @@ export const it = {
     deleteDigit: "Cancella cifra",
   },
   floor: {
+    roomNotBookable: "Non si usa per le prenotazioni",
     title: "Sala",
     status: {
       available: "Libero",
@@ -440,6 +441,17 @@ export const it = {
     height: "Altezza",
     sizeHelp: "Dimensioni del foglio in unità mappa ({min}–{max}). I tavoli non vengono spostati.",
     deleteMap: "Elimina mappa",
+    bookable: "Prenotabile",
+    bookableHelp:
+      "Se la spegni (es. il giardino d'inverno), i suoi tavoli non si usano per prenotazioni, Trova posto e coda. La mappa resta nella Sala per aprire ordini.",
+    notBookableHelp:
+      "Spenta: i suoi tavoli non si usano per prenotazioni, Trova posto e coda. Resta nella Sala per aprire ordini.",
+    notBookable: "non prenotabile",
+    bookableOn: "{name} è di nuovo prenotabile",
+    bookableOff: "{name} non si usa più per le prenotazioni",
+    closeConfirm:
+      "{name} non si userà più per prenotazioni, Trova posto e coda (resta nella Sala per gli ordini).\n\nPrenotazioni che hanno già tavoli lì: {count}. Restano dove sono finché non le sposti (Prenotazioni → Cambia tavolo):\n{list}",
+    andMore: "…e altre {count}",
     tapToEdit: "Tocca un tavolo per modificarlo",
     selectedTable: "Tavolo {name}",
     tablesOnMap: "Tavoli su {name}",
@@ -1350,6 +1362,15 @@ export const it = {
       "* = obbligatoria: il tavolo deve averla. Le altre sono preferenze.",
     room: "Sala preferita",
     anyRoom: "Qualsiasi",
+    roomClosed: "{room} (chiusa)",
+    closedRoomBadge: "{room} è chiusa alle prenotazioni",
+    closedRoomHint: "Questa mappa non si usa per le prenotazioni: sposta la prenotazione con Cambia tavolo.",
+    closedRoomSummary:
+      "Prenotazioni su tavoli di una mappa chiusa: {count}. Spostale con Cambia tavolo, o selezionale e usa Assegna selezionate.",
+    closedRoomSummaryHost:
+      "Prenotazioni su tavoli di una mappa chiusa: {count}. Chiedi a chi pianifica di spostarle.",
+    selectToMove: "Seleziona quelle da spostare",
+    currentInClosedRoom: "{room} è chiusa alle prenotazioni: scegli un altro tavolo.",
     tableSection: "Tavolo",
     plannerAssigns: "Il tavolo lo assegna chi pianifica la sala (Sala Manager), da computer.",
     keepsTables: "Resta sul tavolo {tables}: può cambiarlo solo chi pianifica la sala.",
@@ -1380,6 +1401,7 @@ export const it = {
     warnTakenBy: "Il {table} a quell'ora è di {name}",
     warnTakenNow: "Il {table} è occupato adesso",
     warnNotJoinable: "Tavoli non vicini: controlla che si possano unire",
+    warnClosedRoom: "{tables}: la mappa è chiusa alle prenotazioni",
     reviewTitle: "Anteprima assegnazione",
     reviewPlaced: "Assegnate ({count})",
     reviewMoved: "Spostate per fare posto ({count})",
@@ -1822,6 +1844,7 @@ export const en: typeof it = {
     deleteDigit: "Delete digit",
   },
   floor: {
+    roomNotBookable: "Not used for bookings",
     title: "Floor Plan",
     status: {
       available: "Available",
@@ -2149,6 +2172,17 @@ export const en: typeof it = {
     height: "Height",
     sizeHelp: "Sheet size in map units ({min}–{max}). Tables are not moved.",
     deleteMap: "Delete map",
+    bookable: "Takes bookings",
+    bookableHelp:
+      "Turn it off (e.g. the garden in winter) and its tables aren't used for bookings, Trova posto or the waitlist. The map stays on the Sala page to open orders.",
+    notBookableHelp:
+      "Off: its tables aren't used for bookings, Trova posto or the waitlist. It stays on the Sala page to open orders.",
+    notBookable: "no bookings",
+    bookableOn: "{name} takes bookings again",
+    bookableOff: "{name} is no longer used for bookings",
+    closeConfirm:
+      "{name} will no longer be used for bookings, Trova posto or the waitlist (it stays on the Sala page for orders).\n\nBookings already on its tables: {count}. They stay there until you move them (Prenotazioni → Change table):\n{list}",
+    andMore: "…and {count} more",
     tapToEdit: "Tap a table to edit it",
     selectedTable: "Table {name}",
     tablesOnMap: "Tables on {name}",
@@ -3051,6 +3085,15 @@ export const en: typeof it = {
     needsHint: "* = mandatory: the table must have it. The others are preferences.",
     room: "Preferred room",
     anyRoom: "Any",
+    roomClosed: "{room} (closed)",
+    closedRoomBadge: "{room} takes no bookings",
+    closedRoomHint: "This map isn't used for bookings: move the booking with Change table.",
+    closedRoomSummary:
+      "Bookings on tables of a closed map: {count}. Move them with Change table, or select them and use Assign selected.",
+    closedRoomSummaryHost:
+      "Bookings on tables of a closed map: {count}. Ask whoever plans the floor to move them.",
+    selectToMove: "Select the ones to move",
+    currentInClosedRoom: "{room} takes no bookings: pick another table.",
     tableSection: "Table",
     plannerAssigns: "The table is assigned by whoever plans the floor (Sala Manager), from a computer.",
     keepsTables: "Stays on table {tables}: only a floor planner can change it.",
@@ -3081,6 +3124,7 @@ export const en: typeof it = {
     warnTakenBy: "Table {table} belongs to {name} at that time",
     warnTakenNow: "Table {table} is occupied now",
     warnNotJoinable: "Tables not next to each other: check they can be joined",
+    warnClosedRoom: "{tables}: the map takes no bookings",
     reviewTitle: "Assignment preview",
     reviewPlaced: "Assigned ({count})",
     reviewMoved: "Moved to make room ({count})",

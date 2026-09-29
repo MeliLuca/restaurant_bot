@@ -61,6 +61,7 @@ const groupCache = new WeakMap<FloorContext, Map<number, Group[]>>();
  * Every single table or connected group of joinable tables (up to
  * maxJoinTables) that seats `party`, counting the overfill. A group that
  * already fits is not grown further: a bigger one only adds empty seats.
+ * Tables of a room closed to bookings are never part of one.
  */
 export function fittingGroups(ctx: FloorContext, party: number): Group[] {
   let perParty = groupCache.get(ctx);
@@ -72,6 +73,7 @@ export function fittingGroups(ctx: FloorContext, party: number): Group[] {
   const seen = new Set<string>();
   const out: Group[] = [];
   for (const t of Array.from(ctx.tables.values())) {
+    if (t.closed) continue;
     const stack: string[][] = [[t.id]];
     while (stack.length > 0) {
       const set = stack.pop()!;
@@ -88,7 +90,7 @@ export function fittingGroups(ctx: FloorContext, party: number): Group[] {
       const next = new Set<string>();
       for (const id of set) {
         ctx.adjacency.get(id)?.forEach((n) => {
-          if (!members.has(n)) next.add(n);
+          if (!members.has(n) && !ctx.tables.get(n)?.closed) next.add(n);
         });
       }
       next.forEach((n) => stack.push([...set, n]));

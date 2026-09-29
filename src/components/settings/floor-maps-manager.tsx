@@ -7,9 +7,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   ArrowDown,
   ArrowUp,
+  CalendarOff,
   Circle,
   Combine,
   Map as MapIcon,
@@ -24,7 +26,8 @@ import { TableRow, runAction } from "@/components/settings/tables-manager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { FloorMap, TableTag } from "@/lib/database.types";
+import { fetchReservationsBetween } from "@/lib/api";
+import type { FloorMap, Reservation, TableTag } from "@/lib/database.types";
 import {
   MAP_MAX_SIZE,
   MAP_MIN_SIZE,
@@ -37,7 +40,7 @@ import {
   unplaceTable,
   updateFloorMap,
 } from "@/lib/floor/maps";
-import { useT } from "@/lib/i18n/use-translation";
+import { useLangStore, useT } from "@/lib/i18n/use-translation";
 import {
   createTable,
   deleteTable,
@@ -51,6 +54,8 @@ import { useSmartFloor } from "@/stores/smart-floor-store";
 const NEW_MAP_SIZE = { width: 1000, height: 700 };
 const EMPTY = new Map<string, never[]>();
 const NO_DIMMED = new Set<string>();
+/** Bookings named in the "close to bookings" warning; the rest are counted */
+const CLOSE_LIST_MAX = 10;
 
 interface FloorMapsManagerProps {
   maps: FloorMap[];
@@ -77,6 +82,7 @@ export function FloorMapsManager({
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const smartFloor = useSmartFloor().enabled;
+  const lang = useLangStore((s) => s.lang);
 
   const map = maps.find((m) => m.id === selectedMapId) ?? maps[0] ?? null;
   const onMap = map ? tables.filter((tb) => tb.map_id === map.id) : [];
@@ -98,6 +104,54 @@ export function FloorMapsManager({
     const [id] = ids.splice(index, 1);
     ids.splice(index + delta, 0, id);
     void run(() => reorderFloorMaps(ids), t("floorMapsMgr.reordered"));
+  }
+
+  // closing a room to bookings: say which bookings already sit there (they stay)
+  async function setBookable(m: FloorMap, bookable: boolean) {
+    if (!bookable) {
+      const ids = new Set(tables.filter((tb) => tb.map_id === m.id).map((tb) => tb.id));
+      const from = new Date();
+      from.setHours(0, 0, 0, 0);
+      const until = new Date(from);
+      until.setFullYear(until.getFullYear() + 2);
+      let there: Reservation[];
+      try {
+        there = (await fetchReservationsBetween(from, until)).filter(
+          (r) => r.status === "booked" && r.table_ids.some((id) => ids.has(id)),
+        );
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
+        return;
+      }
+      if (there.length > 0) {
+        const when = new Intl.DateTimeFormat(lang === "it" ? "it-IT" : "en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const list = there
+          .slice(0, CLOSE_LIST_MAX)
+          .map((r) => `• ${when.format(new Date(r.reserved_at))} ${r.customer_name} (${r.party_size})`)
+          .concat(
+            there.length > CLOSE_LIST_MAX
+              ? [t("floorMapsMgr.andMore", { count: there.length - CLOSE_LIST_MAX })]
+              : [],
+          )
+          .join("\n");
+        if (
+          !window.confirm(
+            t("floorMapsMgr.closeConfirm", { name: m.name, count: there.length, list }),
+          )
+        ) {
+          return;
+        }
+      }
+    }
+    void run(
+      () => updateFloorMap(m.id, { bookable }),
+      t(bookable ? "floorMapsMgr.bookableOn" : "floorMapsMgr.bookableOff", { name: m.name }),
+    );
   }
 
   return (
@@ -133,8 +187,15 @@ export function FloorMapsManager({
                     className="flex min-h-10 min-w-0 flex-1 flex-col items-start text-left"
                   >
                     <span className="truncate font-medium">{m.name}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       {t("floorMapsMgr.tablesCount", { count })}
+                      {!m.bookable && (
+                        <>
+                          {" · "}
+                          <CalendarOff className="h-3 w-3" />
+                          {t("floorMapsMgr.notBookable")}
+                        </>
+                      )}
                     </span>
                   </button>
                   <Button
@@ -179,6 +240,7 @@ export function FloorMapsManager({
             map={map}
             tableCount={onMap.length}
             busy={busy}
+            onBookableChange={(bookable) => void setBookable(map, bookable)}
             onSave={(fields) =>
               run(
                 () => updateFloorMap(map.id, fields),
@@ -462,12 +524,14 @@ function MapSettingsCard({
   map,
   tableCount,
   busy,
+  onBookableChange,
   onSave,
   onDelete,
 }: {
   map: FloorMap;
   tableCount: number;
   busy: boolean;
+  onBookableChange: (bookable: boolean) => void;
   onSave: (fields: {
     name?: string;
     width?: number;
@@ -551,6 +615,21 @@ function MapSettingsCard({
         <p className="text-xs text-muted-foreground">
           {t("floorMapsMgr.sizeHelp", { min: MAP_MIN_SIZE, max: MAP_MAX_SIZE })}
         </p>
+        <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+          <input
+            type="checkbox"
+            checked={map.bookable}
+            disabled={busy}
+            onChange={(e) => onBookableChange(e.target.checked)}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium">{t("floorMapsMgr.bookable")}</span>
+            <span className="text-xs text-muted-foreground">
+              {t(map.bookable ? "floorMapsMgr.bookableHelp" : "floorMapsMgr.notBookableHelp")}
+            </span>
+          </span>
+        </label>
         <Button
           variant="outline"
           className="h-11 text-destructive hover:text-destructive"

@@ -115,6 +115,8 @@ export interface Database {
           elements: FloorMapElement[];
           sort_order: number;
           created_at: string;
+          /** Off = no reservations, Trova posto or waitlist on its tables */
+          bookable: boolean;
         };
         Insert: {
           id?: string;
@@ -124,6 +126,7 @@ export interface Database {
           elements?: FloorMapElement[];
           sort_order?: number;
           created_at?: string;
+          bookable?: boolean;
         };
         Update: {
           id?: string;
@@ -133,6 +136,7 @@ export interface Database {
           elements?: FloorMapElement[];
           sort_order?: number;
           created_at?: string;
+          bookable?: boolean;
         };
         Relationships: [];
       };

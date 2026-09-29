@@ -52,6 +52,7 @@ export function toFloorTable(t: TableWithTags): FloorTable {
     zoneId: t.zone_id,
     tagIds: t.table_tags.map((tag) => tag.id),
     occupiedAt: t.occupied_at ? Date.parse(t.occupied_at) : null,
+    closed: false,
   };
 }
 
@@ -61,7 +62,13 @@ export function buildFloorContext(
   now: number = Date.now(),
 ): FloorContext {
   const rules = rulesFrom(snap.settings);
-  const tables = snap.tables.map(toFloorTable);
+  // tables of a room closed to bookings stay known (bookings already on
+  // them keep their hold) but are never offered
+  const closedMaps = new Set(snap.maps.filter((m) => !m.bookable).map((m) => m.id));
+  const tables = snap.tables.map((t) => ({
+    ...toFloorTable(t),
+    closed: t.map_id !== null && closedMaps.has(t.map_id),
+  }));
   return {
     now,
     rules,
