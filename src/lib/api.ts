@@ -182,8 +182,13 @@ export async function assignReservations(
  */
 export async function seatReservation(r: Reservation): Promise<void> {
   await setReservationStatus(r.id, "seated");
-  await Promise.all(r.table_ids.map((id) => updateTableStatus(id, "occupied")));
-  const [first, ...others] = r.table_ids;
+  await occupyTables(r.table_ids);
+}
+
+/** Sit one party on these tables: all occupied, linked when more than one */
+export async function occupyTables(tableIds: string[]): Promise<void> {
+  await Promise.all(tableIds.map((id) => updateTableStatus(id, "occupied")));
+  const [first, ...others] = tableIds;
   // one at a time: each call may merge groups the previous one made
   for (const id of others) {
     await linkTables(

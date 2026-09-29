@@ -14,6 +14,7 @@ import {
   Search,
   ShoppingBag,
   TriangleAlert,
+  UserRoundSearch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,10 @@ import {
 } from "@/components/floor-plan/smart-floor-layer";
 import { useTimeFormat } from "@/components/reservations/format";
 import { useSeatFlow } from "@/components/reservations/seat-flow";
+import {
+  WalkInFinder,
+  walkInMarks,
+} from "@/components/smart-floor/walk-in-finder";
 import { TableCard } from "@/components/floor-plan/table-card";
 import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
 import { releaseReservationTables, resetDeliveryCounter } from "@/lib/api";
@@ -56,6 +61,7 @@ import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 import { usePermission } from "@/stores/auth-store";
+import type { WalkInOption } from "@/lib/smart-floor/walk-in";
 import { useSmartFloor } from "@/stores/smart-floor-store";
 import { useTicketStore } from "@/stores/ticket-store";
 
@@ -116,12 +122,19 @@ export default function FloorPlanPage() {
   const canReserve = usePermission("manage_reservations");
   const canTakeOrders = usePermission("take_orders");
   const canPlanFloor = usePermission("plan_floor");
+  const canManageTables = usePermission("manage_tables");
   const isPhone = useIsPhone();
   const { enabled: smartFloor, settings: floorSettings } = useSmartFloor();
   const time = useTimeFormat();
   const now = useNow(30_000);
   /** Gestione Sala Smart: a time later today to look at (null = now) */
   const [viewAt, setViewAt] = useState<number | null>(null);
+  /** "Trova posto" open, and the tables it shows on the map */
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [finderPick, setFinderPick] = useState<{
+    option: WalkInOption;
+    size: number;
+  } | null>(null);
 
   const tableNameById = new Map(tables.map((tb) => [tb.id, tb.name]));
   const tableNames = (ids: string[]) =>
@@ -178,6 +191,26 @@ export default function FloorPlanPage() {
     now,
     at: viewAt,
   });
+
+  const finder = walkInMarks(
+    layer.active && finderOpen ? (finderPick?.option ?? null) : null,
+    tables,
+    layer.marks,
+    t("walkIn.mapLabel", { count: finderPick?.size ?? 0 }),
+  );
+
+  function pickWalkIn(option: WalkInOption | null, size: number) {
+    setFinderPick(option ? { option, size } : null);
+    // bring its room on screen
+    const room = option && tables.find((tb) => tb.id === option.tableIds[0])?.map_id;
+    if (room) setActiveMapId(room);
+  }
+
+  function toggleFinder() {
+    setFinderOpen((open) => !open);
+    setReservationsExpanded(false);
+    setViewAt(null);
+  }
 
   /** The next booked party on a table today (Gestione Sala Smart) */
   function bookingFor(table: RestaurantTable | null): TableBooking | null {
@@ -317,7 +350,13 @@ export default function FloorPlanPage() {
           value="tables"
           className="mt-4 min-h-0 flex-1 data-[state=inactive]:hidden"
         >
-          <div className="flex h-full min-h-0 flex-col gap-4 xl:flex-row">
+          <div
+            className={cn(
+              "flex h-full min-h-0 flex-col gap-4",
+              // the finder's picks show on the map: keep both on screen
+              finderOpen ? "lg:flex-row" : "xl:flex-row",
+            )}
+          >
             <div className="flex min-h-0 flex-1 flex-col gap-3">
               {/* Search + status filters + reservation actions */}
               <div className="flex flex-wrap items-center gap-2">
@@ -387,7 +426,10 @@ export default function FloorPlanPage() {
                   variant="outline"
                   className="h-11"
                   aria-expanded={reservationsExpanded}
-                  onClick={() => setReservationsExpanded((e) => !e)}
+                  onClick={() => {
+                    setReservationsExpanded((e) => !e);
+                    setFinderOpen(false);
+                  }}
                 >
                   <CalendarClock className="mr-2 h-4 w-4" />
                   {t("floor.todaysReservations")}
@@ -399,19 +441,31 @@ export default function FloorPlanPage() {
                     )}
                   />
                 </Button>
-                {canReserve && (
-                  <Button
-                    className="ml-auto h-11"
-                    onClick={() =>
-                      // Gestione Sala Smart books (and seats) from its own page
-                      smartFloor
-                        ? router.push("/prenotazioni?new=1")
-                        : setReservationOpen(true)
-                    }
-                  >
-                    <CalendarPlus className="mr-2 h-4 w-4" /> {t("floor.newReservation")}
-                  </Button>
-                )}
+                <div className="ml-auto flex flex-wrap gap-2">
+                  {layer.active && canManageTables && (
+                    <Button
+                      variant={finderOpen ? "secondary" : "outline"}
+                      className="h-11"
+                      aria-expanded={finderOpen}
+                      onClick={toggleFinder}
+                    >
+                      <UserRoundSearch className="mr-2 h-4 w-4" /> {t("walkIn.open")}
+                    </Button>
+                  )}
+                  {canReserve && (
+                    <Button
+                      className="h-11"
+                      onClick={() =>
+                        // Gestione Sala Smart books (and seats) from its own page
+                        smartFloor
+                          ? router.push("/prenotazioni?new=1")
+                          : setReservationOpen(true)
+                      }
+                    >
+                      <CalendarPlus className="mr-2 h-4 w-4" /> {t("floor.newReservation")}
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Feature tags (TV screen, accessible…) on their own row */}
@@ -468,8 +522,13 @@ export default function FloorPlanPage() {
                       dimmed={dimmedOnMap}
                       onSelect={handleTableClick}
                       neutral={layer.active && viewAt !== null}
-                      marks={layer.marks}
-                      underlay={layer.underlay}
+                      marks={finder.marks}
+                      underlay={
+                        <>
+                          {layer.underlay}
+                          {finder.underlay}
+                        </>
+                      }
                       toolbar={
                         (maps.length > 1 || layer.active) && (
                           <div className="flex flex-wrap items-center gap-2">
@@ -549,15 +608,31 @@ export default function FloorPlanPage() {
               )}
             </div>
 
-            {reservationsExpanded && (
-              <div className="max-h-[45%] min-h-0 shrink-0 overflow-y-auto xl:h-full xl:max-h-none xl:w-[380px]">
-                <ReservationsPanel
-                  reservations={reservations}
+            {layer.active && finderOpen ? (
+              <div className="max-h-[55%] min-h-0 shrink-0 overflow-y-auto lg:h-full lg:max-h-none lg:w-[340px] xl:w-[380px]">
+                <WalkInFinder
                   tables={tables}
-                  onChanged={refresh}
-                  onSeat={layer.active ? seatFlow.seat : undefined}
+                  reservations={reservations}
+                  links={links}
+                  maps={maps}
+                  openOrders={openOrders}
+                  now={now}
+                  onPick={pickWalkIn}
+                  onSeated={refresh}
+                  onClose={() => setFinderOpen(false)}
                 />
               </div>
+            ) : (
+              reservationsExpanded && (
+                <div className="max-h-[45%] min-h-0 shrink-0 overflow-y-auto xl:h-full xl:max-h-none xl:w-[380px]">
+                  <ReservationsPanel
+                    reservations={reservations}
+                    tables={tables}
+                    onChanged={refresh}
+                    onSeat={layer.active ? seatFlow.seat : undefined}
+                  />
+                </div>
+              )
             )}
           </div>
         </TabsContent>

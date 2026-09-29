@@ -166,7 +166,7 @@ function evaluate(
 }
 
 /** Options that fit the party's size and mandatory needs, whatever the time */
-function feasibleOptions(
+export function feasibleOptions(
   ctx: FloorContext,
   booking: Booking,
 ): { options: Omit<TableOption, "freeUntil">[]; reason: NoTableReason | null } {

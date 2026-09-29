@@ -4,6 +4,7 @@ import { getSupabase } from "@/lib/supabase/client";
 import type { TableJoinRule } from "@/lib/database.types";
 import type { FloorSnapshot } from "./context";
 import { fetchSmartFloorSettings } from "./settings";
+import type { OpenBill } from "./walk-in";
 
 export async function fetchJoinRules(): Promise<TableJoinRule[]> {
   const { data, error } = await getSupabase().from("table_join_rules").select("*");
@@ -55,4 +56,35 @@ export async function clearJoinRules(tableIds: string[]): Promise<void> {
     .in("table_a", tableIds)
     .in("table_b", tableIds);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Every open dine-in bill, for "Trova posto": when its pre-conto was printed
+ * and when it first got an item from a "finishing" category (Dolci…).
+ */
+export async function fetchOpenBills(finishingCategoryIds: string[]): Promise<OpenBill[]> {
+  const { data, error } = await getSupabase()
+    .from("orders")
+    .select("table_id, preconto_at, order_items(created_at, menu_items(category_id))")
+    .eq("status", "open")
+    .eq("order_type", "dine_in");
+  if (error) throw new Error(error.message);
+  const finishing = new Set(finishingCategoryIds);
+  const rows = data as unknown as {
+    table_id: string | null;
+    preconto_at: string | null;
+    order_items: { created_at: string; menu_items: { category_id: string } | null }[];
+  }[];
+  return rows
+    .filter((o) => o.table_id !== null)
+    .map((o) => {
+      const times = o.order_items
+        .filter((i) => i.menu_items && finishing.has(i.menu_items.category_id))
+        .map((i) => Date.parse(i.created_at));
+      return {
+        tableId: o.table_id!,
+        precontoAt: o.preconto_at ? Date.parse(o.preconto_at) : null,
+        finishingAt: times.length > 0 ? Math.min(...times) : null,
+      };
+    });
 }
