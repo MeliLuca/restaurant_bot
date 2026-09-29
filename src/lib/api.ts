@@ -66,12 +66,11 @@ function toReservation({
   return { ...row, table_ids: reservation_tables.map((rt) => rt.table_id) };
 }
 
-export async function fetchTodayReservations(): Promise<Reservation[]> {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-
+/** Reservations with reserved_at in [start, end), earliest first */
+export async function fetchReservationsBetween(
+  start: Date,
+  end: Date,
+): Promise<Reservation[]> {
   const { data, error } = await getSupabase()
     .from("reservations")
     .select(RESERVATION_SELECT)
@@ -80,6 +79,14 @@ export async function fetchTodayReservations(): Promise<Reservation[]> {
     .order("reserved_at");
   if (error) throw new Error(error.message);
   return (data as unknown as ReservationJoinRow[]).map(toReservation);
+}
+
+export async function fetchTodayReservations(): Promise<Reservation[]> {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return fetchReservationsBetween(start, end);
 }
 
 export interface NewReservation {
