@@ -101,6 +101,8 @@ export interface NewReservation {
   tagIds?: string[];
   /** Preferred room (floor map) */
   mapId?: string | null;
+  /** Keep bulk assignment from moving it */
+  locked?: boolean;
 }
 
 /** Create a reservation and its tables in one transaction; returns its id */
@@ -114,11 +116,56 @@ export async function createReservation(r: NewReservation): Promise<string> {
       phone: r.phone || null,
       tag_ids: r.tagIds ?? [],
       map_id: r.mapId ?? null,
+      locked: r.locked ?? false,
     },
     p_table_ids: r.tableIds,
   });
   if (error) throw new Error(error.message);
   return data;
+}
+
+export type ReservationPatch = Partial<Omit<NewReservation, "tableIds">>;
+
+/**
+ * Change a reservation's details; `tableIds` replaces its tables (omit to
+ * leave them alone, [] to unassign).
+ */
+export async function updateReservation(
+  id: string,
+  patch: ReservationPatch,
+  tableIds?: string[],
+): Promise<void> {
+  const p: Record<string, unknown> = { id };
+  if (patch.customerName !== undefined) p.customer_name = patch.customerName;
+  if (patch.partySize !== undefined) p.party_size = patch.partySize;
+  if (patch.reservedAt !== undefined) p.reserved_at = patch.reservedAt.toISOString();
+  if (patch.notes !== undefined) p.notes = patch.notes || null;
+  if (patch.phone !== undefined) p.phone = patch.phone || null;
+  if (patch.tagIds !== undefined) p.tag_ids = patch.tagIds;
+  if (patch.mapId !== undefined) p.map_id = patch.mapId;
+  if (patch.locked !== undefined) p.locked = patch.locked;
+  const { error } = await getSupabase().rpc("save_reservation", {
+    p,
+    p_table_ids: tableIds ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Replace the tables of many reservations in one transaction */
+export async function assignReservations(
+  assignments: { id: string; table_ids: string[] }[],
+): Promise<void> {
+  if (assignments.length === 0) return;
+  const { error } = await getSupabase().rpc("assign_reservations", {
+    p: assignments,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** The party arrived: the booking is seated and all its tables occupied */
+export async function seatReservation(r: Reservation): Promise<void> {
+  await setReservationStatus(r.id, "seated");
+  await Promise.all(r.table_ids.map((id) => updateTableStatus(id, "occupied")));
 }
 
 export async function setReservationStatus(

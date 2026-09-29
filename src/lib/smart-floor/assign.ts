@@ -226,7 +226,16 @@ export interface Plan {
   placed: Placement[];
   /** Other bookings the plan moves to make room (never locked ones) */
   moved: Placement[];
-  unplaced: { bookingId: string; reason: NoTableReason }[];
+  unplaced: Unplaced[];
+}
+
+export interface Unplaced {
+  bookingId: string;
+  reason: NoTableReason;
+  /** Tables it held before the plan */
+  previousTableIds: string[];
+  /** Still free for it: it simply keeps them. Otherwise the plan gave them away. */
+  keepsPrevious: boolean;
 }
 
 /** Hardest parties first: big ones, then those with must-have features */
@@ -260,7 +269,7 @@ export function planAssignments(
   }
   const timeline = new Timeline(ctx, current);
   const chosen = new Map<string, TableOption>();
-  const unplaced: Plan["unplaced"] = [];
+  const unplaced: Unplaced[] = [];
 
   const order = Array.from(targets)
     .map((id) => ctx.bookings.get(id)!)
@@ -339,7 +348,17 @@ export function planAssignments(
       continue;
     }
     if (reason === "all_taken" && opts.allowMoves && repair(b)) continue;
-    unplaced.push({ bookingId: b.id, reason: reason ?? "all_taken" });
+    // no better seat: it keeps what it had, unless a harder party got there first
+    const keepsPrevious =
+      b.tableIds.length > 0 &&
+      timeline.isFree(b.tableIds, ...holdSpan(b.start, ctx.rules));
+    if (keepsPrevious) timeline.hold(b.id, b.tableIds);
+    unplaced.push({
+      bookingId: b.id,
+      reason: reason ?? "all_taken",
+      previousTableIds: b.tableIds,
+      keepsPrevious,
+    });
   }
 
   const placed: Placement[] = [];
@@ -351,4 +370,24 @@ export function planAssignments(
     else moved.push(entry);
   }
   return { placed, moved, unplaced };
+}
+
+/**
+ * Who keeps each table from a party sitting at `start`: the booking holding
+ * it (null = someone sitting there now, or it's being cleaned). Tables not
+ * listed are free for the whole stay. `except`'s own tables don't count.
+ */
+export function tablesTakenAt(
+  ctx: FloorContext,
+  start: number,
+  except: string | null = null,
+): Map<string, string | null> {
+  const timeline = timelineFor(ctx, new Set(except ? [except] : []));
+  const [from, to] = holdSpan(start, ctx.rules);
+  const taken = new Map<string, string | null>();
+  ctx.tables.forEach((_, id) => {
+    const c = timeline.conflicts([id], from, to);
+    if (c.length > 0) taken.set(id, c.find((b) => b.bookingId)?.bookingId ?? null);
+  });
+  return taken;
 }

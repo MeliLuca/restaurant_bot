@@ -51,6 +51,23 @@ function turned(rot: ViewRotation, w: number, h: number) {
   }
 }
 
+/** How a table is marked on top of its status (Gestione Sala Smart previews) */
+export type TableMarkTone = "proposed" | "picked" | "moved" | "held";
+export interface TableMark {
+  tone: TableMarkTone;
+  /** Short text drawn above the table (a party's name) */
+  label?: string;
+}
+
+const MARK_SHAPE: Record<TableMarkTone, string> = {
+  proposed: "fill-emerald-500/30 stroke-emerald-600",
+  picked: "fill-violet-500/30 stroke-violet-600",
+  moved: "fill-amber-400/40 stroke-amber-500",
+  held: "fill-zinc-400/30 stroke-zinc-500",
+};
+/** Neutral look when the current status doesn't matter (planning ahead) */
+const NEUTRAL_SHAPE = "fill-background stroke-zinc-400 group-hover:fill-zinc-100";
+
 interface FloorMapViewProps {
   map: FloorMap;
   /** Tables placed on this map */
@@ -64,6 +81,10 @@ interface FloorMapViewProps {
   toolbar?: ReactNode;
   /** Table outlined as selected (Settings → Mappe sala) */
   selectedId?: string | null;
+  /** Draw tables without their live status colours */
+  neutral?: boolean;
+  /** Tables to highlight, by id */
+  marks?: Map<string, TableMark>;
 }
 
 export function FloorMapView({
@@ -75,6 +96,8 @@ export function FloorMapView({
   onSelect,
   toolbar,
   selectedId = null,
+  neutral = false,
+  marks,
 }: FloorMapViewProps) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -232,6 +255,8 @@ export function FloorMapView({
                   selected={tb.id === selectedId}
                   viewRotation={rotation}
                   onSelect={onSelect}
+                  neutral={neutral}
+                  mark={marks?.get(tb.id)}
                 />
               ))}
             </g>
@@ -357,6 +382,8 @@ interface MapTableProps {
   /** How far the whole map is turned: labels counter-rotate to stay upright */
   viewRotation?: number;
   onSelect: (table: RestaurantTable) => void;
+  neutral?: boolean;
+  mark?: TableMark;
 }
 
 function MapTable({
@@ -367,6 +394,8 @@ function MapTable({
   selected = false,
   viewRotation = 0,
   onSelect,
+  neutral = false,
+  mark,
 }: MapTableProps) {
   const t = useT();
   const pathRef = useRef<SVGPathElement>(null);
@@ -396,7 +425,12 @@ function MapTable({
   }, [table.path]);
 
   const status = STATUS_CONFIG[displayStatus(table.status, splits.length > 0)];
-  const shapeClass = cn("table-shape transition-colors", status.shape);
+  const shapeClass = cn(
+    "table-shape transition-colors",
+    mark ? MARK_SHAPE[mark.tone] : neutral ? NEUTRAL_SHAPE : status.shape,
+  );
+  const strokeWidth = mark && mark.tone !== "held" ? 3 : 1.75;
+  const dash = mark?.tone === "held" ? "4 3" : undefined;
   const rotate = Number(table.rotation) || 0;
   // Numbers read upright whatever the table's and the view's rotation; a
   // table that ends up standing on screen sizes its label on swapped sides.
@@ -445,14 +479,16 @@ function MapTable({
           cx={x + w / 2}
           cy={y + h / 2}
           r={Math.min(w, h) / 2}
-          strokeWidth={1.75}
+          strokeWidth={strokeWidth}
+          strokeDasharray={dash}
           className={shapeClass}
         />
       ) : table.shape === "path" && table.path ? (
         <path
           ref={pathRef}
           d={table.path}
-          strokeWidth={1.75}
+          strokeWidth={strokeWidth}
+          strokeDasharray={dash}
           className={shapeClass}
         />
       ) : (
@@ -462,7 +498,8 @@ function MapTable({
           width={w}
           height={h}
           rx={2}
-          strokeWidth={1.75}
+          strokeWidth={strokeWidth}
+          strokeDasharray={dash}
           className={shapeClass}
         />
       )}
@@ -490,6 +527,20 @@ function MapTable({
         {table.name}
       </text>
 
+      {mark?.label && (
+        <text
+          x={x + w / 2}
+          y={y - 5}
+          transform={upright(x + w / 2, y - 5)}
+          fontSize={14}
+          textAnchor="middle"
+          className="pointer-events-none fill-foreground stroke-background font-semibold"
+          strokeWidth={3}
+          style={{ paintOrder: "stroke" }}
+        >
+          {mark.label}
+        </text>
+      )}
       {splits.length > 1 && (
         <g className="pointer-events-none">
           <circle cx={x + w} cy={y} r={8} className="fill-foreground" />

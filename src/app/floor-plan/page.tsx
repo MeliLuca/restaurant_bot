@@ -39,6 +39,7 @@ import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 import { usePermission } from "@/stores/auth-store";
+import { useSmartFloor } from "@/stores/smart-floor-store";
 import { useTicketStore } from "@/stores/ticket-store";
 
 const LEGEND: TableDisplayStatus[] = [
@@ -97,6 +98,7 @@ export default function FloorPlanPage() {
   useEffect(() => setStoredView(readStoredView()), []);
   const canReserve = usePermission("manage_reservations");
   const canTakeOrders = usePermission("take_orders");
+  const smartFloor = useSmartFloor().enabled;
 
   const activeReservations = reservations.filter(
     (r) => r.status === "booked" || r.status === "seated",
@@ -298,7 +300,12 @@ export default function FloorPlanPage() {
                 {canReserve && (
                   <Button
                     className="ml-auto h-11"
-                    onClick={() => setReservationOpen(true)}
+                    onClick={() =>
+                      // Gestione Sala Smart books (and seats) from its own page
+                      smartFloor
+                        ? router.push("/prenotazioni?new=1")
+                        : setReservationOpen(true)
+                    }
                   >
                     <CalendarPlus className="mr-2 h-4 w-4" /> {t("floor.newReservation")}
                   </Button>

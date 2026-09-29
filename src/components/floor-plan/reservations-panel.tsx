@@ -15,10 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-  setReservationStatus,
-  updateTableStatus,
-} from "@/lib/api";
+import { seatReservation, setReservationStatus } from "@/lib/api";
 import type { Reservation, RestaurantTable } from "@/lib/database.types";
 import { compareTableNames } from "@/lib/floor/maps";
 import { useT } from "@/lib/i18n/use-translation";
@@ -57,10 +54,7 @@ export function ReservationsPanel({
   async function seat(r: Reservation) {
     setBusyId(r.id);
     try {
-      await setReservationStatus(r.id, "seated");
-      await Promise.all(
-        r.table_ids.map((id) => updateTableStatus(id, "occupied")),
-      );
+      await seatReservation(r);
       await onChanged();
       toast.success(
         t("floor.seatedAt", {
