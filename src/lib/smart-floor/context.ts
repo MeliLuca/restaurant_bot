@@ -37,13 +37,8 @@ export function reservationToBooking(r: Reservation): Booking {
   };
 }
 
-/** The engine's view of the floor at `now` */
-export function buildFloorContext(
-  snap: FloorSnapshot,
-  now: number = Date.now(),
-): FloorContext {
-  const rules = rulesFrom(snap.settings);
-  const tables: FloorTable[] = snap.tables.map((t) => ({
+export function toFloorTable(t: TableWithTags): FloorTable {
+  return {
     id: t.id,
     name: t.name,
     capacity: t.capacity,
@@ -52,7 +47,16 @@ export function buildFloorContext(
     geom: t.map_id && t.x !== null ? geomOf(t) : null,
     tagIds: t.table_tags.map((tag) => tag.id),
     occupiedAt: t.occupied_at ? Date.parse(t.occupied_at) : null,
-  }));
+  };
+}
+
+/** The engine's view of the floor at `now` */
+export function buildFloorContext(
+  snap: FloorSnapshot,
+  now: number = Date.now(),
+): FloorContext {
+  const rules = rulesFrom(snap.settings);
+  const tables = snap.tables.map(toFloorTable);
   return {
     now,
     rules,

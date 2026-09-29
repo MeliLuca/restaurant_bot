@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { isMobileRoute } from "@/lib/mobile-route";
+import { FloorAlerts } from "@/components/smart-floor/floor-alerts";
 import { Sidebar } from "./sidebar";
 
 /**
@@ -27,6 +28,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto pb-14 print:overflow-visible sm:pb-0">
         {children}
       </main>
+      {/* Gestione Sala Smart: late / still-occupied bookings (floor_alerts) */}
+      <FloorAlerts />
     </div>
   );
 }

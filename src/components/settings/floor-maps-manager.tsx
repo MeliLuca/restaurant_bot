@@ -11,6 +11,7 @@ import {
   ArrowDown,
   ArrowUp,
   Circle,
+  Combine,
   Map as MapIcon,
   MapPinOff,
   Move,
@@ -45,6 +46,7 @@ import {
   type TableWithTags,
 } from "@/lib/settings-api";
 import { cn } from "@/lib/utils";
+import { useSmartFloor } from "@/stores/smart-floor-store";
 
 const NEW_MAP_SIZE = { width: 1000, height: 700 };
 const EMPTY = new Map<string, never[]>();
@@ -74,6 +76,7 @@ export function FloorMapsManager({
   const [busy, setBusy] = useState(false);
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const smartFloor = useSmartFloor().enabled;
 
   const map = maps.find((m) => m.id === selectedMapId) ?? maps[0] ?? null;
   const onMap = map ? tables.filter((tb) => tb.map_id === map.id) : [];
@@ -215,6 +218,14 @@ export function FloorMapsManager({
                     {t("floorMapsMgr.editLayout")}
                   </Link>
                 </Button>
+                {smartFloor && (
+                  <Button asChild variant="outline" className="h-11 shrink-0">
+                    <Link href={`/settings/floor-maps/${map.id}/joins`}>
+                      <Combine className="mr-2 h-4 w-4" />
+                      {t("joinPairs.open")}
+                    </Link>
+                  </Button>
+                )}
                 <p className="text-sm text-muted-foreground">
                   {t("floorMapsMgr.tapToEdit")}
                 </p>

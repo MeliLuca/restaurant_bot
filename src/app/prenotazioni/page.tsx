@@ -15,15 +15,14 @@ import { PlanReview } from "@/components/reservations/plan-review";
 import { PlanningMap } from "@/components/reservations/planning-map";
 import { ReservationForm } from "@/components/reservations/reservation-form";
 import { ReservationList } from "@/components/reservations/reservation-list";
+import { tableNamesOf } from "@/components/reservations/format";
+import { useSeatFlow } from "@/components/reservations/seat-flow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useNow } from "@/hooks/use-now";
 import { dayKey, dayStart, useReservationsDay } from "@/hooks/use-reservations-day";
-import {
-  seatReservation,
-  setReservationStatus,
-  updateReservation,
-} from "@/lib/api";
+import { setReservationStatus, updateReservation } from "@/lib/api";
 import type { Reservation } from "@/lib/database.types";
 import { useIsPhone } from "@/lib/device";
 import { useT } from "@/lib/i18n/use-translation";
@@ -59,6 +58,7 @@ export default function ReservationsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeMapId, setActiveMapId] = useState<string | null>(null);
   const { snapshot, maps, error, refresh } = useReservationsDay(day);
+  const now = useNow(30_000);
 
   // Sala → "Nuova prenotazione" lands here with ?new=1 (and maybe ?d=)
   useEffect(() => {
@@ -79,6 +79,12 @@ export default function ReservationsPage() {
   const reservations = snapshot?.reservations ?? [];
   const tables = snapshot?.tables ?? [];
   const isToday = day === dayKey(new Date());
+  const seatFlow = useSeatFlow({
+    maps,
+    canPlan,
+    tableNames: (ids) => (ctx ? tableNamesOf(ctx, ids) : ""),
+    onDone: refresh,
+  });
 
   const plan = useMemo(
     () =>
@@ -247,6 +253,7 @@ export default function ReservationsPage() {
               canPlan={canPlan}
               canEdit={canEdit}
               isToday={isToday}
+              now={now}
               busyId={busyId}
               focusId={focusId}
               onFocus={setFocusId}
@@ -254,12 +261,10 @@ export default function ReservationsPage() {
               onSelectedChange={setSelected}
               onEdit={(r) => setView({ kind: "form", editing: r })}
               onAssign={(ids) => setView({ kind: "review", ids, allowMoves: false })}
-              onSeat={(r) =>
-                void run(r.id, () => seatReservation(r), t("floor.seatedAt", {
-                  name: r.customer_name,
-                  table: r.table_ids.map((id) => ctx.tables.get(id)?.name ?? "?").join(" + "),
-                }))
-              }
+              onSeat={(r) => {
+                setBusyId(r.id);
+                void seatFlow.seat(r).finally(() => setBusyId(null));
+              }}
               onCancel={(r) =>
                 void run(
                   r.id,
@@ -290,6 +295,7 @@ export default function ReservationsPage() {
           </div>
         </div>
       )}
+      {seatFlow.element}
     </div>
   );
 }

@@ -28,7 +28,11 @@ export function useRealtimeRefresh(
       debounceTimer = setTimeout(() => void refresh(), REFRESH_DEBOUNCE_MS);
     };
 
-    let channel = getSupabase().channel(channelName);
+    // supabase-js hands back the live channel for a topic it already has, so
+    // two mounted users of one name would share (and tear down) each other's
+    let channel = getSupabase().channel(
+      `${channelName}-${Math.random().toString(36).slice(2)}`,
+    );
     for (const table of key.split(",")) {
       channel = channel.on(
         "postgres_changes",

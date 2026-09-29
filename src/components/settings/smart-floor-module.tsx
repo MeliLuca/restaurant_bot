@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Armchair, Clock, Phone, Sparkles, Tag, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -222,6 +223,12 @@ export function SmartFloorModule({
               joined: 6 + 10 + bonus,
             })}
           </div>
+          <p className="text-sm text-muted-foreground">
+            {t("smartFloor.pairsHint")}{" "}
+            <Link href="/settings/floor-maps" className="font-medium text-foreground underline underline-offset-2">
+              {t("smartFloor.pairsLink")}
+            </Link>
+          </p>
         </CardContent>
       </Card>
 

@@ -14,6 +14,7 @@ import {
 } from "@/lib/pos/bill-preview";
 import type { VariationOption } from "@/lib/pos/variation-selection";
 import { compareTableNames } from "@/lib/floor/maps";
+import { linkTables } from "@/lib/floor/links";
 import { getSupabase } from "@/lib/supabase/client";
 import type {
   Category,
@@ -50,6 +51,19 @@ export async function updateTableStatus(
     .update({ status })
     .eq("id", tableId);
   if (error) throw new Error(error.message);
+}
+
+/** Fresh statuses of a few tables (right before seating a party there) */
+export async function fetchTableStatuses(
+  ids: string[],
+): Promise<Map<string, TableStatus>> {
+  if (ids.length === 0) return new Map();
+  const { data, error } = await getSupabase()
+    .from("tables")
+    .select("id, status")
+    .in("id", ids);
+  if (error) throw new Error(error.message);
+  return new Map(data.map((t) => [t.id, t.status]));
 }
 
 /** Reservation rows with the tables they hold */
@@ -162,10 +176,35 @@ export async function assignReservations(
   if (error) throw new Error(error.message);
 }
 
-/** The party arrived: the booking is seated and all its tables occupied */
+/**
+ * The party arrived: the booking is seated and all its tables occupied. Tables
+ * pushed together are linked too, so paying one bill warns about the others.
+ */
 export async function seatReservation(r: Reservation): Promise<void> {
   await setReservationStatus(r.id, "seated");
   await Promise.all(r.table_ids.map((id) => updateTableStatus(id, "occupied")));
+  const [first, ...others] = r.table_ids;
+  // one at a time: each call may merge groups the previous one made
+  for (const id of others) {
+    await linkTables(
+      { tableId: first, subtable: null },
+      { tableId: id, subtable: null },
+    );
+  }
+}
+
+/** A late party's tables go back to the floor; the booking stays, unassigned */
+export async function releaseReservationTables(id: string): Promise<void> {
+  await updateReservation(id, {}, []);
+}
+
+/** "Aspetta": no late / occupied alert for this booking until `until` */
+export async function snoozeReservationAlert(id: string, until: Date): Promise<void> {
+  const { error } = await getSupabase()
+    .from("reservations")
+    .update({ alert_snoozed_until: until.toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
 export async function setReservationStatus(

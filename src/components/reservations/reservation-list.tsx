@@ -45,6 +45,8 @@ interface ReservationListProps {
   canEdit: boolean;
   /** Seating only makes sense on the day itself */
   isToday: boolean;
+  /** For "in ritardo" on today's list */
+  now: number;
   busyId: string | null;
   focusId: string | null;
   onFocus: (id: string | null) => void;
@@ -64,6 +66,7 @@ export function ReservationList({
   canPlan,
   canEdit,
   isToday,
+  now,
   busyId,
   focusId,
   onFocus,
@@ -177,6 +180,9 @@ export function ReservationList({
           {shown.map((r) => {
             const booked = r.status === "booked";
             const hasTables = r.table_ids.length > 0;
+            const start = Date.parse(r.reserved_at);
+            const lateMinutes =
+              isToday && booked && start <= now ? Math.floor((now - start) / 60_000) : null;
             return (
               <li
                 key={r.id}
@@ -213,6 +219,11 @@ export function ReservationList({
                     )}
                     {!booked && (
                       <Badge variant="secondary">{t(STATUS_KEY[r.status])}</Badge>
+                    )}
+                    {lateMinutes !== null && (
+                      <Badge className="bg-fuchsia-600 text-white hover:bg-fuchsia-600">
+                        {t("smartFloor.lateBy", { minutes: lateMinutes })}
+                      </Badge>
                     )}
                   </div>
                   {r.tag_ids.length > 0 && (

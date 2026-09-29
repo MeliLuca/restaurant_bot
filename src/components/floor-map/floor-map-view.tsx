@@ -51,10 +51,19 @@ function turned(rot: ViewRotation, w: number, h: number) {
   }
 }
 
-/** How a table is marked on top of its status (Gestione Sala Smart previews) */
-export type TableMarkTone = "proposed" | "picked" | "moved" | "held";
+/** How a table is marked on top of its status (Gestione Sala Smart) */
+export type TableMarkTone =
+  | "proposed"
+  | "picked"
+  | "moved"
+  | "held"
+  | "late"
+  | "overdue";
 export interface TableMark {
-  tone: TableMarkTone;
+  /** Replaces the status colours; none = keep them */
+  tone?: TableMarkTone;
+  /** A thick violet border over whatever fill: booked soon */
+  ring?: boolean;
   /** Short text drawn above the table (a party's name) */
   label?: string;
 }
@@ -64,6 +73,8 @@ const MARK_SHAPE: Record<TableMarkTone, string> = {
   picked: "fill-violet-500/30 stroke-violet-600",
   moved: "fill-amber-400/40 stroke-amber-500",
   held: "fill-zinc-400/30 stroke-zinc-500",
+  late: "fill-fuchsia-500/30 stroke-fuchsia-600",
+  overdue: "fill-fuchsia-600/60 stroke-fuchsia-700",
 };
 /** Neutral look when the current status doesn't matter (planning ahead) */
 const NEUTRAL_SHAPE = "fill-background stroke-zinc-400 group-hover:fill-zinc-100";
@@ -85,6 +96,10 @@ interface FloorMapViewProps {
   neutral?: boolean;
   /** Tables to highlight, by id */
   marks?: Map<string, TableMark>;
+  /** Drawn in map units under the tables (outlines around table groups) */
+  underlay?: ReactNode;
+  /** Drawn in map units over the tables */
+  overlay?: ReactNode;
 }
 
 export function FloorMapView({
@@ -98,6 +113,8 @@ export function FloorMapView({
   selectedId = null,
   neutral = false,
   marks,
+  underlay,
+  overlay,
 }: FloorMapViewProps) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -245,6 +262,7 @@ export function FloorMapView({
                   <Scenery key={i} el={el} viewRotation={rotation} />
                 ))}
               </g>
+              {underlay}
               {tables.map((tb) => (
                 <MapTable
                   key={tb.id}
@@ -259,6 +277,7 @@ export function FloorMapView({
                   mark={marks?.get(tb.id)}
                 />
               ))}
+              {overlay}
             </g>
           </svg>
         )}
@@ -427,9 +446,14 @@ function MapTable({
   const status = STATUS_CONFIG[displayStatus(table.status, splits.length > 0)];
   const shapeClass = cn(
     "table-shape transition-colors",
-    mark ? MARK_SHAPE[mark.tone] : neutral ? NEUTRAL_SHAPE : status.shape,
+    mark?.tone ? MARK_SHAPE[mark.tone] : neutral ? NEUTRAL_SHAPE : status.shape,
+    mark?.ring && "stroke-violet-600",
   );
-  const strokeWidth = mark && mark.tone !== "held" ? 3 : 1.75;
+  const strokeWidth = mark?.ring
+    ? 3.5
+    : mark?.tone && mark.tone !== "held"
+      ? 3
+      : 1.75;
   const dash = mark?.tone === "held" ? "4 3" : undefined;
   const rotate = Number(table.rotation) || 0;
   // Numbers read upright whatever the table's and the view's rotation; a
@@ -452,7 +476,7 @@ function MapTable({
     <g
       role="button"
       tabIndex={dimmed ? -1 : 0}
-      aria-label={`${t("floorMap.tableAria", { name: table.name })}: ${t(status.labelKey)}`}
+      aria-label={`${t("floorMap.tableAria", { name: table.name })}: ${t(status.labelKey)}${mark?.label ? ` · ${mark.label}` : ""}`}
       aria-disabled={dimmed || undefined}
       transform={
         rotate ? `rotate(${rotate} ${x + w / 2} ${y + h / 2})` : undefined

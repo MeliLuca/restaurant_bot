@@ -23,10 +23,23 @@ import { ReservationDialog } from "@/components/floor-plan/reservation-dialog";
 import { FloorMapView } from "@/components/floor-map/floor-map-view";
 import { ReservationsPanel } from "@/components/floor-plan/reservations-panel";
 import { STATUS_CONFIG, type TableDisplayStatus } from "@/lib/floor/status";
-import { TableActionsDialog } from "@/components/floor-plan/table-actions-dialog";
+import {
+  TableActionsDialog,
+  type TableBooking,
+} from "@/components/floor-plan/table-actions-dialog";
+import {
+  TimeControl,
+  spotLabel,
+  useSmartFloorLayer,
+} from "@/components/floor-plan/smart-floor-layer";
+import { useTimeFormat } from "@/components/reservations/format";
+import { useSeatFlow } from "@/components/reservations/seat-flow";
 import { TableCard } from "@/components/floor-plan/table-card";
 import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
-import { resetDeliveryCounter } from "@/lib/api";
+import { releaseReservationTables, resetDeliveryCounter } from "@/lib/api";
+import { compareTableNames } from "@/lib/floor/maps";
+import { useIsPhone } from "@/lib/device";
+import { useNow } from "@/hooks/use-now";
 import {
   readStoredView,
   storeView,
@@ -34,7 +47,11 @@ import {
 } from "@/lib/floor/view-pref";
 import { linkedNamesByTable } from "@/lib/floor/links";
 import { useFloorData } from "@/hooks/use-floor-data";
-import type { RestaurantTable, TableStatus } from "@/lib/database.types";
+import type {
+  Reservation,
+  RestaurantTable,
+  TableStatus,
+} from "@/lib/database.types";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
@@ -98,7 +115,26 @@ export default function FloorPlanPage() {
   useEffect(() => setStoredView(readStoredView()), []);
   const canReserve = usePermission("manage_reservations");
   const canTakeOrders = usePermission("take_orders");
-  const smartFloor = useSmartFloor().enabled;
+  const canPlanFloor = usePermission("plan_floor");
+  const isPhone = useIsPhone();
+  const { enabled: smartFloor, settings: floorSettings } = useSmartFloor();
+  const time = useTimeFormat();
+  const now = useNow(30_000);
+  /** Gestione Sala Smart: a time later today to look at (null = now) */
+  const [viewAt, setViewAt] = useState<number | null>(null);
+
+  const tableNameById = new Map(tables.map((tb) => [tb.id, tb.name]));
+  const tableNames = (ids: string[]) =>
+    ids
+      .map((id) => tableNameById.get(id) ?? "?")
+      .sort(compareTableNames)
+      .join(" + ");
+  const seatFlow = useSeatFlow({
+    maps,
+    canPlan: canPlanFloor && !isPhone,
+    tableNames,
+    onDone: refresh,
+  });
 
   const activeReservations = reservations.filter(
     (r) => r.status === "booked" || r.status === "seated",
@@ -133,6 +169,60 @@ export default function FloorPlanPage() {
   const offMapTables = visibleTables.filter(
     (tb) => tb.map_id === null || !maps.some((m) => m.id === tb.map_id),
   );
+
+  const layer = useSmartFloorLayer({
+    tables,
+    reservations,
+    links,
+    mapTableIds: new Set(mapTables.map((tb) => tb.id)),
+    now,
+    at: viewAt,
+  });
+
+  /** The next booked party on a table today (Gestione Sala Smart) */
+  function bookingFor(table: RestaurantTable | null): TableBooking | null {
+    if (!layer.active || !table || !floorSettings) return null;
+    const next = reservations
+      .filter((r) => r.status === "booked" && r.table_ids.includes(table.id))
+      .sort((a, b) => Date.parse(a.reserved_at) - Date.parse(b.reserved_at))[0];
+    if (!next) return null;
+    const start = Date.parse(next.reserved_at);
+    const span =
+      (floorSettings.meal_minutes + floorSettings.buffer_minutes) * 60_000;
+    return {
+      reservation: next,
+      tables: tableNames(next.table_ids),
+      time: time(start),
+      lateMinutes: start <= now ? Math.floor((now - start) / 60_000) : null,
+      clashesWithWalkIn: start > now && start - now < span,
+    };
+  }
+
+  /** Grid view: the party booked on a table, as a chip */
+  function bookingChip(id: string) {
+    const spot = layer.spots.get(id);
+    if (!spot) return undefined;
+    return {
+      text: `${time(spot.reservation.reserved_at)} ${spot.reservation.customer_name}`,
+      title: spotLabel(spot, time),
+      late: spot.kind === "late" || spot.kind === "overdue",
+    };
+  }
+
+  async function releaseBooking(r: Reservation) {
+    try {
+      await releaseReservationTables(r.id);
+      await refresh();
+      toast.success(
+        t("smartFloor.released", {
+          tables: tableNames(r.table_ids),
+          name: r.customer_name,
+        }),
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
+    }
+  }
 
   function chooseView(v: FloorView) {
     setStoredView(v);
@@ -183,7 +273,7 @@ export default function FloorPlanPage() {
     <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
       <div className="flex flex-wrap items-center gap-6">
         <h1 className="text-2xl font-semibold">{t("floor.title")}</h1>
-        <div className="hidden items-center gap-4 sm:flex">
+        <div className="hidden flex-wrap items-center gap-4 sm:flex">
           {LEGEND.map((s) => (
             <span
               key={s}
@@ -193,6 +283,18 @@ export default function FloorPlanPage() {
               {t(STATUS_CONFIG[s].labelKey)}
             </span>
           ))}
+          {layer.active && (
+            <>
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <span className="h-3 w-3 rounded-full border-[3px] border-violet-600" />
+                {t("smartFloor.legendSoon")}
+              </span>
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <span className="h-3 w-3 rounded-full bg-fuchsia-600" />
+                {t("smartFloor.legendLate")}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -339,6 +441,24 @@ export default function FloorPlanPage() {
 
               {view === "map" && activeMap ? (
                 <div className="flex min-h-0 flex-1 flex-col gap-3">
+                  {layer.active && viewAt !== null && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-sm dark:border-violet-800 dark:bg-violet-950">
+                      <span className="font-medium">
+                        {t("smartFloor.viewAtBanner", { time: time(viewAt) })}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {t("smartFloor.viewAtLegend")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto h-8"
+                        onClick={() => setViewAt(null)}
+                      >
+                        {t("smartFloor.backToNow")}
+                      </Button>
+                    </div>
+                  )}
                   <div className="min-h-[320px] flex-1">
                     <FloorMapView
                       map={activeMap}
@@ -347,10 +467,16 @@ export default function FloorPlanPage() {
                       linkedByTable={linkedByTable}
                       dimmed={dimmedOnMap}
                       onSelect={handleTableClick}
+                      neutral={layer.active && viewAt !== null}
+                      marks={layer.marks}
+                      underlay={layer.underlay}
                       toolbar={
-                        maps.length > 1 && (
-                          <div className="flex flex-wrap gap-2">
-                            {maps.map((m) => (
+                        (maps.length > 1 || layer.active) && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {layer.active && (
+                              <TimeControl at={viewAt} now={now} onChange={setViewAt} />
+                            )}
+                            {maps.length > 1 && maps.map((m) => (
                               <button
                                 key={m.id}
                                 type="button"
@@ -414,6 +540,7 @@ export default function FloorPlanPage() {
                           splits={splitsByTable.get(t.id) ?? []}
                           linkedTo={linkedByTable.get(t.id)}
                           onSelect={handleTableClick}
+                          booking={bookingChip(t.id)}
                         />
                       ))}
                     </div>
@@ -428,6 +555,7 @@ export default function FloorPlanPage() {
                   reservations={reservations}
                   tables={tables}
                   onChanged={refresh}
+                  onSeat={layer.active ? seatFlow.seat : undefined}
                 />
               </div>
             )}
@@ -475,7 +603,11 @@ export default function FloorPlanPage() {
         table={selectedTable}
         onClose={() => setSelectedTable(null)}
         onChanged={refresh}
+        booking={bookingFor(selectedTable)}
+        onSeatBooking={seatFlow.seat}
+        onReleaseBooking={canPlanFloor ? releaseBooking : undefined}
       />
+      {seatFlow.element}
       <ReservationDialog
         open={reservationOpen}
         tables={tables}

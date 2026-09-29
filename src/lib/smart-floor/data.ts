@@ -26,3 +26,33 @@ export async function fetchFloorSnapshot(day: Date = new Date()): Promise<FloorS
   ]);
   return { settings, tables, tags, reservations, joinRules };
 }
+
+/**
+ * Set whether two tables can be pushed together, against what the map says:
+ * true / false store an exception, null drops it (the map decides again).
+ */
+export async function setJoinRule(
+  a: string,
+  b: string,
+  joinable: boolean | null,
+): Promise<void> {
+  // stored once per pair, smaller id first (uuid text sorts like the bytes)
+  const [table_a, table_b] = a < b ? [a, b] : [b, a];
+  const sb = getSupabase();
+  const { error } =
+    joinable === null
+      ? await sb.from("table_join_rules").delete().match({ table_a, table_b })
+      : await sb.from("table_join_rules").upsert({ table_a, table_b, joinable });
+  if (error) throw new Error(error.message);
+}
+
+/** Drop every exception between tables of these (one map's) tables */
+export async function clearJoinRules(tableIds: string[]): Promise<void> {
+  if (tableIds.length === 0) return;
+  const { error } = await getSupabase()
+    .from("table_join_rules")
+    .delete()
+    .in("table_a", tableIds)
+    .in("table_b", tableIds);
+  if (error) throw new Error(error.message);
+}

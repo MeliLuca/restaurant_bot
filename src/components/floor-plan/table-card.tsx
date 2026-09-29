@@ -13,6 +13,8 @@ interface TableCardProps {
   /** Names of linked tables/splits (empty = not linked) */
   linkedTo?: string[];
   onSelect: (table: RestaurantTable) => void;
+  /** Gestione Sala Smart: the party booked here ("20:30 Rossi") */
+  booking?: { text: string; title: string; late: boolean };
 }
 
 /** Max split chips shown before collapsing the rest into an "…" chip */
@@ -23,6 +25,7 @@ export function TableCard({
   splits,
   linkedTo = [],
   onSelect,
+  booking,
 }: TableCardProps) {
   const t = useT();
   // An occupied table with an open order reads as "ordered" (red).
@@ -38,13 +41,28 @@ export function TableCard({
         "relative flex h-36 w-36 shrink-0 grow-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 p-3 transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         status.card,
+        booking && (booking.late ? "border-fuchsia-600" : "border-violet-600"),
       )}
     >
+      {booking && (
+        <span
+          title={booking.title}
+          className={cn(
+            "absolute left-1.5 top-1.5 max-w-[4.25rem] truncate rounded-full px-1.5 py-px text-[10px] font-semibold text-white",
+            booking.late ? "bg-fuchsia-600" : "bg-violet-600",
+          )}
+        >
+          {booking.text}
+        </span>
+      )}
       {linkedTo.length > 0 && (
         <span
           title={linkedTo.join(", ")}
           aria-label={`${t("links.badgeAria")}: ${linkedTo.join(", ")}`}
-          className="absolute right-1.5 top-1.5 flex max-w-[5.5rem] items-center gap-0.5 rounded-full bg-background/80 px-1.5 py-px text-[10px] font-semibold text-foreground/80"
+          className={cn(
+            "absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-full bg-background/80 px-1.5 py-px text-[10px] font-semibold text-foreground/80",
+            booking ? "max-w-[4.25rem]" : "max-w-[5.5rem]",
+          )}
         >
           <Link2 className="h-3 w-3 shrink-0" />
           <span className="truncate">{linkedTo.join(", ")}</span>

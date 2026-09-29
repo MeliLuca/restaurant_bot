@@ -30,12 +30,15 @@ interface ReservationsPanelProps {
   reservations: Reservation[];
   tables: RestaurantTable[];
   onChanged: () => Promise<void>;
+  /** Seats the party itself (Gestione Sala Smart: checks the table is free) */
+  onSeat?: (r: Reservation) => Promise<void>;
 }
 
 export function ReservationsPanel({
   reservations,
   tables,
   onChanged,
+  onSeat,
 }: ReservationsPanelProps) {
   const t = useT();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -53,6 +56,10 @@ export function ReservationsPanel({
 
   async function seat(r: Reservation) {
     setBusyId(r.id);
+    if (onSeat) {
+      await onSeat(r).finally(() => setBusyId(null));
+      return;
+    }
     try {
       await seatReservation(r);
       await onChanged();

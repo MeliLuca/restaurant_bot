@@ -144,6 +144,8 @@ export interface Database {
           map_id: string | null;
           /** Bulk assignment never moves a locked booking */
           locked: boolean;
+          /** Late / still-occupied alert put off ("Aspetta") until then */
+          alert_snoozed_until: string | null;
         };
         Insert: {
           id?: string;
@@ -157,6 +159,7 @@ export interface Database {
           tag_ids?: string[];
           map_id?: string | null;
           locked?: boolean;
+          alert_snoozed_until?: string | null;
         };
         Update: {
           id?: string;
@@ -170,6 +173,7 @@ export interface Database {
           tag_ids?: string[];
           map_id?: string | null;
           locked?: boolean;
+          alert_snoozed_until?: string | null;
         };
         Relationships: [];
       };
