@@ -1,5 +1,6 @@
 import { geomOf } from "@/lib/floor/maps";
 import type {
+  FloorMap,
   Reservation,
   SmartFloorSettings,
   TableJoinRule,
@@ -7,6 +8,7 @@ import type {
 } from "@/lib/database.types";
 import type { TableWithTags } from "@/lib/settings-api";
 import { buildAdjacency } from "./adjacency";
+import { mapBarriers } from "./barriers";
 import {
   rulesFrom,
   type Booking,
@@ -22,6 +24,8 @@ export interface FloorSnapshot {
   /** The service's reservations; only "booked" ones hold tables */
   reservations: Reservation[];
   joinRules: TableJoinRule[];
+  /** The rooms, for the lines and dividers that keep tables apart */
+  maps: FloorMap[];
 }
 
 export function reservationToBooking(r: Reservation): Booking {
@@ -45,6 +49,7 @@ export function toFloorTable(t: TableWithTags): FloorTable {
     status: t.status,
     mapId: t.map_id,
     geom: t.map_id && t.x !== null ? geomOf(t) : null,
+    zoneId: t.zone_id,
     tagIds: t.table_tags.map((tag) => tag.id),
     occupiedAt: t.occupied_at ? Date.parse(t.occupied_at) : null,
   };
@@ -62,7 +67,12 @@ export function buildFloorContext(
     rules,
     tables: new Map(tables.map((t) => [t.id, t])),
     mandatoryTagIds: new Set(snap.tags.filter((t) => t.is_mandatory).map((t) => t.id)),
-    adjacency: buildAdjacency(tables, rules.joinDistance, snap.joinRules),
+    adjacency: buildAdjacency(
+      tables,
+      rules.joinDistance,
+      snap.joinRules,
+      mapBarriers(snap.maps),
+    ),
     bookings: new Map(
       snap.reservations
         .filter((r) => r.status === "booked")

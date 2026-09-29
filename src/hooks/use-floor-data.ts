@@ -88,8 +88,10 @@ export function useFloorData(): FloorData {
       debounceTimer = setTimeout(() => void refresh(), REFRESH_DEBOUNCE_MS);
     };
 
+    // supabase-js hands back the live channel for a topic it already has, so
+    // two mounted users of one name would share (and tear down) each other's
     const channel = getSupabase()
-      .channel("floor-data")
+      .channel(`floor-data-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "tables" },
@@ -113,6 +115,12 @@ export function useFloorData(): FloorData {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "reservation_tables" },
+        debouncedRefresh,
+      )
+      // a divider taken away or put back changes which tables can join
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "floor_maps" },
         debouncedRefresh,
       )
       .subscribe((status) => {

@@ -39,7 +39,7 @@ const TABS: {
 
 /** Focused flows own the whole screen: the tabs would both steal room from
  *  the cart bar and invite a stray tap that abandons a half-built round. */
-function isFocusedFlow(pathname: string): boolean {
+export function isFocusedFlow(pathname: string): boolean {
   return pathname.endsWith("/order") || pathname.endsWith("/pay");
 }
 

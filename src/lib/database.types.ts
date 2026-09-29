@@ -16,11 +16,17 @@ export type TableShape = "rect" | "circle" | "path";
 
 /** Scenery drawn on a floor map (walls, stages, labels…), in map units.
  * Mirrors the jsonb contract documented in the floor_maps migration. */
-export type FloorMapElementStyle = "wall" | "area" | "arrow";
+export type FloorMapElementStyle = "wall" | "area" | "arrow" | "divider";
+/** Walls and dividers keep tables apart (Gestione Sala Smart); `off` = a
+ * divider taken away for now: drawn faded, tables either side can join. */
+interface SceneryLook {
+  style?: FloorMapElementStyle;
+  off?: boolean;
+}
 export type FloorMapElement =
-  | { kind: "rect"; x: number; y: number; w: number; h: number; style?: FloorMapElementStyle }
-  | { kind: "circle"; cx: number; cy: number; r: number; style?: FloorMapElementStyle }
-  | {
+  | ({ kind: "rect"; x: number; y: number; w: number; h: number } & SceneryLook)
+  | ({ kind: "circle"; cx: number; cy: number; r: number } & SceneryLook)
+  | ({
       kind: "ellipse";
       cx: number;
       cy: number;
@@ -28,9 +34,8 @@ export type FloorMapElement =
       ry: number;
       rotate?: number;
       label?: string;
-      style?: FloorMapElementStyle;
-    }
-  | { kind: "path"; d: string; style?: FloorMapElementStyle }
+    } & SceneryLook)
+  | ({ kind: "path"; d: string } & SceneryLook)
   | {
       kind: "text";
       x: number;
@@ -62,6 +67,8 @@ export interface Database {
           path: string | null;
           /** When the table went occupied (null unless occupied) — set by trigger */
           occupied_at: string | null;
+          /** Zone inside its room (Gestione Sala Smart): zones never join */
+          zone_id: string | null;
         };
         Insert: {
           id?: string;
@@ -78,6 +85,7 @@ export interface Database {
           rotation?: number;
           path?: string | null;
           occupied_at?: string | null;
+          zone_id?: string | null;
         };
         Update: {
           id?: string;
@@ -94,6 +102,7 @@ export interface Database {
           rotation?: number;
           path?: string | null;
           occupied_at?: string | null;
+          zone_id?: string | null;
         };
         Relationships: [];
       };
@@ -244,6 +253,30 @@ export interface Database {
           created_at?: string;
           resolved_at?: string | null;
           skip_until?: string | null;
+        };
+        Relationships: [];
+      };
+      floor_zones: {
+        Row: {
+          id: string;
+          map_id: string;
+          name: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          map_id: string;
+          name: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          map_id?: string;
+          name?: string;
+          sort_order?: number;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -1218,6 +1251,7 @@ export type ReservationRow = Database["public"]["Tables"]["reservations"]["Row"]
 export type Reservation = ReservationRow & { table_ids: string[] };
 export type WaitlistEntry = Database["public"]["Tables"]["waitlist"]["Row"];
 export type TableJoinRule = Database["public"]["Tables"]["table_join_rules"]["Row"];
+export type FloorZone = Database["public"]["Tables"]["floor_zones"]["Row"];
 export type SmartFloorSettings =
   Database["public"]["Tables"]["smart_floor_settings"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];

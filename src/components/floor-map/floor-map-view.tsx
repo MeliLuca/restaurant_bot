@@ -318,7 +318,10 @@ const SCENERY_STYLE = {
   wall: "fill-none stroke-muted-foreground",
   area: "fill-muted stroke-muted-foreground",
   arrow: "fill-none stroke-foreground",
+  // screens, planters, steps: keep tables apart like a wall, but can go
+  divider: "fill-none stroke-amber-600",
 } as const;
+const DIVIDER_DASH = "7 5";
 
 /** Would text at this on-screen angle read upside down? */
 function upsideDown(deg: number): boolean {
@@ -358,8 +361,9 @@ export function Scenery({
   }
   const style = el.style ?? "wall";
   const common = {
-    className: SCENERY_STYLE[style],
-    strokeWidth: style === "arrow" ? 3 : 1.5,
+    className: cn(SCENERY_STYLE[style], style === "divider" && el.off && "opacity-30"),
+    strokeWidth: style === "arrow" ? 3 : style === "divider" ? 2.5 : 1.5,
+    strokeDasharray: style === "divider" ? DIVIDER_DASH : undefined,
   };
   switch (el.kind) {
     case "rect":

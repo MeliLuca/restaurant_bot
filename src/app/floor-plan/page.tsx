@@ -32,7 +32,7 @@ import {
   TimeControl,
   spotLabel,
   useSmartFloorLayer,
-} from "@/components/floor-plan/smart-floor-layer";
+} from "@/components/smart-floor/floor-layer";
 import { useTimeFormat } from "@/components/reservations/format";
 import { useSeatFlow } from "@/components/reservations/seat-flow";
 import { WalkInPanel, type WalkInTab } from "@/components/smart-floor/walk-in-panel";

@@ -1,7 +1,13 @@
 import { fetchReservationsBetween } from "@/lib/api";
+import { fetchFloorMaps } from "@/lib/floor/maps";
 import { fetchTablesWithTags, fetchTableTags } from "@/lib/settings-api";
 import { getSupabase } from "@/lib/supabase/client";
-import type { TableJoinRule } from "@/lib/database.types";
+import type {
+  FloorMap,
+  FloorMapElement,
+  FloorZone,
+  TableJoinRule,
+} from "@/lib/database.types";
 import type { FloorSnapshot } from "./context";
 import { fetchSmartFloorSettings } from "./settings";
 import type { OpenBill } from "./walk-in";
@@ -18,14 +24,15 @@ export async function fetchFloorSnapshot(day: Date = new Date()): Promise<FloorS
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
-  const [settings, tables, tags, reservations, joinRules] = await Promise.all([
+  const [settings, tables, tags, reservations, joinRules, maps] = await Promise.all([
     fetchSmartFloorSettings(),
     fetchTablesWithTags(),
     fetchTableTags(),
     fetchReservationsBetween(start, end),
     fetchJoinRules(),
+    fetchFloorMaps(),
   ]);
-  return { settings, tables, tags, reservations, joinRules };
+  return { settings, tables, tags, reservations, joinRules, maps };
 }
 
 /**
@@ -56,6 +63,72 @@ export async function clearJoinRules(tableIds: string[]): Promise<void> {
     .in("table_a", tableIds)
     .in("table_b", tableIds);
   if (error) throw new Error(error.message);
+}
+
+// ZONES (tables of different zones are never pushed together) ---------------------
+
+export async function fetchZones(): Promise<FloorZone[]> {
+  const { data, error } = await getSupabase()
+    .from("floor_zones")
+    .select("*")
+    .order("sort_order")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createZone(mapId: string, name: string, sortOrder: number): Promise<FloorZone> {
+  const { data, error } = await getSupabase()
+    .from("floor_zones")
+    .insert({ map_id: mapId, name: name.trim(), sort_order: sortOrder })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function renameZone(id: string, name: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("floor_zones")
+    .update({ name: name.trim() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** Its tables are left with no zone */
+export async function deleteZone(id: string): Promise<void> {
+  const { error } = await getSupabase().from("floor_zones").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** Put tables in a zone of their room (null = no zone) */
+export async function setTablesZone(tableIds: string[], zoneId: string | null): Promise<void> {
+  if (tableIds.length === 0) return;
+  const { error } = await getSupabase()
+    .from("tables")
+    .update({ zone_id: zoneId })
+    .in("id", tableIds);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Take a divider away for now (off) or put it back, by its place in the
+ * map's scenery. The rest of the drawing is written back as it was read.
+ */
+export async function setDividerOff(
+  map: FloorMap,
+  index: number,
+  off: boolean,
+): Promise<FloorMapElement[]> {
+  const elements = map.elements.map((el, i) =>
+    i === index && el.kind !== "text" ? { ...el, off: off || undefined } : el,
+  );
+  const { error } = await getSupabase()
+    .from("floor_maps")
+    .update({ elements })
+    .eq("id", map.id);
+  if (error) throw new Error(error.message);
+  return elements;
 }
 
 /**

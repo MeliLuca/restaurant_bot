@@ -17,6 +17,7 @@ import type {
   TableJoinRule,
   TableLink,
   TableTag,
+  WaitlistEntry,
 } from "@/lib/database.types";
 import type { Geom } from "@/lib/floor/geometry";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
@@ -25,6 +26,7 @@ import type { TableWithTags } from "@/lib/settings-api";
 import { buildFloorContext, toFloorTable } from "@/lib/smart-floor/context";
 import { fetchJoinRules, fetchOpenBills } from "@/lib/smart-floor/data";
 import { hullPath } from "@/lib/smart-floor/hull";
+import { claimedTables, matchQueue, type QueueMatch } from "@/lib/smart-floor/queue";
 import type { Booking, FloorContext } from "@/lib/smart-floor/types";
 import {
   finishingSignals,
@@ -33,6 +35,7 @@ import {
   type OpenBill,
   type WalkInOption,
 } from "@/lib/smart-floor/walk-in";
+import { toQueueParty } from "@/lib/smart-floor/waitlist-api";
 import { cn } from "@/lib/utils";
 import { useSmartFloor } from "@/stores/smart-floor-store";
 
@@ -76,12 +79,15 @@ export function useWalkInFloor({
   tables,
   reservations,
   links,
+  maps,
   openOrders,
   now,
 }: {
   tables: TableWithTags[];
   reservations: Reservation[];
   links: TableLink[];
+  /** The rooms: their lines and dividers keep tables apart */
+  maps: FloorMap[];
   openOrders: Order[];
   now: number;
 }): WalkInFloor {
@@ -116,9 +122,9 @@ export function useWalkInFloor({
   const ctx = useMemo(
     () =>
       settings && joinRules && bills
-        ? buildFloorContext({ settings, tables, tags, reservations, joinRules }, now)
+        ? buildFloorContext({ settings, tables, tags, reservations, joinRules, maps }, now)
         : null,
-    [settings, tables, tags, reservations, joinRules, bills, now],
+    [settings, tables, tags, reservations, joinRules, maps, bills, now],
   );
   const finishing = useMemo(
     () =>
@@ -128,6 +134,32 @@ export function useWalkInFloor({
     [ctx, bills, links],
   );
   return { ctx, finishing, tags };
+}
+
+/**
+ * The waitlist on that floor: what each party gets, first come first served,
+ * and the tables it holds (table id → party name), kept from walk-ins.
+ */
+export function useWalkInQueue(
+  floor: WalkInFloor,
+  waitlist: WaitlistEntry[],
+): { matches: Map<string, QueueMatch>; claims: Map<string, string> } {
+  const matches = useMemo(
+    () =>
+      floor.ctx
+        ? matchQueue(floor.ctx, waitlist.map(toQueueParty), floor.finishing)
+        : new Map<string, QueueMatch>(),
+    [floor.ctx, floor.finishing, waitlist],
+  );
+  const claims = useMemo(() => {
+    const names = new Map(waitlist.map((e) => [e.id, e.customer_name]));
+    const out = new Map<string, string>();
+    claimedTables(matches).forEach((partyId, tableId) =>
+      out.set(tableId, names.get(partyId) ?? "?"),
+    );
+    return out;
+  }, [matches, waitlist]);
+  return { matches, claims };
 }
 
 /** Of these tables, the ones someone sat at a second ago (on another device) */

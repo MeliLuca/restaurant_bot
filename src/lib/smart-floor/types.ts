@@ -40,6 +40,8 @@ export interface FloorTable {
   /** Room it is drawn in; null = not on any map (can't be joined) */
   mapId: string | null;
   geom: Geom | null;
+  /** Zone inside its room; tables of different zones never join */
+  zoneId: string | null;
   tagIds: string[];
   /** When it was sat (ms), if occupied */
   occupiedAt: number | null;

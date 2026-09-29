@@ -1,5 +1,8 @@
 import { MOBILE_ROOT } from "@/lib/mobile-route";
 
+/** The "Accoglienza" screen's tabs (Gestione Sala Smart) */
+export type HostStandTab = "find" | "queue" | "today";
+
 /**
  * Every /m URL is built here. When the phone UI is extracted into its own app,
  * this file and MOBILE_ROOT are the only things that change.
@@ -25,6 +28,8 @@ export const mRoutes = {
   // take-away order taking is addressed by the order, which always exists by
   // then: a take-away is created the moment it is named
   takeawayOrder: (orderId: string) => `${MOBILE_ROOT}/ta/${orderId}/order`,
+  hostStand: (tab: HostStandTab = "find") =>
+    `${MOBILE_ROOT}/sala` + (tab === "find" ? "" : `?tab=${tab}`),
   chat: () => `${MOBILE_ROOT}/chat`,
   thread: (conversationId: string) => `${MOBILE_ROOT}/chat/${conversationId}`,
 };

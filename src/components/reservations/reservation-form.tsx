@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Hand, Lock, Sparkles, TriangleAlert, Users } from "lucide-react";
-import type { TableMark } from "@/components/floor-map/floor-map-view";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,25 +14,12 @@ import type {
   TableTag,
 } from "@/lib/database.types";
 import { dayStart } from "@/hooks/use-reservations-day";
-import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
-import {
-  seatsOf,
-  suggestTables,
-  tablesTakenAt,
-} from "@/lib/smart-floor/assign";
 import type { Booking, FloorContext } from "@/lib/smart-floor/types";
 import { cn } from "@/lib/utils";
-import { optionNotes, reasonText, tableNamesOf, useTimeFormat } from "./format";
+import { tableNamesOf, useTimeFormat } from "./format";
 import { PlanningMap } from "./planning-map";
-
-type TableMode = "auto" | "manual" | "none";
-
-const MODES: { value: TableMode; labelKey: TranslationKey }[] = [
-  { value: "auto", labelKey: "reservations.modeAuto" },
-  { value: "manual", labelKey: "reservations.modeManual" },
-  { value: "none", labelKey: "reservations.modeNone" },
-];
+import { TablePickerSection, useTablePicker } from "./table-picker";
 
 /** Stand-in id for a reservation not saved yet */
 const NEW_ID = "__new__";
@@ -41,23 +27,6 @@ const NEW_ID = "__new__";
 function timeOf(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-/** Are these tables one connected group of joinable tables? */
-function connected(ctx: FloorContext, ids: string[]): boolean {
-  if (ids.length < 2) return true;
-  const seen = new Set([ids[0]]);
-  const queue = [ids[0]];
-  while (queue.length > 0) {
-    const id = queue.shift()!;
-    ctx.adjacency.get(id)?.forEach((n) => {
-      if (ids.includes(n) && !seen.has(n)) {
-        seen.add(n);
-        queue.push(n);
-      }
-    });
-  }
-  return seen.size === ids.length;
 }
 
 interface ReservationFormProps {
@@ -102,18 +71,7 @@ export function ReservationForm({
   const [mapId, setMapId] = useState<string | null>(editing?.map_id ?? null);
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [locked, setLocked] = useState(editing?.locked ?? false);
-  const [mode, setMode] = useState<TableMode>(
-    editing && editing.table_ids.length > 0 ? "manual" : "auto",
-  );
-  const [picked, setPicked] = useState<string[]>(editing?.table_ids ?? []);
-  const [chosen, setChosen] = useState(0);
   const [busy, setBusy] = useState(false);
-
-  const tagName = (id: string) => tags.find((tg) => tg.id === id)?.name ?? "?";
-  const mapName = (id: string | null) =>
-    maps.find((m) => m.id === id)?.name ?? t("reservations.anyRoom");
-  const bookingName = (id: string | null) =>
-    id ? reservations.find((r) => r.id === id)?.customer_name ?? "?" : null;
 
   const size = parseInt(party, 10);
   const validSize = Number.isFinite(size) && size >= 1;
@@ -139,81 +97,19 @@ export function ReservationForm({
         }
       : null;
 
-  // the engine's picks for these details, live
-  const suggestion = useMemo(
-    () => (ctx && booking ? suggestTables(ctx, booking, { limit: 4 }) : null),
-    // booking is rebuilt each render; its inputs are the real deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ctx, size, start.getTime(), tagIds.join(), mapId, editing?.id],
-  );
-  // new details, new list: start again from the best one
-  useEffect(() => setChosen(0), [suggestion]);
-  const options = suggestion?.options ?? [];
-  const option = options[Math.min(chosen, options.length - 1)] ?? null;
-
-  const taken = useMemo(
-    () =>
-      ctx && validStart
-        ? tablesTakenAt(ctx, start.getTime(), editing?.id ?? null)
-        : new Map<string, string | null>(),
-    [ctx, start, validStart, editing?.id],
-  );
-
-  const chosenTables =
-    !canPlan ? [] : mode === "auto" ? (option?.tableIds ?? []) : mode === "manual" ? picked : [];
-
-  // what the map shows: taken tables greyed with who holds them, ours on top
-  const marks = new Map<string, TableMark>();
-  taken.forEach((holder, id) => {
-    marks.set(id, {
-      tone: "held",
-      label: bookingName(holder) ?? t("reservations.takenNow"),
-    });
+  // an edited party keeps its tables unless told otherwise ("Riassegna")
+  const picker = useTablePicker({
+    ctx,
+    booking,
+    reservations,
+    tags,
+    initialMode: editing && editing.table_ids.length > 0 ? "manual" : "auto",
+    label: name.trim(),
   });
-  for (const id of chosenTables) {
-    marks.set(id, {
-      tone: mode === "auto" ? "proposed" : "picked",
-      label: name.trim() || undefined,
-    });
-  }
-
-  // manual choice: what's wrong with it (it can still be saved)
-  const warnings: string[] = [];
-  if (ctx && mode === "manual" && picked.length > 0 && booking) {
-    const seats = seatsOf(ctx, picked);
-    if (size > seats + ctx.rules.overfillSeats) {
-      warnings.push(t("reservations.warnSeats", { seats, count: size }));
-    }
-    const has = new Set(picked.flatMap((id) => ctx.tables.get(id)?.tagIds ?? []));
-    const missing = tagIds.filter((id) => ctx.mandatoryTagIds.has(id) && !has.has(id));
-    if (missing.length > 0) {
-      warnings.push(t("reservations.warnMandatory", { tags: missing.map(tagName).join(", ") }));
-    }
-    for (const id of picked) {
-      if (!taken.has(id)) continue;
-      const holder = bookingName(taken.get(id) ?? null);
-      warnings.push(
-        holder
-          ? t("reservations.warnTakenBy", { table: tableNamesOf(ctx, [id]), name: holder })
-          : t("reservations.warnTakenNow", { table: tableNamesOf(ctx, [id]) }),
-      );
-    }
-    if (!connected(ctx, picked)) warnings.push(t("reservations.warnNotJoinable"));
-  }
+  const chosenTables = canPlan ? picker.chosenTables : [];
 
   function toggleTag(id: string) {
     setTagIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
-  }
-
-  function clickTable(tb: RestaurantTable) {
-    if (!canPlan) return;
-    // clicking the map always means "I'll choose": start from the current pick
-    if (mode !== "manual") {
-      setMode("manual");
-      setPicked(chosenTables.includes(tb.id) ? chosenTables : [tb.id]);
-      return;
-    }
-    setPicked((ids) => (ids.includes(tb.id) ? ids.filter((x) => x !== tb.id) : [...ids, tb.id]));
   }
 
   async function save() {
@@ -406,116 +302,15 @@ export function ReservationForm({
                 : t("reservations.plannerAssigns")}
             </p>
           ) : (
-            <>
-              <div role="group" className="flex rounded-lg border p-1">
-                {MODES.map((m) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    aria-pressed={mode === m.value}
-                    onClick={() => {
-                      if (m.value === "manual" && mode === "auto") setPicked(option?.tableIds ?? []);
-                      setMode(m.value);
-                    }}
-                    className={cn(
-                      "flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md text-sm transition-colors",
-                      mode === m.value
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent",
-                    )}
-                  >
-                    {m.value === "auto" && <Sparkles className="h-4 w-4" />}
-                    {m.value === "manual" && <Hand className="h-4 w-4" />}
-                    {t(m.labelKey)}
-                  </button>
-                ))}
-              </div>
-
-              {mode === "auto" &&
-                (!ctx ? (
-                  <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-                ) : !booking ? (
-                  <p className="text-sm text-muted-foreground">{t("reservations.fillDetails")}</p>
-                ) : suggestion?.reason ? (
-                  <p className="flex gap-2 text-sm">
-                    <TriangleAlert className="h-4 w-4 shrink-0 text-amber-500" />
-                    {reasonText(t, ctx, booking, suggestion.reason, tagName)}
-                  </p>
-                ) : (
-                  <div role="radiogroup" className="flex flex-col gap-2">
-                    {options.map((o, i) => {
-                      const notesList = optionNotes(t, ctx, booking, o, tagName, mapName);
-                      const active = option === o;
-                      return (
-                        <button
-                          key={o.tableIds.join()}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          onClick={() => setChosen(i)}
-                          className={cn(
-                            "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
-                            active ? "border-emerald-600 bg-emerald-500/10" : "hover:bg-accent",
-                          )}
-                        >
-                          <span className="flex w-full items-center gap-2 font-medium">
-                            {tableNamesOf(ctx, o.tableIds)}
-                            <span className="flex items-center gap-1 text-sm font-normal text-muted-foreground">
-                              <Users className="h-3.5 w-3.5" />
-                              {t("reservations.seatsCount", { count: o.seats })}
-                            </span>
-                            {i === 0 && (
-                              <span className="ml-auto text-xs font-normal text-emerald-700">
-                                {t("reservations.best")}
-                              </span>
-                            )}
-                          </span>
-                          {notesList.length > 0 && (
-                            <span className="text-xs text-muted-foreground">
-                              {notesList.join(" · ")}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-
-              {mode === "manual" && (
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm text-muted-foreground">{t("reservations.pickHint")}</p>
-                  {ctx && picked.length > 0 && (
-                    <p className="text-sm">
-                      <span className="font-medium">{tableNamesOf(ctx, picked)}</span>
-                      {" · "}
-                      {t("reservations.seatsCount", { count: seatsOf(ctx, picked) })}
-                    </p>
-                  )}
-                  {warnings.map((w) => (
-                    <p key={w} className="flex gap-2 text-sm">
-                      <TriangleAlert className="h-4 w-4 shrink-0 text-amber-500" /> {w}
-                    </p>
-                  ))}
-                </div>
-              )}
-
-              {mode === "none" && (
-                <p className="text-sm text-muted-foreground">{t("reservations.noneHint")}</p>
-              )}
-
-              {chosenTables.length > 0 && (
-                <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 accent-primary"
-                    checked={locked}
-                    onChange={(e) => setLocked(e.target.checked)}
-                  />
-                  <Lock className="h-4 w-4 text-muted-foreground" />
-                  {t("reservations.lockLabel")}
-                </label>
-              )}
-            </>
+            <TablePickerSection
+              picker={picker}
+              ctx={ctx}
+              booking={booking}
+              tags={tags}
+              maps={maps}
+              locked={locked}
+              onLockedChange={setLocked}
+            />
           )}
         </div>
 
@@ -535,9 +330,9 @@ export function ReservationForm({
           tables={tables}
           activeMapId={activeMapId}
           onActiveMapChange={onActiveMapChange}
-          marks={marks}
+          marks={canPlan ? picker.marks : new Map()}
           focusTableIds={chosenTables}
-          onTableClick={clickTable}
+          onTableClick={canPlan ? picker.clickTable : undefined}
           header={
             validStart && (
               <span className="text-sm text-muted-foreground">

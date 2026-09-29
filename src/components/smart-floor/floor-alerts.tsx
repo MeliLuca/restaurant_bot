@@ -55,14 +55,15 @@ import { takenMeanwhile, waitedText } from "./walk-in-shared";
  * late beyond the limit ("Aspetta / Libera il tavolo") or due soon while its
  * table is still occupied ("Altro tavolo").
  */
-export function FloorAlerts() {
+export function FloorAlerts({ phone = false }: { phone?: boolean }) {
   const canSee = usePermission("floor_alerts");
   const { enabled } = useSmartFloor();
   if (!canSee || !enabled) return null;
-  return <FloorAlertsStack />;
+  return <FloorAlertsStack phone={phone} />;
 }
 
-function FloorAlertsStack() {
+/** `phone`: the /m layout, the stack sits above its tab bar */
+function FloorAlertsStack({ phone }: { phone: boolean }) {
   const t = useT();
   const time = useTimeFormat();
   const now = useNow(30_000);
@@ -112,9 +113,10 @@ function FloorAlertsStack() {
     }));
   }, [snapshot, now, waitlist.entries]);
 
-  // a new alert opens the stack again
+  // a new alert opens the stack again (a ready party whose table changes is
+  // not new: the two data sources settle one after the other)
   const keys = [
-    ...ready.map((q) => `queue:${q.entry.id}:${q.option.tableIds.join("+")}`),
+    ...ready.map((q) => `queue:${q.entry.id}`),
     ...alerts.map((a) => `${a.kind}:${a.reservation.id}`),
   ].join(",");
   const seen = useRef<Set<string>>(new Set());
@@ -159,8 +161,11 @@ function FloorAlertsStack() {
     <>
       <div
         className={cn(
-          "fixed bottom-20 z-40 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 print:hidden sm:bottom-4",
-          onRight ? "right-4 items-end" : "left-4 sm:left-28 lg:left-60",
+          "fixed z-40 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 print:hidden",
+          phone
+            ? "bottom-[calc(4.25rem+env(safe-area-inset-bottom))] left-3"
+            : "bottom-20 sm:bottom-4",
+          !phone && (onRight ? "right-4 items-end" : "left-4 sm:left-28 lg:left-60"),
         )}
       >
         {collapsed ? (
@@ -350,7 +355,7 @@ function FloorAlertsStack() {
                       >
                         <Clock className="mr-1 h-4 w-4" /> {t("smartFloor.wait")}
                       </Button>
-                      {late && canRelease && (
+                      {late && canRelease && !isPhone && (
                         <Button
                           size="sm"
                           className="h-9 bg-fuchsia-600 text-white hover:bg-fuchsia-700"

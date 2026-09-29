@@ -3,7 +3,7 @@
 // Beside the Sala map: "Trova posto" for a party walking in, and the
 // waitlist ("coda") for the ones who wait for a table.
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
@@ -15,14 +15,12 @@ import type {
 } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
 import type { TableWithTags } from "@/lib/settings-api";
-import { claimedTables, matchQueue } from "@/lib/smart-floor/queue";
 import type { WalkIn, WalkInOption } from "@/lib/smart-floor/walk-in";
-import { toQueueParty } from "@/lib/smart-floor/waitlist-api";
 import { cn } from "@/lib/utils";
 import { WaitlistDialog } from "./waitlist-dialog";
 import { WaitlistQueue } from "./waitlist-queue";
 import { WalkInFinder } from "./walk-in-finder";
-import { useWalkInFloor } from "./walk-in-shared";
+import { useWalkInFloor, useWalkInQueue } from "./walk-in-shared";
 
 export type WalkInTab = "find" | "queue";
 
@@ -57,25 +55,13 @@ export function WalkInPanel({
   onClose: () => void;
 }) {
   const t = useT();
-  const floor = useWalkInFloor({ tables, reservations, links, openOrders, now });
+  const floor = useWalkInFloor({ tables, reservations, links, maps, openOrders, now });
   const [dialog, setDialog] = useState<{
     editing: WaitlistEntry | null;
     prefill: WalkIn | null;
   } | null>(null);
 
-  const matches = useMemo(
-    () =>
-      floor.ctx ? matchQueue(floor.ctx, waitlist.map(toQueueParty), floor.finishing) : new Map(),
-    [floor.ctx, floor.finishing, waitlist],
-  );
-  const claims = useMemo(() => {
-    const names = new Map(waitlist.map((e) => [e.id, e.customer_name]));
-    const out = new Map<string, string>();
-    claimedTables(matches).forEach((partyId, tableId) =>
-      out.set(tableId, names.get(partyId) ?? "?"),
-    );
-    return out;
-  }, [matches, waitlist]);
+  const { matches, claims } = useWalkInQueue(floor, waitlist);
 
   const tabs: { value: WalkInTab; label: string }[] = [
     { value: "find", label: t("walkIn.title") },

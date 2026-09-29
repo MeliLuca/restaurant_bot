@@ -40,6 +40,7 @@ const EXPORT_STYLE: Record<FloorMapElementStyle, string> = {
   wall: 'fill="none" stroke="#555" stroke-width="1.5"',
   area: 'fill="#eeeeee" stroke="#555" stroke-width="1.5"',
   arrow: 'fill="none" stroke="#222" stroke-width="3"',
+  divider: 'fill="none" stroke="#d97706" stroke-width="2.5" stroke-dasharray="7 5"',
 };
 
 function elementSvg(el: FloorMapElement): string {
@@ -174,6 +175,8 @@ function paintStyle(el: SVGGraphicsElement): FloorMapElementStyle {
   const fill = cs.fill;
   const filled = fill && fill !== "none" && !/rgba\(.*,\s*0\)$/.test(fill) && fill !== "rgb(255, 255, 255)";
   if (filled && el.tagName !== "line" && el.tagName !== "polyline") return "area";
+  // a dashed line: a divider (how they are exported)
+  if (cs.strokeDasharray && cs.strokeDasharray !== "none") return "divider";
   const m = el.getCTM();
   const width = (parseFloat(cs.strokeWidth) || 1) * (m ? scaleX(m) : 1);
   return width >= 2.5 ? "arrow" : "wall";

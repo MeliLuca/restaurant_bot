@@ -7,11 +7,11 @@ import { TriangleAlert } from "lucide-react";
 import { JoinPairsEditor } from "@/components/settings/join-pairs-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { FloorMap, TableJoinRule } from "@/lib/database.types";
+import type { FloorMap, FloorZone, TableJoinRule } from "@/lib/database.types";
 import { fetchFloorMaps } from "@/lib/floor/maps";
 import { useT } from "@/lib/i18n/use-translation";
 import { fetchTablesWithTags, type TableWithTags } from "@/lib/settings-api";
-import { fetchJoinRules } from "@/lib/smart-floor/data";
+import { fetchJoinRules, fetchZones } from "@/lib/smart-floor/data";
 import { usePermission } from "@/stores/auth-store";
 import { useSmartFloor } from "@/stores/smart-floor-store";
 
@@ -23,21 +23,24 @@ export default function JoinPairsPage() {
   const [map, setMap] = useState<FloorMap | null>(null);
   const [tables, setTables] = useState<TableWithTags[]>([]);
   const [rules, setRules] = useState<TableJoinRule[]>([]);
+  const [zones, setZones] = useState<FloorZone[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!canManage) return;
     try {
-      const [maps, tb, jr] = await Promise.all([
+      const [maps, tb, jr, zn] = await Promise.all([
         fetchFloorMaps(),
         fetchTablesWithTags(),
         fetchJoinRules(),
+        fetchZones(),
       ]);
       const found = maps.find((m) => m.id === id);
       if (!found) throw new Error(t("floorMapsMgr.notFound"));
       setMap(found);
       setTables(tb);
       setRules(jr);
+      setZones(zn.filter((z) => z.map_id === id));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("floorMapsMgr.failedLoad"));
@@ -79,6 +82,7 @@ export default function JoinPairsPage() {
         map={map}
         tables={tables}
         rules={rules}
+        zones={zones}
         joinDistance={settings.join_distance}
         moduleOn={enabled}
         onChanged={load}

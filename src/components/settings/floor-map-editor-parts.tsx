@@ -708,9 +708,28 @@ export function ElementPanel({
               { value: "wall", labelKey: "floorMapEditor.styleWall" },
               { value: "area", labelKey: "floorMapEditor.styleArea" },
               { value: "arrow", labelKey: "floorMapEditor.styleArrow" },
+              { value: "divider", labelKey: "floorMapEditor.styleDivider" },
             ]}
-            onChange={(style) => onChange({ ...el, style: style === "wall" ? undefined : style })}
+            onChange={(style) =>
+              onChange({ ...el, style: style === "wall" ? undefined : style, off: undefined })
+            }
           />
+          {el.style === "divider" && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {t("floorMapEditor.dividerHelp")}
+              </p>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!el.off}
+                  onChange={(e) => onChange({ ...el, off: e.target.checked || undefined })}
+                  className="mt-0.5 h-4 w-4 accent-primary"
+                />
+                <span>{t("floorMapEditor.dividerOff")}</span>
+              </label>
+            </>
+          )}
           {el.kind === "ellipse" && (
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               {t("floorMapEditor.ellipseLabel")}

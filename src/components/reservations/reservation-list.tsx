@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  ArrowLeftRight,
   Armchair,
   Lock,
   LockOpen,
@@ -52,8 +53,11 @@ interface ReservationListProps {
   onFocus: (id: string | null) => void;
   selected: Set<string>;
   onSelectedChange: (ids: Set<string>) => void;
-  onEdit: (r: Reservation) => void;
+  /** None: no edit button (the phone lists today's bookings, the form is desktop's) */
+  onEdit?: (r: Reservation) => void;
   onAssign: (ids: string[]) => void;
+  /** A booking that has tables: see where else it could go ("Cambia tavolo") */
+  onChangeTables?: (r: Reservation) => void;
   onSeat: (r: Reservation) => void;
   onCancel: (r: Reservation) => void;
   onToggleLock: (r: Reservation) => void;
@@ -74,6 +78,7 @@ export function ReservationList({
   onSelectedChange,
   onEdit,
   onAssign,
+  onChangeTables,
   onSeat,
   onCancel,
   onToggleLock,
@@ -266,7 +271,19 @@ export function ReservationList({
                       </Badge>
                     ) : null}
                     <div className="ml-auto flex gap-1">
-                      {canPlan && booked && (
+                      {canPlan && booked && hasTables && onChangeTables && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9"
+                          disabled={busyId === r.id}
+                          onClick={() => onChangeTables(r)}
+                        >
+                          <ArrowLeftRight className="mr-1 h-4 w-4" />
+                          {t("reservations.changeTables")}
+                        </Button>
+                      )}
+                      {canPlan && booked && (!hasTables || !onChangeTables) && (
                         <Button
                           size="sm"
                           variant={hasTables ? "outline" : "default"}
@@ -308,7 +325,7 @@ export function ReservationList({
                           <Armchair className="h-4 w-4" />
                         </Button>
                       )}
-                      {canEdit && booked && (
+                      {canEdit && booked && onEdit && (
                         <Button
                           size="sm"
                           variant="ghost"

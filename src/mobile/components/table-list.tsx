@@ -3,9 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, Link2, Map as MapIcon, Search, Users, X } from "lucide-react";
+import {
+  LayoutGrid,
+  Link2,
+  Map as MapIcon,
+  Search,
+  UserRoundSearch,
+  Users,
+  X,
+} from "lucide-react";
 import { FloorMapView } from "@/components/floor-map/floor-map-view";
+import { useSmartFloorLayer } from "@/components/smart-floor/floor-layer";
 import { useFloorData } from "@/hooks/use-floor-data";
+import { useNow } from "@/hooks/use-now";
+import { useWaitlist } from "@/hooks/use-waitlist";
 import { useT } from "@/lib/i18n/use-translation";
 import { STATUS_CONFIG, displayStatus } from "@/lib/floor/status";
 import { linkedNamesByTable } from "@/lib/floor/links";
@@ -14,25 +25,31 @@ import {
   storeView,
   type FloorView,
 } from "@/lib/floor/view-pref";
-import type { FloorMap, RestaurantTable } from "@/lib/database.types";
+import type { FloorMap, Reservation, TableLink } from "@/lib/database.types";
+import type { TableWithTags } from "@/lib/settings-api";
 import { cn } from "@/lib/utils";
+import { usePermission } from "@/stores/auth-store";
+import { useSmartFloor } from "@/stores/smart-floor-store";
 import { mRoutes } from "@/mobile/lib/routes";
 import { MHeader, DesktopSwitch } from "./m-header";
 
 /**
  * The floor, phone-shaped.
  *
- * IMPORTANT: useFloorData() is mounted here and nowhere else in the mobile
- * tree. It hard-codes the realtime channel name "floor-data", and
- * RealtimeClient.channel() returns the *existing* channel for a repeated
- * topic — so a second concurrent mount would share one object, and whichever
- * unmounted first would tear down realtime for the other, silently degrading
- * it to the 15s poll. Never mount this in src/app/m/layout.tsx.
+ * useFloorData() refetches the whole floor on every table/order change:
+ * mount it in screens, never in src/app/m/layout.tsx (every screen would pay
+ * for it).
  */
 export function TableList() {
   const t = useT();
   const router = useRouter();
-  const { tables, openOrders, links, maps, loading, error } = useFloorData();
+  const { tables, reservations, openOrders, links, maps, loading, error } = useFloorData();
+  // Gestione Sala Smart: the door ("Accoglienza") is one tap away
+  const { enabled: smartFloor } = useSmartFloor();
+  const canSeat = usePermission("manage_tables");
+  const canReserve = usePermission("manage_reservations");
+  const showHostStand = smartFloor && (canSeat || canReserve);
+  const waitlist = useWaitlist(showHostStand);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [storedView, setStoredView] = useState<FloorView | null>(null);
@@ -89,6 +106,21 @@ export function TableList() {
         title={t("m.tabTables")}
         action={
           <div className="flex items-center">
+            {showHostStand && (
+              <Link
+                href={mRoutes.hostStand()}
+                aria-label={t("m.hostStandOpen", { count: waitlist.entries.length })}
+                title={t("m.hostStand")}
+                className="relative flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
+              >
+                <UserRoundSearch className="h-5 w-5" />
+                {waitlist.entries.length > 0 && (
+                  <span className="absolute right-0.5 top-1 min-w-4 rounded-full bg-emerald-600 px-1 text-center text-[10px] font-semibold leading-4 text-white">
+                    {waitlist.entries.length}
+                  </span>
+                )}
+              </Link>
+            )}
             <button
               type="button"
               aria-label={t("floor.searchTables")}
@@ -139,6 +171,8 @@ export function TableList() {
           activeMapId={activeMap.id}
           onPickMap={setActiveMapId}
           tables={tables}
+          reservations={reservations}
+          links={links}
           visibleIds={new Set(visible.map((tb) => tb.id))}
           splitsByTable={splitsByTable}
           linkedByTable={linkedByTable}
@@ -214,12 +248,18 @@ export function TableList() {
   );
 }
 
-/** Read-only drawn map for phones: tap a table to open it, pinch to zoom. */
+/**
+ * Read-only drawn map for phones: tap a table to open it, pinch to zoom.
+ * With Gestione Sala Smart on, booked tables get their party (violet = due
+ * within two hours, fuchsia = late), as on the desktop Sala.
+ */
 function MapPane({
   maps,
   activeMapId,
   onPickMap,
   tables,
+  reservations,
+  links,
   visibleIds,
   splitsByTable,
   linkedByTable,
@@ -230,7 +270,9 @@ function MapPane({
   maps: FloorMap[];
   activeMapId: string;
   onPickMap: (id: string) => void;
-  tables: RestaurantTable[];
+  tables: TableWithTags[];
+  reservations: Reservation[];
+  links: TableLink[];
   visibleIds: Set<string>;
   splitsByTable: Map<string, (string | null)[]>;
   linkedByTable: Map<string, string[]>;
@@ -241,6 +283,15 @@ function MapPane({
   const t = useT();
   const map = maps.find((m) => m.id === activeMapId)!;
   const onMap = tables.filter((tb) => tb.map_id === map.id);
+  const now = useNow(30_000);
+  const layer = useSmartFloorLayer({
+    tables,
+    reservations,
+    links,
+    mapTableIds: new Set(onMap.map((tb) => tb.id)),
+    now,
+    at: null,
+  });
   const offMap = tables.filter(
     (tb) =>
       visibleIds.has(tb.id) &&
@@ -258,6 +309,8 @@ function MapPane({
         linkedByTable={linkedByTable}
         dimmed={new Set(onMap.filter((tb) => !visibleIds.has(tb.id)).map((tb) => tb.id))}
         onSelect={(tb) => onOpen(tb.id)}
+        marks={layer.marks}
+        underlay={layer.underlay}
         toolbar={
           maps.length > 1 && (
             <div className="flex gap-1.5 overflow-x-auto">

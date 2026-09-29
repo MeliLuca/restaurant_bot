@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { FloorMap } from "@/lib/database.types";
-import { fetchFloorMaps } from "@/lib/floor/maps";
 import type { FloorSnapshot } from "@/lib/smart-floor/context";
 import { fetchFloorSnapshot } from "@/lib/smart-floor/data";
 import { useRealtimeRefresh } from "./use-realtime-refresh";
@@ -31,12 +30,9 @@ export function useReservationsDay(day: string) {
 
   const refresh = useCallback(async () => {
     try {
-      const [snap, m] = await Promise.all([
-        fetchFloorSnapshot(dayStart(day)),
-        fetchFloorMaps(),
-      ]);
+      const snap = await fetchFloorSnapshot(dayStart(day));
       setSnapshot(snap);
-      setMaps(m);
+      setMaps(snap.maps);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load reservations");
@@ -50,7 +46,7 @@ export function useReservationsDay(day: string) {
 
   useRealtimeRefresh(
     "reservations-day",
-    ["reservations", "reservation_tables", "tables", "smart_floor_settings"],
+    ["reservations", "reservation_tables", "tables", "smart_floor_settings", "floor_maps"],
     refresh,
   );
 

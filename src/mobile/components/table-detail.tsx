@@ -20,8 +20,8 @@ import { MHeader } from "./m-header";
  * One table: its open splits and what is on each. The two actions a waiter
  * standing at the table actually needs are full-width and unmissable.
  *
- * Deliberately does NOT mount useFloorData — see the channel-collision note in
- * table-list.tsx. It fetches just this table's orders instead.
+ * Deliberately does NOT mount useFloorData, which reads the whole floor: it
+ * fetches just this table's orders instead.
  */
 export function TableDetail({ tableId }: { tableId: string }) {
   const t = useT();

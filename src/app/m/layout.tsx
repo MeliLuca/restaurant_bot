@@ -1,3 +1,4 @@
+import { MFloorAlerts } from "@/mobile/components/m-floor-alerts";
 import { MTabBar } from "@/mobile/components/m-tab-bar";
 import { OfflineBar } from "@/mobile/components/offline-bar";
 
@@ -24,6 +25,7 @@ export default function MobileLayout({
       <OfflineBar />
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       <MTabBar />
+      <MFloorAlerts />
     </div>
   );
 }

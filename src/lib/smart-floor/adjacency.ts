@@ -1,8 +1,10 @@
 // Which tables can be pushed together: those drawn close on the same map,
-// plus/minus the hand-made exceptions in table_join_rules.
+// in the same zone, with no line or divider drawn between them — plus/minus
+// the hand-made exceptions in table_join_rules, which win over all that.
 
 import { center, type Geom } from "@/lib/floor/geometry";
 import type { TableJoinRule } from "@/lib/database.types";
+import { barrierBetween, type Barrier } from "./barriers";
 import type { FloorTable } from "./types";
 
 type Pt = [number, number];
@@ -100,34 +102,34 @@ function boxOf(poly: Pt[]) {
   };
 }
 
+/** Why two tables drawn close together still aren't pushed together */
+export type ApartReason = "zone" | "wall" | "divider";
+
+export interface ClosePair {
+  a: string;
+  b: string;
+  /** null = the map lets them join */
+  apart: ApartReason | null;
+}
+
 /**
- * table id → the tables it can be pushed together with. Two tables qualify
- * when they are drawn on the same map with outlines at most `maxGap` apart;
- * a rule overrides that either way.
+ * Every pair of tables drawn on the same map with outlines at most `maxGap`
+ * apart, and what keeps them apart, if anything: different zones (a table
+ * with no zone and one with a zone count as different), or a line or a
+ * divider crossing the straight line between their centres.
  */
-export function buildAdjacency(
+export function closePairs(
   tables: FloorTable[],
   maxGap: number,
-  rules: TableJoinRule[] = [],
-): Map<string, Set<string>> {
-  const adj = new Map<string, Set<string>>(tables.map((t) => [t.id, new Set()]));
-  const link = (a: string, b: string, on: boolean) => {
-    if (!adj.has(a) || !adj.has(b) || a === b) return;
-    if (on) {
-      adj.get(a)!.add(b);
-      adj.get(b)!.add(a);
-    } else {
-      adj.get(a)!.delete(b);
-      adj.get(b)!.delete(a);
-    }
-  };
-
+  barriers: Map<string, Barrier[]> = new Map(),
+): ClosePair[] {
   const placed = tables
     .filter((t) => t.mapId && t.geom)
     .map((t) => {
       const poly = outline(t.geom!);
-      return { t, poly, box: boxOf(poly) };
+      return { t, poly, box: boxOf(poly), mid: center(t.geom!) };
     });
+  const out: ClosePair[] = [];
   for (let i = 0; i < placed.length; i++) {
     for (let j = i + 1; j < placed.length; j++) {
       const a = placed[i];
@@ -142,8 +144,40 @@ export function buildAdjacency(
       ) {
         continue;
       }
-      if (outlineGap(a.poly, b.poly) <= maxGap) link(a.t.id, b.t.id, true);
+      if (outlineGap(a.poly, b.poly) > maxGap) continue;
+      const apart: ApartReason | null =
+        (a.t.zoneId ?? null) !== (b.t.zoneId ?? null)
+          ? "zone"
+          : barrierBetween(a.mid, b.mid, barriers.get(a.t.mapId!) ?? []);
+      out.push({ a: a.t.id, b: b.t.id, apart });
     }
+  }
+  return out;
+}
+
+/**
+ * table id → the tables it can be pushed together with: the close pairs
+ * nothing keeps apart (see closePairs), then the rules, either way.
+ */
+export function buildAdjacency(
+  tables: FloorTable[],
+  maxGap: number,
+  rules: TableJoinRule[] = [],
+  barriers: Map<string, Barrier[]> = new Map(),
+): Map<string, Set<string>> {
+  const adj = new Map<string, Set<string>>(tables.map((t) => [t.id, new Set()]));
+  const link = (a: string, b: string, on: boolean) => {
+    if (!adj.has(a) || !adj.has(b) || a === b) return;
+    if (on) {
+      adj.get(a)!.add(b);
+      adj.get(b)!.add(a);
+    } else {
+      adj.get(a)!.delete(b);
+      adj.get(b)!.delete(a);
+    }
+  };
+  for (const p of closePairs(tables, maxGap, barriers)) {
+    if (!p.apart) link(p.a, p.b, true);
   }
   for (const r of rules) link(r.table_a, r.table_b, r.joinable);
   return adj;

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { TableMark } from "@/components/floor-map/floor-map-view";
 import { PlanReview } from "@/components/reservations/plan-review";
+import { TableChange } from "@/components/reservations/table-change";
 import { PlanningMap } from "@/components/reservations/planning-map";
 import { ReservationForm } from "@/components/reservations/reservation-form";
 import { ReservationList } from "@/components/reservations/reservation-list";
@@ -34,7 +35,8 @@ import { useSmartFloor } from "@/stores/smart-floor-store";
 type View =
   | { kind: "list" }
   | { kind: "form"; editing: Reservation | null }
-  | { kind: "review"; ids: string[]; allowMoves: boolean };
+  | { kind: "review"; ids: string[]; allowMoves: boolean }
+  | { kind: "tables"; reservation: Reservation };
 
 function shiftDay(key: string, days: number): string {
   const d = dayStart(key);
@@ -224,6 +226,26 @@ export default function ReservationsPage() {
           <div className="w-[460px] animate-pulse rounded-xl bg-muted" />
           <div className="flex-1 animate-pulse rounded-xl bg-muted" />
         </div>
+      ) : view.kind === "tables" ? (
+        <TableChange
+          // a fresh picker for each booking
+          key={view.reservation.id}
+          ctx={ctx}
+          reservation={
+            reservations.find((r) => r.id === view.reservation.id) ?? view.reservation
+          }
+          reservations={reservations}
+          tags={snapshot.tags}
+          maps={maps}
+          tables={tables}
+          activeMapId={activeMapId}
+          onActiveMapChange={setActiveMapId}
+          onDone={(saved) => {
+            setFocusId(view.reservation.id);
+            setView({ kind: "list" });
+            if (saved) void refresh();
+          }}
+        />
       ) : view.kind === "review" && plan ? (
         <PlanReview
           ctx={ctx}
@@ -261,6 +283,7 @@ export default function ReservationsPage() {
               onSelectedChange={setSelected}
               onEdit={(r) => setView({ kind: "form", editing: r })}
               onAssign={(ids) => setView({ kind: "review", ids, allowMoves: false })}
+              onChangeTables={(reservation) => setView({ kind: "tables", reservation })}
               onSeat={(r) => {
                 setBusyId(r.id);
                 void seatFlow.seat(r).finally(() => setBusyId(null));
