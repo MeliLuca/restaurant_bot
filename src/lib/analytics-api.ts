@@ -1,5 +1,5 @@
 import { getSupabase } from "@/lib/supabase/client";
-import type { Order, OrderItem, Reservation } from "@/lib/database.types";
+import type { Order, OrderItem, ReservationRow } from "@/lib/database.types";
 import type { ServiceDateRange } from "@/lib/analytics/date-range";
 
 export type AnalyticsOrderItem = OrderItem & {
@@ -50,9 +50,9 @@ export async function fetchOrdersForRange(
 /** Reservations with reserved_at in [start, end). */
 export async function fetchReservationsForRange(
   range: ServiceDateRange,
-): Promise<Reservation[]> {
+): Promise<ReservationRow[]> {
   const sb = getSupabase();
-  const rows: Reservation[] = [];
+  const rows: ReservationRow[] = [];
   for (let from = 0; ; from += FETCH_PAGE) {
     const { data, error } = await sb
       .from("reservations")

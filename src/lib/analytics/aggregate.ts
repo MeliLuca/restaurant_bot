@@ -1,4 +1,4 @@
-import type { MenuItem, Reservation } from "@/lib/database.types";
+import type { MenuItem, ReservationRow } from "@/lib/database.types";
 import type { AnalyticsOrder } from "@/lib/analytics-api";
 import type { ItemStat } from "@/lib/stats-api";
 import { toCents } from "@/lib/money";
@@ -393,7 +393,7 @@ export interface ReservationSummary {
 }
 
 export function reservationStats(
-  reservations: Reservation[],
+  reservations: ReservationRow[],
   range: ServiceDateRange,
 ): ReservationSummary {
   let booked = 0;

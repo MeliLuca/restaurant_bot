@@ -1335,11 +1335,14 @@ insert into roles (id, name, permissions) values
   ('70000000-0000-0000-0000-000000000001', 'Admin',
    array['manage_tables','manage_reservations','take_orders','checkout_orders','manage_staff',
          'manage_menu','manage_floor','manage_availability','view_stats','manage_printers',
-         'override_price']),
+         'override_price','plan_floor','floor_alerts']),
   ('70000000-0000-0000-0000-000000000002', 'Host',
    array['manage_tables','manage_reservations']),
   ('70000000-0000-0000-0000-000000000003', 'Server',
-   array['manage_tables','take_orders','checkout_orders'])
+   array['manage_tables','take_orders','checkout_orders']),
+  -- also created by the smart_floor migration (same id), for existing DBs
+  ('70000000-0000-0000-0000-000000000004', 'Sala Manager',
+   array['manage_tables','manage_reservations','plan_floor','floor_alerts'])
 on conflict (id) do nothing;
 
 insert into app_users (id, name, role_id, pin_hash) values
@@ -1352,12 +1355,20 @@ insert into app_users (id, name, role_id, pin_hash) values
 on conflict (id) do nothing;
 
 -- TABLE TAGS: features used to filter tables (prefix a0) -----------------------
-insert into table_tags (id, name) values
-  ('a0000000-0000-0000-0000-000000000001', 'TV screen'),
-  ('a0000000-0000-0000-0000-000000000002', 'Accessible'),
-  ('a0000000-0000-0000-0000-000000000003', 'Child friendly'),
-  ('a0000000-0000-0000-0000-000000000004', 'Window seat')
+-- is_mandatory: Gestione Sala Smart never seats a party that asked for it
+-- at a table without it (the others are preferences)
+insert into table_tags (id, name, is_mandatory) values
+  ('a0000000-0000-0000-0000-000000000001', 'TV screen', false),
+  ('a0000000-0000-0000-0000-000000000002', 'Accessible', true),
+  ('a0000000-0000-0000-0000-000000000003', 'Child friendly', false),
+  ('a0000000-0000-0000-0000-000000000004', 'Window seat', false)
 on conflict (id) do nothing;
+
+-- Gestione Sala Smart: a bill with desserts/coffee is "about to leave". The
+-- migration sets this too, but on a reset it runs before the menu exists.
+update smart_floor_settings
+  set finishing_category_ids = array(select id from categories where name = 'Dolci')
+  where finishing_category_ids = '{}';
 
 -- ---------------------------------------------------------------------------
 -- Pantry hygiene + demo add-on prices

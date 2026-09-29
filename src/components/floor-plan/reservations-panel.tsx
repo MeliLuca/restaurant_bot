@@ -20,6 +20,7 @@ import {
   updateTableStatus,
 } from "@/lib/api";
 import type { Reservation, RestaurantTable } from "@/lib/database.types";
+import { compareTableNames } from "@/lib/floor/maps";
 import { useT } from "@/lib/i18n/use-translation";
 import { usePermission } from "@/stores/auth-store";
 
@@ -44,19 +45,27 @@ export function ReservationsPanel({
   const [query, setQuery] = useState("");
   const [sortAsc, setSortAsc] = useState(true);
   const canManage = usePermission("manage_reservations");
-  const tableName = (id: string) =>
-    tables.find((t) => t.id === id)?.name ?? "?";
+  // a party may hold several tables pushed together ("201 + 202")
+  const tableNames = (ids: string[]) =>
+    ids.length === 0
+      ? "—"
+      : ids
+          .map((id) => tables.find((t) => t.id === id)?.name ?? "?")
+          .sort(compareTableNames)
+          .join(" + ");
 
   async function seat(r: Reservation) {
     setBusyId(r.id);
     try {
       await setReservationStatus(r.id, "seated");
-      await updateTableStatus(r.table_id, "occupied");
+      await Promise.all(
+        r.table_ids.map((id) => updateTableStatus(id, "occupied")),
+      );
       await onChanged();
       toast.success(
         t("floor.seatedAt", {
           name: r.customer_name,
-          table: tableName(r.table_id),
+          table: tableNames(r.table_ids),
         }),
       );
     } catch (e) {
@@ -152,7 +161,7 @@ export function ReservationsPanel({
                 <div className="text-xs text-muted-foreground">
                   {t("floor.partyOf", {
                     count: r.party_size,
-                    table: tableName(r.table_id),
+                    table: tableNames(r.table_ids),
                   })}
                   {r.notes ? ` · ${r.notes}` : ""}
                 </div>
@@ -166,7 +175,7 @@ export function ReservationsPanel({
                   <Button
                     size="sm"
                     className="h-10"
-                    disabled={busyId === r.id}
+                    disabled={busyId === r.id || r.table_ids.length === 0}
                     onClick={() => seat(r)}
                   >
                     <Armchair className="mr-1 h-4 w-4" /> {t("floor.seat")}

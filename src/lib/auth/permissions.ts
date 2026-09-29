@@ -12,6 +12,18 @@ export const PERMISSIONS = [
     description: "Create, seat, and cancel bookings",
   },
   {
+    key: "plan_floor",
+    label: "Plan the floor",
+    description:
+      "Let Gestione Sala Smart assign tables to bookings, one or many at once (desktop only)",
+  },
+  {
+    key: "floor_alerts",
+    label: "Floor alerts",
+    description:
+      "Get the Gestione Sala Smart alerts: a table free for the waitlist, a late booking",
+  },
+  {
     key: "take_orders",
     label: "Take orders",
     description: "Use the POS to build tickets and send to kitchen",

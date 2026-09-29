@@ -23,14 +23,14 @@ import {
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { reservationStats } from "@/lib/analytics/aggregate";
 import type { ServiceDateRange } from "@/lib/analytics/date-range";
-import type { Reservation } from "@/lib/database.types";
+import type { ReservationRow } from "@/lib/database.types";
 import { useLangStore, useT } from "@/lib/i18n/use-translation";
 
 export function ReservationsTab({
   reservations,
   range,
 }: {
-  reservations: Reservation[];
+  reservations: ReservationRow[];
   range: ServiceDateRange;
 }) {
   const t = useT();

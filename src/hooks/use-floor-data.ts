@@ -105,6 +105,16 @@ export function useFloorData(): FloorData {
         { event: "*", schema: "public", table: "table_links" },
         debouncedRefresh,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reservations" },
+        debouncedRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reservation_tables" },
+        debouncedRefresh,
+      )
       .subscribe((status) => {
         realtimeUp.current = status === "SUBSCRIBED";
       });

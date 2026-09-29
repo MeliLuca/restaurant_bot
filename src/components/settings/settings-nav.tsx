@@ -17,6 +17,7 @@ const LINKS: {
   { href: "/settings/menu", labelKey: "settings.navMenu", permission: "manage_menu" },
   { href: "/settings/tables", labelKey: "settings.navTablesTags", permission: "manage_floor" },
   { href: "/settings/floor-maps", labelKey: "settings.navFloorMaps", permission: "manage_floor" },
+  { href: "/settings/modules", labelKey: "settings.navModules", permission: "manage_floor" },
   {
     href: "/settings/availability",
     labelKey: "settings.navAvailability",

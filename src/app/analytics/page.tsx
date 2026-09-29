@@ -22,7 +22,7 @@ import {
 } from "@/lib/analytics/date-range";
 import { fetchCategories, fetchMenuItems } from "@/lib/api";
 import { fetchStaff, type StaffMember } from "@/lib/staff-api";
-import type { Category, MenuItem, Reservation } from "@/lib/database.types";
+import type { Category, MenuItem, ReservationRow } from "@/lib/database.types";
 import { useLangStore, useT } from "@/lib/i18n/use-translation";
 import { usePermission } from "@/stores/auth-store";
 
@@ -44,7 +44,7 @@ export default function AnalyticsPage() {
   const [customEnd, setCustomEnd] = useState(() => toDayInput(new Date()));
   const [orders, setOrders] = useState<AnalyticsOrder[]>([]);
   const [prevOrders, setPrevOrders] = useState<AnalyticsOrder[]>([]);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [reservations, setReservations] = useState<ReservationRow[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);

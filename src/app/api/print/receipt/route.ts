@@ -1,14 +1,16 @@
 // POST /api/print/receipt — fire the full CASSA receipt for an order (all
 // lines, company header, totals). Callable any time: checkout or reprint.
 // With preconto: true it prints the same itemized bill under a big
-// "PRE-CONTO / NON FISCALE" banner — purely informative, the order is not
-// touched (this route never changes order/table state).
+// "PRE-CONTO / NON FISCALE" banner — purely informative: the order is not
+// touched (this route never changes order/table state) beyond stamping
+// preconto_at, which Gestione Sala Smart reads as "about to leave".
 // Body: { orderId: string, preconto?: boolean }
 
 import { NextResponse } from "next/server";
 import { loadOrderPrintContext } from "@/lib/printing/data";
 import { buildCassaPayload } from "@/lib/printing/route-order";
 import { dispatchPayloads } from "@/lib/printing/dispatch";
+import { getSupabase } from "@/lib/supabase/client";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -37,6 +39,13 @@ export async function POST(request: Request) {
         { error: "No active CASSA printer configured" },
         { status: 409 },
       );
+    }
+    if (preconto) {
+      // best effort: a missed stamp must never cost the customer their bill
+      await getSupabase()
+        .from("orders")
+        .update({ preconto_at: new Date().toISOString() })
+        .eq("id", ctx.order.id);
     }
     const jobs = await dispatchPayloads(ctx.order.id, [payload], "conto");
     return NextResponse.json({ jobs });

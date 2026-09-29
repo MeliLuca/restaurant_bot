@@ -96,7 +96,7 @@ export function ReservationDialog({
     setBusy(true);
     try {
       await createReservation({
-        tableId,
+        tableIds: [tableId],
         customerName: customerName.trim(),
         partySize: size,
         reservedAt,

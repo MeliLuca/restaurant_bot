@@ -822,6 +822,7 @@ export const it = {
     navMenu: "Menù",
     navTablesTags: "Tavoli ed etichette",
     navFloorMaps: "Mappe sala",
+    navModules: "Moduli",
     navAvailability: "Disponibilità",
     navPrintTemplates: "Modelli di stampa",
     navPrintTexts: "Testi di stampa",
@@ -1283,6 +1284,64 @@ export const it = {
       "Cerca una voce per nome o ingrediente, oppure scegli una categoria qui sopra.",
     categoriesTitle: "Categorie",
   },
+  smartFloor: {
+    moduleName: "Gestione Sala Smart",
+    moduleDescription:
+      "Assegna in automatico i tavoli alle prenotazioni (anche tante insieme, unendo i tavoli vicini), trova posto a chi arriva senza prenotazione e gestisce la coda d'attesa.",
+    on: "Attivo",
+    off: "Spento",
+    turnedOn: "Gestione Sala Smart attivata",
+    turnedOff: "Gestione Sala Smart disattivata",
+    onNote:
+      "Attivo su tutti i dispositivi. Le regole qui sotto valgono subito per ogni nuova assegnazione.",
+    offNote:
+      "Spento: l'app funziona come prima, ogni prenotazione con un tavolo scelto a mano. Puoi preparare le regole qui sotto e attivarlo quando vuoi.",
+    needsPermission: "Serve il permesso per gestire la disposizione della sala.",
+    loadFailed: "Impossibile caricare il modulo",
+    timesTitle: "Tempi",
+    timesBody:
+      "Un tavolo prenotato resta impegnato per {duration}: prima di allora si può far sedere qualcun altro solo se finisce in tempo.",
+    mealMinutes: "Durata media di un tavolo",
+    bufferMinutes: "Margine prima della prenotazione successiva",
+    lateAfterMinutes: "Prenotazione in ritardo dopo",
+    occupiedWarnMinutes: "Avvisa se il tavolo prenotato è ancora occupato",
+    minutes: "min",
+    minutesLate: "min di ritardo",
+    minutesBefore: "min prima",
+    seatsTitle: "Posti e tavoli uniti",
+    seatsBody:
+      "I posti di un tavolo sono indicativi: qui decidi quanto si può stringere o allargare, e quando due tavoli si possono unire.",
+    overfillSeats: "Persone in più accettate",
+    maxSpareSeats: "Posti vuoti accettati",
+    joinBonusSeats: "Posti in più per ogni unione",
+    maxJoinTables: "Massimo tavoli da unire",
+    joinDistance: "Distanza massima per unire due tavoli",
+    people: "persone",
+    seats: "posti",
+    tables: "tavoli",
+    mapUnits: "unità della mappa",
+    seatsExample:
+      "Esempio: un tavolo da 4 accoglie da {min} a {max} persone; due tavoli da 6 e 10 uniti fanno {joined} posti.",
+    between: "Un numero da {min} a {max}",
+    bookingsTitle: "Prenotazioni",
+    phoneRequired: "Numero di telefono obbligatorio",
+    phoneRequiredHint:
+      "Serve per chiamare chi è in ritardo o avvisare di un cambiamento. Nessun messaggio viene inviato in automatico.",
+    featuresTitle: "Etichette obbligatorie",
+    featuresBody:
+      "Se una prenotazione chiede un'etichetta obbligatoria, non riceve mai un tavolo senza. Le altre sono preferenze: se non c'è un tavolo che le ha, pazienza. Con più tavoli uniti basta che ce l'abbia uno.",
+    mandatory: "obbligatoria se richiesta",
+    preference: "preferenza",
+    tagNowMandatory: "{name} ora è obbligatoria se richiesta",
+    tagNowPreference: "{name} ora è una preferenza",
+    noTags: "Nessuna etichetta: aggiungile in Tavoli ed etichette.",
+    finishingTitle: "Tavoli che stanno per liberarsi",
+    finishingBody:
+      "Un tavolo che ha ordinato da queste categorie, ha chiesto il pre-conto o è seduto da più di {duration} viene proposto come \"sta per liberarsi\".",
+    unsaved: "Modifiche non salvate",
+    fixFields: "Correggi i valori evidenziati",
+    saved: "Impostazioni salvate",
+  },
   perm: {
     manage_tables: {
       label: "Aggiorna stato tavoli",
@@ -1291,6 +1350,16 @@ export const it = {
     manage_reservations: {
       label: "Gestisci prenotazioni",
       description: "Crea, accomoda e annulla prenotazioni",
+    },
+    plan_floor: {
+      label: "Pianifica la sala",
+      description:
+        "Fai assegnare i tavoli alle prenotazioni da Gestione Sala Smart, una o tante insieme (solo da computer)",
+    },
+    floor_alerts: {
+      label: "Avvisi sala",
+      description:
+        "Ricevi gli avvisi di Gestione Sala Smart: tavolo libero per la coda, prenotazione in ritardo",
     },
     take_orders: {
       label: "Prendi ordini",
@@ -2170,6 +2239,7 @@ export const en: typeof it = {
     navMenu: "Menu",
     navTablesTags: "Tables & tags",
     navFloorMaps: "Floor maps",
+    navModules: "Modules",
     navAvailability: "Availability",
     navPrintTemplates: "Print templates",
     navPrintTexts: "Print texts",
@@ -2626,6 +2696,64 @@ export const en: typeof it = {
       "Search for an item by name or ingredient, or pick a category above.",
     categoriesTitle: "Categories",
   },
+  smartFloor: {
+    moduleName: "Gestione Sala Smart",
+    moduleDescription:
+      "Assigns tables to reservations automatically (many at once too, pushing nearby tables together), finds a seat for walk-ins and runs the waitlist.",
+    on: "On",
+    off: "Off",
+    turnedOn: "Gestione Sala Smart switched on",
+    turnedOff: "Gestione Sala Smart switched off",
+    onNote:
+      "On for every device. The rules below apply to every new assignment straight away.",
+    offNote:
+      "Off: the app works as before, every reservation on a hand-picked table. You can set up the rules below and switch it on whenever you like.",
+    needsPermission: "You need the floor-layout permission.",
+    loadFailed: "Could not load the module",
+    timesTitle: "Times",
+    timesBody:
+      "A reserved table is held for {duration}: before that someone else may sit there only if they finish in time.",
+    mealMinutes: "Average time at a table",
+    bufferMinutes: "Gap before the next reservation",
+    lateAfterMinutes: "Reservation is late after",
+    occupiedWarnMinutes: "Warn if the reserved table is still occupied",
+    minutes: "min",
+    minutesLate: "min late",
+    minutesBefore: "min before",
+    seatsTitle: "Seats and joined tables",
+    seatsBody:
+      "A table's seat count is a guide: decide here how far it can squeeze or stretch, and when two tables can be pushed together.",
+    overfillSeats: "Extra guests allowed",
+    maxSpareSeats: "Empty seats allowed",
+    joinBonusSeats: "Extra seats per join",
+    maxJoinTables: "Most tables to join",
+    joinDistance: "Max distance to join two tables",
+    people: "guests",
+    seats: "seats",
+    tables: "tables",
+    mapUnits: "map units",
+    seatsExample:
+      "Example: a table for 4 takes {min} to {max} guests; tables for 6 and 10 pushed together seat {joined}.",
+    between: "A number from {min} to {max}",
+    bookingsTitle: "Reservations",
+    phoneRequired: "Phone number required",
+    phoneRequiredHint:
+      "To call a late party or tell them about a change. Nothing is ever sent automatically.",
+    featuresTitle: "Mandatory tags",
+    featuresBody:
+      "A reservation asking for a mandatory tag never gets a table without it. The others are preferences: if no table has them, never mind. With tables pushed together, one of them having it is enough.",
+    mandatory: "mandatory when asked",
+    preference: "preference",
+    tagNowMandatory: "{name} is now mandatory when asked",
+    tagNowPreference: "{name} is now a preference",
+    noTags: "No tags yet: add them in Tables & tags.",
+    finishingTitle: "Tables about to leave",
+    finishingBody:
+      "A table that ordered from these categories, asked for the pre-bill, or has been seated for more than {duration} is offered as \"about to leave\".",
+    unsaved: "Unsaved changes",
+    fixFields: "Fix the highlighted values",
+    saved: "Settings saved",
+  },
   perm: {
     manage_tables: {
       label: "Update table status",
@@ -2634,6 +2762,16 @@ export const en: typeof it = {
     manage_reservations: {
       label: "Manage reservations",
       description: "Create, seat, and cancel bookings",
+    },
+    plan_floor: {
+      label: "Plan the floor",
+      description:
+        "Let Gestione Sala Smart assign tables to bookings, one or many at once (desktop only)",
+    },
+    floor_alerts: {
+      label: "Floor alerts",
+      description:
+        "Get the Gestione Sala Smart alerts: a table free for the waitlist, a late booking",
     },
     take_orders: {
       label: "Take orders",

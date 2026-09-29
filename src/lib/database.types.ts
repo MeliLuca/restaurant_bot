@@ -5,6 +5,7 @@ export type TableStatus = "available" | "occupied" | "dirty";
 export type OrderStatus = "open" | "paid" | "cancelled";
 export type OrderType = "dine_in" | "takeaway";
 export type ReservationStatus = "booked" | "seated" | "cancelled" | "no_show";
+export type WaitlistStatus = "waiting" | "seated" | "left";
 export type PrinterType = "CASSA" | "CUCINA" | "BAR";
 export type PaymentKind = "even" | "items";
 export type PaperSize = "80mm" | "58mm";
@@ -59,6 +60,8 @@ export interface Database {
           h: number | null;
           rotation: number;
           path: string | null;
+          /** When the table went occupied (null unless occupied) — set by trigger */
+          occupied_at: string | null;
         };
         Insert: {
           id?: string;
@@ -74,6 +77,7 @@ export interface Database {
           h?: number | null;
           rotation?: number;
           path?: string | null;
+          occupied_at?: string | null;
         };
         Update: {
           id?: string;
@@ -89,6 +93,7 @@ export interface Database {
           h?: number | null;
           rotation?: number;
           path?: string | null;
+          occupied_at?: string | null;
         };
         Relationships: [];
       };
@@ -123,44 +128,188 @@ export interface Database {
         Relationships: [];
       };
       reservations: {
+        // Tables live in reservation_tables (none = not assigned yet)
         Row: {
           id: string;
-          table_id: string;
           customer_name: string;
           party_size: number;
           reserved_at: string;
           status: ReservationStatus;
           notes: string | null;
           created_at: string;
+          phone: string | null;
+          /** Requested table features (table_tags ids) */
+          tag_ids: string[];
+          /** Preferred room (floor map), null = anywhere */
+          map_id: string | null;
+          /** Bulk assignment never moves a locked booking */
+          locked: boolean;
         };
         Insert: {
           id?: string;
-          table_id: string;
           customer_name: string;
           party_size: number;
           reserved_at: string;
           status?: ReservationStatus;
           notes?: string | null;
           created_at?: string;
+          phone?: string | null;
+          tag_ids?: string[];
+          map_id?: string | null;
+          locked?: boolean;
         };
         Update: {
           id?: string;
-          table_id?: string;
           customer_name?: string;
           party_size?: number;
           reserved_at?: string;
           status?: ReservationStatus;
           notes?: string | null;
           created_at?: string;
+          phone?: string | null;
+          tag_ids?: string[];
+          map_id?: string | null;
+          locked?: boolean;
+        };
+        Relationships: [];
+      };
+      reservation_tables: {
+        Row: {
+          reservation_id: string;
+          table_id: string;
+        };
+        Insert: {
+          reservation_id: string;
+          table_id: string;
+        };
+        Update: {
+          reservation_id?: string;
+          table_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "reservations_table_id_fkey";
+            foreignKeyName: "reservation_tables_reservation_id_fkey";
+            columns: ["reservation_id"];
+            referencedRelation: "reservations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reservation_tables_table_id_fkey";
             columns: ["table_id"];
             referencedRelation: "tables";
             referencedColumns: ["id"];
           },
         ];
+      };
+      waitlist: {
+        Row: {
+          id: string;
+          customer_name: string;
+          party_size: number;
+          phone: string | null;
+          tag_ids: string[];
+          map_id: string | null;
+          notes: string | null;
+          status: WaitlistStatus;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          customer_name: string;
+          party_size: number;
+          phone?: string | null;
+          tag_ids?: string[];
+          map_id?: string | null;
+          notes?: string | null;
+          status?: WaitlistStatus;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          customer_name?: string;
+          party_size?: number;
+          phone?: string | null;
+          tag_ids?: string[];
+          map_id?: string | null;
+          notes?: string | null;
+          status?: WaitlistStatus;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Relationships: [];
+      };
+      table_join_rules: {
+        // One row per pair, table_a < table_b
+        Row: {
+          table_a: string;
+          table_b: string;
+          joinable: boolean;
+        };
+        Insert: {
+          table_a: string;
+          table_b: string;
+          joinable: boolean;
+        };
+        Update: {
+          table_a?: string;
+          table_b?: string;
+          joinable?: boolean;
+        };
+        Relationships: [];
+      };
+      smart_floor_settings: {
+        // Singleton: exactly one row, primary key is the constant `true`.
+        Row: {
+          id: boolean;
+          enabled: boolean;
+          meal_minutes: number;
+          buffer_minutes: number;
+          late_after_minutes: number;
+          occupied_warn_minutes: number;
+          phone_required: boolean;
+          overfill_seats: number;
+          max_spare_seats: number;
+          join_bonus_seats: number;
+          join_distance: number;
+          max_join_tables: number;
+          finishing_category_ids: string[];
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          enabled?: boolean;
+          meal_minutes?: number;
+          buffer_minutes?: number;
+          late_after_minutes?: number;
+          occupied_warn_minutes?: number;
+          phone_required?: boolean;
+          overfill_seats?: number;
+          max_spare_seats?: number;
+          join_bonus_seats?: number;
+          join_distance?: number;
+          max_join_tables?: number;
+          finishing_category_ids?: string[];
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          enabled?: boolean;
+          meal_minutes?: number;
+          buffer_minutes?: number;
+          late_after_minutes?: number;
+          occupied_warn_minutes?: number;
+          phone_required?: boolean;
+          overfill_seats?: number;
+          max_spare_seats?: number;
+          join_bonus_seats?: number;
+          join_distance?: number;
+          max_join_tables?: number;
+          finishing_category_ids?: string[];
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       categories: {
         Row: {
@@ -258,6 +407,8 @@ export interface Database {
           opened_by: string | null;
           opened_at: string;
           closed_at: string | null;
+          /** Last pre-conto printed for this bill */
+          preconto_at: string | null;
         };
         Insert: {
           id?: string;
@@ -278,6 +429,7 @@ export interface Database {
           opened_by?: string | null;
           opened_at?: string;
           closed_at?: string | null;
+          preconto_at?: string | null;
         };
         Update: {
           id?: string;
@@ -298,6 +450,7 @@ export interface Database {
           opened_by?: string | null;
           opened_at?: string;
           closed_at?: string | null;
+          preconto_at?: string | null;
         };
         Relationships: [
           {
@@ -430,16 +583,20 @@ export interface Database {
           id: string;
           name: string;
           created_at: string;
+          /** A booking that asks for it never gets a table without it */
+          is_mandatory: boolean;
         };
         Insert: {
           id?: string;
           name: string;
           created_at?: string;
+          is_mandatory?: boolean;
         };
         Update: {
           id?: string;
           name?: string;
           created_at?: string;
+          is_mandatory?: boolean;
         };
         Relationships: [];
       };
@@ -993,6 +1150,29 @@ export interface Database {
         /** draft key → id of each table the save created */
         Returns: Record<string, string>;
       };
+      save_reservation: {
+        Args: {
+          p: {
+            id?: string;
+            customer_name?: string;
+            party_size?: number;
+            reserved_at?: string;
+            phone?: string | null;
+            notes?: string | null;
+            tag_ids?: string[];
+            map_id?: string | null;
+            locked?: boolean;
+            status?: ReservationStatus;
+          };
+          /** null/absent = leave the tables alone, [] = unassign */
+          p_table_ids?: string[] | null;
+        };
+        Returns: string;
+      };
+      assign_reservations: {
+        Args: { p: { id: string; table_ids: string[] }[] };
+        Returns: undefined;
+      };
       move_order_items: {
         Args: {
           p_from_order: string;
@@ -1026,7 +1206,13 @@ export interface Database {
 // Convenience row aliases for app code
 export type RestaurantTable = Database["public"]["Tables"]["tables"]["Row"];
 export type FloorMap = Database["public"]["Tables"]["floor_maps"]["Row"];
-export type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
+export type ReservationRow = Database["public"]["Tables"]["reservations"]["Row"];
+/** A reservation with the tables it holds ([] = not assigned yet) */
+export type Reservation = ReservationRow & { table_ids: string[] };
+export type WaitlistEntry = Database["public"]["Tables"]["waitlist"]["Row"];
+export type TableJoinRule = Database["public"]["Tables"]["table_join_rules"]["Row"];
+export type SmartFloorSettings =
+  Database["public"]["Tables"]["smart_floor_settings"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type MenuItem = Database["public"]["Tables"]["menu_items"]["Row"];
 export type Order = Database["public"]["Tables"]["orders"]["Row"];

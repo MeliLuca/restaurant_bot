@@ -24,6 +24,7 @@ import type {
   OrderPayment,
   PaymentKind,
   Reservation,
+  ReservationRow,
   ReservationStatus,
   RestaurantTable,
   TableStatus,
@@ -51,6 +52,20 @@ export async function updateTableStatus(
   if (error) throw new Error(error.message);
 }
 
+/** Reservation rows with the tables they hold */
+const RESERVATION_SELECT = "*, reservation_tables(table_id)";
+
+type ReservationJoinRow = ReservationRow & {
+  reservation_tables: { table_id: string }[];
+};
+
+function toReservation({
+  reservation_tables,
+  ...row
+}: ReservationJoinRow): Reservation {
+  return { ...row, table_ids: reservation_tables.map((rt) => rt.table_id) };
+}
+
 export async function fetchTodayReservations(): Promise<Reservation[]> {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -59,31 +74,44 @@ export async function fetchTodayReservations(): Promise<Reservation[]> {
 
   const { data, error } = await getSupabase()
     .from("reservations")
-    .select("*")
+    .select(RESERVATION_SELECT)
     .gte("reserved_at", start.toISOString())
     .lt("reserved_at", end.toISOString())
     .order("reserved_at");
   if (error) throw new Error(error.message);
-  return data;
+  return (data as unknown as ReservationJoinRow[]).map(toReservation);
 }
 
 export interface NewReservation {
-  tableId: string;
+  /** Tables it holds; [] = not assigned yet (Gestione Sala Smart) */
+  tableIds: string[];
   customerName: string;
   partySize: number;
   reservedAt: Date;
   notes?: string;
+  phone?: string;
+  /** Requested table features (table_tags ids) */
+  tagIds?: string[];
+  /** Preferred room (floor map) */
+  mapId?: string | null;
 }
 
-export async function createReservation(r: NewReservation): Promise<void> {
-  const { error } = await getSupabase().from("reservations").insert({
-    table_id: r.tableId,
-    customer_name: r.customerName,
-    party_size: r.partySize,
-    reserved_at: r.reservedAt.toISOString(),
-    notes: r.notes || null,
+/** Create a reservation and its tables in one transaction; returns its id */
+export async function createReservation(r: NewReservation): Promise<string> {
+  const { data, error } = await getSupabase().rpc("save_reservation", {
+    p: {
+      customer_name: r.customerName,
+      party_size: r.partySize,
+      reserved_at: r.reservedAt.toISOString(),
+      notes: r.notes || null,
+      phone: r.phone || null,
+      tag_ids: r.tagIds ?? [],
+      map_id: r.mapId ?? null,
+    },
+    p_table_ids: r.tableIds,
   });
   if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function setReservationStatus(
