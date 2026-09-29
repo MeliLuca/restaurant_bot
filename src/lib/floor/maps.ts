@@ -152,7 +152,20 @@ export function geomOf(table: RestaurantTable): Geom {
   };
 }
 
-/** Write an editor draft in one transaction (see save_floor_map_layout). */
+/** A table drawn in the editor that doesn't exist yet (created on save) */
+export interface NewMapTable {
+  /** Draft key, not a real id */
+  key: string;
+  name: string;
+  capacity: number;
+  tagIds: string[];
+  geom: Geom;
+}
+
+/**
+ * Write an editor draft in one transaction (see save_floor_map_layout).
+ * Returns draft key → real id for the tables it created.
+ */
 export async function saveFloorMapLayout(
   mapId: string,
   changes: { id: string; geom: Geom | null }[],
@@ -160,15 +173,57 @@ export async function saveFloorMapLayout(
   elements?: FloorMapElement[],
   /** New sheet size; omit to keep it */
   size?: { width: number; height: number },
-): Promise<void> {
-  const { error } = await getSupabase().rpc("save_floor_map_layout", {
+  /** Tables drawn in this draft */
+  created: NewMapTable[] = [],
+): Promise<Record<string, string>> {
+  const { data, error } = await getSupabase().rpc("save_floor_map_layout", {
     p_map_id: mapId,
-    p_tables: changes.map(({ id, geom }) =>
-      geom ? { id, placed: true, ...geom } : { id, placed: false },
-    ),
+    p_tables: [
+      ...changes.map(({ id, geom }) =>
+        geom ? { id, placed: true, ...geom } : { id, placed: false },
+      ),
+      ...created.map((c) => ({
+        new: true as const,
+        key: c.key,
+        name: c.name,
+        capacity: c.capacity,
+        tag_ids: c.tagIds,
+        ...c.geom,
+      })),
+    ],
     p_elements: elements ?? null,
     p_width: size?.width ?? null,
     p_height: size?.height ?? null,
   });
   if (error) throw new Error(error.message);
+  return data ?? {};
+}
+
+/**
+ * Name for a freshly drawn table: one past the highest plain-number name
+ * ("71" after "70"; "102/4" and "Patio 3" don't count), or "1".
+ */
+export function nextTableName(taken: string[]): string {
+  return nextTableNameLike("", taken);
+}
+
+/**
+ * Next name in the same series as `like`: "G1" → one past the highest
+ * "G<n>" ("G6" if G1–G5 exist), "310" → one past the highest plain number.
+ * A name without a trailing number starts a plain-number series.
+ */
+export function nextTableNameLike(like: string, taken: string[]): string {
+  const prefix = like.trim().replace(/\d+$/, "");
+  const series = /\d$/.test(like.trim()) ? prefix : "";
+  const escaped = series.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${escaped}(\\d+)$`, "i");
+  const used = new Set(taken.map((n) => n.trim().toLowerCase()));
+  let max = 0;
+  for (const name of taken) {
+    const m = re.exec(name.trim());
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  let n = max + 1;
+  while (used.has(`${series}${n}`.toLowerCase())) n++;
+  return `${series}${n}`;
 }

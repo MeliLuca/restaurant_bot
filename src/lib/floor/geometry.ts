@@ -330,3 +330,39 @@ export function toShape(g: Geom, shape: "rect" | "circle"): Geom {
 export function labelFontSize(name: string, w: number, h: number, max = 20): number {
   return Math.min(max, h * 0.55, (w * 0.9) / (Math.max(1, name.length) * 0.55));
 }
+
+export type RepeatDir = "right" | "down" | "left" | "up";
+
+/**
+ * Copies of a group of tables laid out in a row ("Ripeti in fila"): the
+ * offset from one copy to the next — the group's visible size along the
+ * direction plus `gap` — and how many copies still fit on the sheet.
+ */
+export function repeatLayout(
+  geoms: Geom[],
+  dir: RepeatDir,
+  gap: number,
+  width: number,
+  height: number,
+): { dx: number; dy: number; fits: number } {
+  const bs = geoms.map(bounds);
+  const x1 = Math.min(...bs.map((b) => b.x1));
+  const y1 = Math.min(...bs.map((b) => b.y1));
+  const x2 = Math.max(...bs.map((b) => b.x2));
+  const y2 = Math.max(...bs.map((b) => b.y2));
+  const stepX = x2 - x1 + gap;
+  const stepY = y2 - y1 + gap;
+  // a hair of slack so float noise doesn't lose a copy that fits exactly
+  const count = (room: number, step: number) =>
+    step > 0 ? Math.max(0, Math.floor((room + 1e-6) / step)) : 0;
+  switch (dir) {
+    case "right":
+      return { dx: stepX, dy: 0, fits: count(width - x2, stepX) };
+    case "left":
+      return { dx: -stepX, dy: 0, fits: count(x1, stepX) };
+    case "down":
+      return { dx: 0, dy: stepY, fits: count(height - y2, stepY) };
+    case "up":
+      return { dx: 0, dy: -stepY, fits: count(y1, stepY) };
+  }
+}

@@ -205,31 +205,33 @@ export function FloorMapsManager({
       {map && (
         <div className="flex min-w-0 flex-col gap-6">
           <Card>
-            <CardContent className="h-[60vh] min-h-[360px] pt-6">
-              <FloorMapView
-                map={map}
-                tables={onMap}
-                splitsByTable={EMPTY}
-                linkedByTable={EMPTY}
-                dimmed={NO_DIMMED}
-                selectedId={selected?.id}
-                onSelect={(tb) =>
-                  setSelectedTableId((cur) => (cur === tb.id ? null : tb.id))
-                }
-                toolbar={
-                  <div className="flex items-center gap-3">
-                    <Button asChild className="h-11 shrink-0">
-                      <Link href={`/settings/floor-maps/${map.id}/edit`}>
-                        <Move className="mr-2 h-4 w-4" />
-                        {t("floorMapsMgr.editLayout")}
-                      </Link>
-                    </Button>
-                    <p className="hidden truncate text-sm text-muted-foreground sm:block">
-                      {t("floorMapsMgr.tapToEdit")}
-                    </p>
-                  </div>
-                }
-              />
+            <CardContent className="flex h-[60vh] min-h-[360px] flex-col gap-3 pt-6">
+              {/* above the map, not in its toolbar: there it covered the
+                  rotate button on narrower screens */}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button asChild className="h-11 shrink-0">
+                  <Link href={`/settings/floor-maps/${map.id}/edit`}>
+                    <Move className="mr-2 h-4 w-4" />
+                    {t("floorMapsMgr.editLayout")}
+                  </Link>
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                  {t("floorMapsMgr.tapToEdit")}
+                </p>
+              </div>
+              <div className="min-h-0 flex-1">
+                <FloorMapView
+                  map={map}
+                  tables={onMap}
+                  splitsByTable={EMPTY}
+                  linkedByTable={EMPTY}
+                  dimmed={NO_DIMMED}
+                  selectedId={selected?.id}
+                  onSelect={(tb) =>
+                    setSelectedTableId((cur) => (cur === tb.id ? null : tb.id))
+                  }
+                />
+              </div>
             </CardContent>
           </Card>
 

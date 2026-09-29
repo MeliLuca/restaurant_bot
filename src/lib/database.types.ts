@@ -959,23 +959,39 @@ export interface Database {
       save_floor_map_layout: {
         Args: {
           p_map_id: string;
-          p_tables: ({
-            id: string;
-            placed: boolean;
-          } & Partial<{
-            shape: TableShape;
-            x: number;
-            y: number;
-            w: number;
-            h: number;
-            rotation: number;
-            path: string | null;
-          }>)[];
+          p_tables: (
+            | ({ id: string; placed: boolean } & Partial<{
+                shape: TableShape;
+                x: number;
+                y: number;
+                w: number;
+                h: number;
+                rotation: number;
+                path: string | null;
+              }>)
+            | {
+                /** A table drawn in the editor, created by this save */
+                new: true;
+                /** Draft key, echoed back with the new id */
+                key: string;
+                name: string;
+                capacity: number;
+                tag_ids: string[];
+                shape: TableShape;
+                x: number;
+                y: number;
+                w: number;
+                h: number;
+                rotation: number;
+                path: string | null;
+              }
+          )[];
           p_elements?: FloorMapElement[] | null;
           p_width?: number | null;
           p_height?: number | null;
         };
-        Returns: undefined;
+        /** draft key → id of each table the save created */
+        Returns: Record<string, string>;
       };
       move_order_items: {
         Args: {

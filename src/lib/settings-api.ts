@@ -117,6 +117,57 @@ export async function setTableTags(
   if (error) throw new Error(error.message);
 }
 
+// Bulk edits (several tables selected in the map editor). Ids go in the URL
+// (`in.(…)`), so long lists are sent in chunks to stay under its limit.
+const ID_CHUNK = 100;
+
+function chunks<T>(list: T[]): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += ID_CHUNK) out.push(list.slice(i, i + ID_CHUNK));
+  return out;
+}
+
+export async function setTablesCapacity(
+  tableIds: string[],
+  capacity: number,
+): Promise<void> {
+  for (const ids of chunks(tableIds)) {
+    const { error } = await getSupabase()
+      .from("tables")
+      .update({ capacity })
+      .in("id", ids);
+    if (error) throw new Error(error.message);
+  }
+}
+
+/** Give every table the tag (tables that already have it are left alone). */
+export async function addTagToTables(
+  tagId: string,
+  tableIds: string[],
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from("table_tag_links")
+    .upsert(
+      tableIds.map((table_id) => ({ table_id, tag_id: tagId })),
+      { onConflict: "table_id,tag_id", ignoreDuplicates: true },
+    );
+  if (error) throw new Error(error.message);
+}
+
+export async function removeTagFromTables(
+  tagId: string,
+  tableIds: string[],
+): Promise<void> {
+  for (const ids of chunks(tableIds)) {
+    const { error } = await getSupabase()
+      .from("table_tag_links")
+      .delete()
+      .eq("tag_id", tagId)
+      .in("table_id", ids);
+    if (error) throw new Error(error.message);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Ingredients & the 86 board
 // ---------------------------------------------------------------------------

@@ -3,8 +3,17 @@
 // Drawing pieces and side panels of the floor map editor
 // (floor-map-editor.tsx holds the state, gestures and toolbar).
 
-import { useEffect, useState } from "react";
-import { Copy, ImagePlus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  Copy,
+  ImagePlus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Scenery } from "@/components/floor-map/floor-map-view";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import type {
   FloorMapElement,
   FloorMapElementStyle,
+  TableTag,
 } from "@/lib/database.types";
 import {
   labelFontSize,
@@ -27,6 +37,7 @@ import {
   resizeGeom,
   type Geom,
   type Handle,
+  type RepeatDir,
 } from "@/lib/floor/geometry";
 import type { Box } from "@/lib/floor/scenery";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
@@ -55,6 +66,7 @@ export function EditorTable({
   geom: g,
   selected,
   locked,
+  passive = false,
   onPointerDown,
 }: {
   name: string;
@@ -62,6 +74,8 @@ export function EditorTable({
   selected: boolean;
   /** Other layer is being edited: drawn faded, not interactive */
   locked: boolean;
+  /** A drawing tool is active: clicks go through to the sheet */
+  passive?: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
 }) {
   const cx = g.x + g.w / 2;
@@ -75,7 +89,11 @@ export function EditorTable({
   return (
     <g
       transform={g.rotation ? `rotate(${g.rotation} ${cx} ${cy})` : undefined}
-      className={cn("cursor-move", locked && "pointer-events-none opacity-30")}
+      className={cn(
+        "cursor-move",
+        locked && "pointer-events-none opacity-30",
+        passive && "pointer-events-none",
+      )}
       onPointerDown={onPointerDown}
     >
       {g.shape === "circle" ? (
@@ -92,6 +110,41 @@ export function EditorTable({
         textAnchor="middle"
         dominantBaseline="central"
         className="pointer-events-none fill-foreground font-semibold"
+      >
+        {name}
+      </text>
+    </g>
+  );
+}
+
+/** A copy "Ripeti in fila" is about to add: dashed, with its future name. */
+export function GhostTable({ name, geom: g, px }: { name: string; geom: Geom; px: number }) {
+  const cx = g.x + g.w / 2;
+  const cy = g.y + g.h / 2;
+  const common = {
+    strokeWidth: 1.5 * px,
+    strokeDasharray: `${4 * px} ${3 * px}`,
+    className: "fill-blue-500/10 stroke-blue-600",
+  };
+  return (
+    <g
+      transform={g.rotation ? `rotate(${g.rotation} ${cx} ${cy})` : undefined}
+      className="pointer-events-none"
+    >
+      {g.shape === "circle" ? (
+        <circle cx={cx} cy={cy} r={Math.min(g.w, g.h) / 2} {...common} />
+      ) : g.shape === "path" && g.path ? (
+        <path d={g.path} {...common} />
+      ) : (
+        <rect x={g.x} y={g.y} width={g.w} height={g.h} rx={2} {...common} />
+      )}
+      <text
+        x={cx}
+        y={cy}
+        fontSize={labelFontSize(name, g.w, g.h)}
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="fill-blue-700 font-semibold"
       >
         {name}
       </text>
@@ -206,6 +259,243 @@ export function SelectionHandles({
 // ---------------------------------------------------------------------------
 // Side panels
 // ---------------------------------------------------------------------------
+
+/**
+ * Seats and tags for several selected tables at once. A field the tables
+ * disagree on shows as mixed: seats blank ("misti"), a tag dashed with how
+ * many of them have it. Clicking a tag gives it to all, or takes it from all
+ * when every one already has it.
+ */
+export function BulkDetails({
+  count,
+  capacities,
+  tags,
+  tagCounts,
+  busy,
+  onCapacity,
+  onTag,
+}: {
+  /** tables selected */
+  count: number;
+  capacities: number[];
+  tags: TableTag[];
+  /** tag id → how many of the selected tables have it */
+  tagCounts: Map<string, number>;
+  busy: boolean;
+  onCapacity: (capacity: number) => void;
+  onTag: (tagId: string, add: boolean) => void;
+}) {
+  const t = useT();
+  const common = capacities.every((c) => c === capacities[0]) ? capacities[0] : null;
+  const [seats, setSeats] = useState(common === null ? "" : String(common));
+  // The field is disabled while the save runs, which blurs it a second time
+  // if it still had focus: remember what was sent so it goes out once.
+  const sent = useRef<number | null>(null);
+  useEffect(() => {
+    setSeats(common === null ? "" : String(common));
+    sent.current = null;
+  }, [common]);
+
+  function commit() {
+    const n = parseInt(seats, 10);
+    if (!Number.isFinite(n) || n < 1) {
+      setSeats(common === null ? "" : String(common));
+      return;
+    }
+    if (n === common || n === sent.current) return;
+    sent.current = n;
+    onCapacity(n);
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {t("floorMapEditor.bulkSeats")}
+        <Input
+          value={seats}
+          type="number"
+          min={1}
+          inputMode="numeric"
+          placeholder={t("floorMapEditor.bulkMixed")}
+          className="h-10 w-28"
+          disabled={busy}
+          onChange={(e) => setSeats(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+        />
+      </label>
+      {tags.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs text-muted-foreground">{t("floorMapEditor.bulkTags")}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag) => {
+              const n = tagCounts.get(tag.id) ?? 0;
+              const all = n === count;
+              const some = n > 0 && !all;
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={all ? true : some ? "mixed" : false}
+                  title={
+                    all
+                      ? t("floorMapEditor.bulkTagRemove", { tag: tag.name })
+                      : t("floorMapEditor.bulkTagAdd", { tag: tag.name })
+                  }
+                  onClick={() => onTag(tag.id, !all)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                    all
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : some
+                        ? "border-dashed border-primary text-foreground hover:bg-accent"
+                        : "text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {tag.name}
+                  {some && <span className="ml-1 text-muted-foreground">{n}/{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export interface RepeatSettings {
+  dir: RepeatDir;
+  /** copies of the selection to add */
+  count: number;
+  /** empty space between one copy and the next, in map units */
+  gap: number;
+}
+
+export const REPEAT_MAX = 50;
+
+const REPEAT_DIRS: [RepeatDir, React.ComponentType<{ className?: string }>, TranslationKey][] = [
+  ["right", ArrowRight, "floorMapEditor.dirRight"],
+  ["down", ArrowDown, "floorMapEditor.dirDown"],
+  ["left", ArrowLeft, "floorMapEditor.dirLeft"],
+  ["up", ArrowUp, "floorMapEditor.dirUp"],
+];
+
+/**
+ * "Ripeti in fila": copies of the selected table(s), one after the other in
+ * a direction. The copies are previewed on the map while this is open.
+ */
+export function RepeatPanel({
+  settings,
+  fits,
+  tablesToAdd,
+  onChange,
+  onApply,
+  onClose,
+}: {
+  settings: RepeatSettings;
+  /** copies that fit on the sheet in this direction */
+  fits: number;
+  /** tables the button will add (copies × selected tables) */
+  tablesToAdd: number;
+  /** merged into the current settings */
+  onChange: (patch: Partial<RepeatSettings>) => void;
+  onApply: () => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const [count, setCount] = useState(String(settings.count));
+  const [gap, setGap] = useState(String(settings.gap));
+  const num = (v: string) => Number(v.replace(",", "."));
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">{t("floorMapEditor.repeatTitle")}</h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          aria-label={t("common.close")}
+          title={t("common.close")}
+          onClick={onClose}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">{t("floorMapEditor.repeatHelp")}</p>
+      <div
+        role="group"
+        aria-label={t("floorMapEditor.repeatDirection")}
+        className="grid h-10 grid-cols-4 gap-1 rounded-lg border bg-background p-1"
+      >
+        {REPEAT_DIRS.map(([dir, Icon, key]) => (
+          <button
+            key={dir}
+            type="button"
+            title={t(key)}
+            aria-label={t(key)}
+            aria-pressed={settings.dir === dir}
+            onClick={() => onChange({ dir })}
+            className={cn(
+              "flex items-center justify-center rounded-md",
+              settings.dir === dir
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent",
+            )}
+          >
+            <Icon className="h-4 w-4" />
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          {t("floorMapEditor.repeatCount")}
+          <Input
+            value={count}
+            inputMode="numeric"
+            className="h-10"
+            onChange={(e) => {
+              setCount(e.target.value);
+              const n = parseInt(e.target.value, 10);
+              if (n >= 1 && n <= REPEAT_MAX) onChange({ count: n });
+            }}
+            onBlur={() => setCount(String(settings.count))}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          {t("floorMapEditor.repeatGap")}
+          <Input
+            value={gap}
+            inputMode="decimal"
+            className="h-10"
+            onChange={(e) => {
+              setGap(e.target.value);
+              const n = num(e.target.value);
+              if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= 0 && n <= 1000)
+                onChange({ gap: n });
+            }}
+            onBlur={() => setGap(String(settings.gap))}
+          />
+        </label>
+      </div>
+      {fits === 0 ? (
+        <p className="text-xs text-amber-700">{t("floorMapEditor.repeatNoRoom")}</p>
+      ) : fits < settings.count ? (
+        <p className="text-xs text-amber-700">{t("floorMapEditor.repeatOnlyFit", { count: fits })}</p>
+      ) : null}
+      <Button className="h-10" disabled={tablesToAdd === 0} onClick={onApply}>
+        <Copy className="mr-2 h-4 w-4" />
+        {tablesToAdd === 1
+          ? t("floorMapEditor.repeatApplyOne")
+          : t("floorMapEditor.repeatApply", { count: tablesToAdd })}
+      </Button>
+    </div>
+  );
+}
 
 /** Exact numbers for the selected table; commit on blur / Enter. */
 export function GeometryFields({ geom, onChange }: { geom: Geom; onChange: (g: Geom) => void }) {
@@ -360,6 +650,7 @@ export function ElementPanel({
             <Input
               autoFocus
               value={text}
+              onFocus={(e) => e.currentTarget.select()}
               className="h-10"
               onChange={(e) => setText(e.target.value)}
               onBlur={() => text.trim() && text !== el.text && onChange({ ...el, text: text.trim() })}

@@ -32,6 +32,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Circle,
+  Copy,
   FileDown,
   FileUp,
   Grid3x3,
@@ -40,12 +41,14 @@ import {
   Maximize,
   Minus,
   MousePointer2,
+  Pencil,
   Plus,
   Redo2,
   RectangleHorizontal,
   RotateCcw,
   RotateCw,
   Save,
+  Slash,
   Spline,
   Square,
   Trash2,
@@ -54,14 +57,18 @@ import {
 } from "lucide-react";
 import { useKeepCenterOnZoom } from "@/components/floor-map/floor-map-view";
 import {
+  BulkDetails,
   EditorElement,
   EditorTable,
   ElementPanel,
   GeometryFields,
+  GhostTable,
   ImportDialog,
+  RepeatPanel,
   SelectionHandles,
   TracePanel,
   type ImportOptions,
+  type RepeatSettings,
   type TracePhoto,
 } from "@/components/settings/floor-map-editor-parts";
 import { TableRow, runAction } from "@/components/settings/tables-manager";
@@ -71,9 +78,11 @@ import {
   ROTATE_SNAP_DEG,
   alignGeoms,
   bounds,
+  center,
   clampToMap,
   dragGeom,
   moveGeom,
+  repeatLayout,
   resizeGeom,
   rotateBy,
   rotateToward,
@@ -84,17 +93,21 @@ import {
   type Handle,
 } from "@/lib/floor/geometry";
 import {
+  DEFAULT_TABLE_SIZE,
   MAP_MAX_SIZE,
   MAP_MIN_SIZE,
   compareTableNames,
   defaultPlacement,
   geomOf,
+  nextTableName,
+  nextTableNameLike,
   saveFloorMapLayout,
 } from "@/lib/floor/maps";
 import {
   arrowPath,
   constrain45,
   elementBounds,
+  freehandPath,
   moveElement,
   polylinePath,
   resizeElement,
@@ -111,8 +124,11 @@ import {
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import {
+  addTagToTables,
   createTable,
+  removeTagFromTables,
   setTableTags,
+  setTablesCapacity,
   updateTable,
   type TableWithTags,
 } from "@/lib/settings-api";
@@ -120,21 +136,33 @@ import { cn } from "@/lib/utils";
 
 /** table id → geometry on this map; null = taken off the map in this draft */
 type TablesDraft = Record<string, Geom | null>;
+/** A table drawn in this draft: it only becomes a real table on "Salva" */
+interface DraftTable {
+  name: string;
+  capacity: number;
+  tagIds: string[];
+}
 /** Everything the editor can change; one undo step = one Doc */
 interface Doc {
   tables: TablesDraft;
+  /** draft key (also a key of `tables`) → tables drawn in this draft */
+  created: Record<string, DraftTable>;
   elements: FloorMapElement[];
   /** sheet size in map units (fit to a traced photo or an imported SVG) */
   width: number;
   height: number;
 }
 type Layer = "tables" | "scenery";
-type Tool = "select" | "wall" | "rect" | "circle" | "arrow" | "text";
+type TableTool = "tableRect" | "tableCircle";
+type DrawTool = TableTool | "line" | "rect" | "circle" | "arrow";
+type Tool = "select" | DrawTool | "wall" | "freehand" | "text";
 type Pt = [number, number];
 
 const GRID = 10;
 const ZOOM_STEPS = [1, 1.5, 2, 3, 4];
 const HISTORY_LIMIT = 100;
+/** Smallest side of a table drawn by dragging */
+const MIN_TABLE = 20;
 /** New scenery pasted/duplicated this far from the original */
 const DUPLICATE_OFFSET = 20;
 
@@ -144,7 +172,8 @@ type Gesture =
   | { kind: "rotate"; id: string; start: Doc }
   | { kind: "elmove"; idxs: number[]; box: Box; x0: number; y0: number; start: Doc }
   | { kind: "elresize"; idx: number; handle: Handle; box: Box; start: Doc }
-  | { kind: "draw"; tool: "rect" | "circle" | "arrow"; x0: number; y0: number; x1: number; y1: number }
+  | { kind: "draw"; tool: DrawTool; x0: number; y0: number; x1: number; y1: number }
+  | { kind: "freehand"; pts: Pt[] }
   | { kind: "marquee"; x0: number; y0: number; x1: number; y1: number; additive: string[] | number[] };
 
 interface FloorMapEditorProps {
@@ -158,10 +187,34 @@ interface FloorMapEditorProps {
 function initialDoc(map: FloorMap, tables: TableWithTags[]): Doc {
   const t: TablesDraft = {};
   for (const tb of tables) if (tb.map_id === map.id) t[tb.id] = geomOf(tb);
-  return { tables: t, elements: map.elements, width: map.width, height: map.height };
+  return { tables: t, created: {}, elements: map.elements, width: map.width, height: map.height };
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const isTableTool = (tool: Tool): tool is TableTool =>
+  tool === "tableRect" || tool === "tableCircle";
+
+/** A drawn table taken off the map is simply gone: it never existed. */
+function prune(d: Doc): Doc {
+  const gone = Object.keys(d.created).filter((k) => !d.tables[k]);
+  if (gone.length === 0) return d;
+  const tables = { ...d.tables };
+  const created = { ...d.created };
+  for (const k of gone) {
+    delete tables[k];
+    delete created[k];
+  }
+  return { ...d, tables, created };
+}
+
+/** After a save: drawn tables now have real ids (draft key → id). */
+function remapDoc(d: Doc, ids: Record<string, string>): Doc {
+  if (!Object.keys(d.created).some((k) => ids[k])) return d;
+  const tables: TablesDraft = {};
+  for (const [id, g] of Object.entries(d.tables)) tables[ids[id] ?? id] = g;
+  const created = Object.fromEntries(Object.entries(d.created).filter(([k]) => !ids[k]));
+  return { ...d, tables, created };
+}
 
 function boxesMeet(b: Box, x1: number, y1: number, x2: number, y2: number) {
   return b.x + b.w >= x1 && b.x <= x2 && b.y + b.h >= y1 && b.y <= y2;
@@ -201,13 +254,23 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
   const boxRef = useRef<HTMLDivElement>(null);
 
   const draft = doc.tables;
+  const created = doc.created;
   const elements = doc.elements;
   const W = doc.width;
   const H = doc.height;
   const byId = useMemo(() => new Map(tables.map((tb) => [tb.id, tb])), [tables]);
+  const nameOf = (id: string) => byId.get(id)?.name ?? created[id]?.name ?? "";
   const placedIds = Object.keys(draft)
-    .filter((id) => draft[id] && byId.has(id))
-    .sort((a, b) => compareTableNames(byId.get(a)!.name, byId.get(b)!.name));
+    .filter((id) => draft[id] && (byId.has(id) || created[id]))
+    .sort((a, b) => compareTableNames(nameOf(a), nameOf(b)));
+  // Draft keys of drawn tables; never reused, so undo/redo can't mix them up.
+  const drawnCount = useRef(0);
+  // Bumped to reset the side panel's name field after a rejected rename.
+  const [rowKey, setRowKey] = useState(0);
+  // "Ripeti in fila": settings persist while editing, the panel closes
+  // whenever the selection changes
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [repeat, setRepeat] = useState<RepeatSettings>({ dir: "right", count: 3, gap: 20 });
   // Off-map tables, plus the ones this draft took off: ready to (re)place.
   const toPlace = tables.filter(
     (tb) =>
@@ -222,6 +285,8 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
   useKeepCenterOnZoom(boxRef, scale);
   const single = selected.length === 1 ? selected[0] : null;
   const singleEl = selectedEls.length === 1 ? selectedEls[0] : null;
+  const selectionKey = selected.join(",");
+  useEffect(() => setRepeatOpen(false), [selectionKey, layer]);
   const snapPt = (x: number, y: number, free = false): Pt =>
     free || !grid ? [x, y] : [snapTo(x, grid), snapTo(y, grid)];
 
@@ -234,7 +299,8 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
   const docRef = useRef(doc);
   docRef.current = doc;
 
-  const commit = useCallback((before: Doc, after: Doc) => {
+  const commit = useCallback((before: Doc, next: Doc) => {
+    const after = prune(next);
     docRef.current = after;
     setDoc(after);
     if (same(before, after)) return;
@@ -344,6 +410,171 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
     applyElements((els) => [...els, el]);
     setElSel([elements.length]);
     setTool("select");
+  }
+
+  /** Is `name` free for a table (ignoring the table `self`)? */
+  function nameFree(name: string, self: string) {
+    const key = name.trim().toLowerCase();
+    const existing = byName.get(key);
+    if (existing && existing.id !== self) return false;
+    return !Object.entries(docRef.current.created).some(
+      ([k, c]) => k !== self && c.name.trim().toLowerCase() === key,
+    );
+  }
+
+  /**
+   * A table drawn with a table tool: a click drops one of the standard size
+   * centred there, a drag sets its size (rectangle corner to corner, circle
+   * from the centre out). It gets the next free number and seats estimated
+   * from its size, and is only created for real on "Salva".
+   */
+  function addTable(tl: TableTool, x0: number, y0: number, x1: number, y1: number, click: boolean) {
+    const shape = tl === "tableCircle" ? "circle" : "rect";
+    let g: Geom;
+    if (click) {
+      const { w, h } = DEFAULT_TABLE_SIZE[shape];
+      g = { shape, x: snapTo(x0 - w / 2, grid), y: snapTo(y0 - h / 2, grid), w, h, rotation: 0, path: null };
+    } else if (shape === "circle") {
+      const r = Math.max(MIN_TABLE / 2, snapTo(Math.hypot(x1 - x0, y1 - y0), grid));
+      g = { shape, x: x0 - r, y: y0 - r, w: 2 * r, h: 2 * r, rotation: 0, path: null };
+    } else {
+      g = {
+        shape,
+        x: Math.min(x0, x1),
+        y: Math.min(y0, y1),
+        w: Math.max(MIN_TABLE, Math.abs(x1 - x0)),
+        h: Math.max(MIN_TABLE, Math.abs(y1 - y0)),
+        rotation: 0,
+        path: null,
+      };
+    }
+    const geom = clampToMap(g, W, H);
+    const key = `new-${++drawnCount.current}`;
+    const name = nextTableName([
+      ...tables.map((tb) => tb.name),
+      ...Object.values(docRef.current.created).map((c) => c.name),
+    ]);
+    const capacity = estimateSeats(shape, geom.w, geom.h);
+    apply((d) => ({
+      ...d,
+      tables: { ...d.tables, [key]: geom },
+      created: { ...d.created, [key]: { name, capacity, tagIds: [] } },
+    }));
+    setSelection([key]);
+    setTool("select");
+  }
+
+  /**
+   * The copies "Ripeti in fila" would add: every selected table shifted by
+   * one step per copy, named after it in its series (G1 → G6…), in reading
+   * order so a row copied downwards is numbered left to right.
+   */
+  function planRepeat() {
+    if (!repeatOpen || layer !== "tables" || selected.length === 0) return null;
+    const geoms = selected.map((id) => draft[id]!);
+    const { dx, dy, fits } = repeatLayout(geoms, repeat.dir, repeat.gap, W, H);
+    const order = [...selected].sort((a, b) => {
+      const [ax, ay] = center(draft[a]!);
+      const [bx, by] = center(draft[b]!);
+      return Math.round(ay / GRID) - Math.round(by / GRID) || ax - bx;
+    });
+    const names = [...tables.map((tb) => tb.name), ...Object.values(created).map((c) => c.name)];
+    const items: { source: string; geom: Geom; name: string }[] = [];
+    for (let k = 1; k <= Math.min(repeat.count, fits); k++) {
+      for (const id of order) {
+        const name = nextTableNameLike(nameOf(id), names);
+        names.push(name);
+        items.push({ source: id, geom: moveGeom(draft[id]!, dx * k, dy * k), name });
+      }
+    }
+    return { fits, items };
+  }
+
+  /** Add the planned copies as drawn tables: same shape, seats and tags. */
+  function applyRepeat() {
+    const plan = planRepeat();
+    if (!plan || plan.items.length === 0) return;
+    const addTables: TablesDraft = {};
+    const addCreated: Record<string, DraftTable> = {};
+    for (const it of plan.items) {
+      const key = `new-${++drawnCount.current}`;
+      const src = byId.get(it.source);
+      addTables[key] = it.geom;
+      addCreated[key] = {
+        name: it.name,
+        capacity: src?.capacity ?? created[it.source].capacity,
+        tagIds: src ? src.table_tags.map((g) => g.id) : [...created[it.source].tagIds],
+      };
+    }
+    apply((d) => ({
+      ...d,
+      tables: { ...d.tables, ...addTables },
+      created: { ...d.created, ...addCreated },
+    }));
+    // originals + copies stay selected: repeat again the other way for a grid
+    setSelection([...selected, ...Object.keys(addTables)]);
+    toast.success(t("floorMapEditor.repeatDone", { count: plan.items.length }));
+  }
+
+  /** Does this table (saved or drawn) carry the tag? */
+  function hasTag(id: string, tagId: string) {
+    const tb = byId.get(id);
+    return tb ? tb.table_tags.some((g) => g.id === tagId) : !!created[id]?.tagIds.includes(tagId);
+  }
+
+  /**
+   * Seats or a tag for every selected table. Saved tables are written at
+   * once, like the single-table details; drawn ones change in the draft.
+   */
+  function editSelected(
+    draftFn: (c: DraftTable) => DraftTable,
+    save: (savedIds: string[]) => Promise<void>,
+  ) {
+    const drawn = selected.filter((id) => created[id]);
+    const savedIds = selected.filter((id) => byId.has(id));
+    if (drawn.length > 0) {
+      apply((d) => {
+        const next = { ...d.created };
+        for (const id of drawn) if (next[id]) next[id] = draftFn(next[id]);
+        return { ...d, created: next };
+      });
+    }
+    const msg = t("floorMapEditor.bulkUpdated", { count: selected.length });
+    if (savedIds.length > 0) void run(() => save(savedIds), msg);
+    else toast.success(msg);
+  }
+
+  function setSelectedCapacity(capacity: number) {
+    editSelected(
+      (c) => ({ ...c, capacity }),
+      (ids) => setTablesCapacity(ids, capacity),
+    );
+  }
+
+  function setSelectedTag(tagId: string, add: boolean) {
+    editSelected(
+      (c) => ({
+        ...c,
+        tagIds: add
+          ? c.tagIds.includes(tagId) ? c.tagIds : [...c.tagIds, tagId]
+          : c.tagIds.filter((x) => x !== tagId),
+      }),
+      (ids) => (add ? addTagToTables(tagId, ids) : removeTagFromTables(tagId, ids)),
+    );
+  }
+
+  /** Name / seats / tags of a drawn table live in the draft (one undo step). */
+  function updateDrawn(key: string, fields: Partial<DraftTable>) {
+    if (fields.name !== undefined && !nameFree(fields.name, key)) {
+      toast.error(t("floorMapEditor.nameTaken", { name: fields.name.trim() }));
+      setRowKey((k) => k + 1);
+      return;
+    }
+    apply((d) =>
+      d.created[key]
+        ? { ...d, created: { ...d.created, [key]: { ...d.created[key], ...fields } } }
+        : d,
+    );
   }
 
   const finishWall = useCallback(() => {
@@ -495,8 +726,10 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
     capture(e);
     const free = e.altKey;
     const [x, y] = toMap(e);
-    if (layer === "scenery" && tool !== "select") {
-      if (tool === "wall") {
+    if (tool !== "select") {
+      if (tool === "freehand") {
+        setGesture({ kind: "freehand", pts: [[x, y]] });
+      } else if (tool === "wall") {
         let p = snapPt(x, y, free);
         const last = wall[wall.length - 1];
         if (last && e.shiftKey) p = snapPt(...constrain45(last[0], last[1], p[0], p[1]), true);
@@ -603,10 +836,17 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
       }
       case "draw": {
         let [x1, y1] = snapPt(px, py, free);
-        if (gesture.tool === "arrow" && e.shiftKey) {
+        if ((gesture.tool === "arrow" || gesture.tool === "line") && e.shiftKey) {
           [x1, y1] = constrain45(gesture.x0, gesture.y0, x1, y1);
         }
         setGesture({ ...gesture, x1, y1 });
+        break;
+      }
+      case "freehand": {
+        // one sample every couple of screen pixels is plenty
+        const last = gesture.pts[gesture.pts.length - 1];
+        if (Math.hypot(px - last[0], py - last[1]) < 2 / (scale || 1)) break;
+        setGesture({ kind: "freehand", pts: [...gesture.pts, [px, py]] });
         break;
       }
       case "marquee":
@@ -640,15 +880,30 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
       }
       return;
     }
+    if (gesture.kind === "freehand") {
+      // tolerance in screen pixels, so a stroke looks the same at any zoom;
+      // the pencil stays in hand for the next stroke
+      const unit = 1 / (scale || 1);
+      const d = freehandPath(gesture.pts, 1.5 * unit, 12 * unit);
+      if (d) applyElements((els) => [...els, { kind: "path", d }]);
+      return;
+    }
     if (gesture.kind === "draw") {
       const { x0, y0, x1, y1 } = gesture;
       const w = Math.abs(x1 - x0);
       const h = Math.abs(y1 - y0);
-      if (Math.hypot(w, h) < 4) return; // a click, not a drag
+      const click = Math.hypot(w, h) < 4;
+      if (isTableTool(gesture.tool)) {
+        addTable(gesture.tool, x0, y0, x1, y1, click);
+        return;
+      }
+      if (click) return; // a click, not a drag
       if (gesture.tool === "rect") {
         addElement({ kind: "rect", x: Math.min(x0, x1), y: Math.min(y0, y1), w, h });
       } else if (gesture.tool === "circle") {
         addElement({ kind: "circle", cx: x0, cy: y0, r: Math.round(Math.hypot(w, h) * 100) / 100 });
+      } else if (gesture.tool === "line") {
+        addElement({ kind: "path", d: polylinePath([[x0, y0], [x1, y1]]) });
       } else {
         addElement({ kind: "path", d: arrowPath(x0, y0, x1, y1), style: "arrow" });
       }
@@ -704,12 +959,14 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
       tables: imported.tables.length,
       matched: imported.tables.length - missing.length,
       missing,
-      others: placedIds.filter((id) => !names.has(byId.get(id)!.name.trim().toLowerCase())).length,
+      others: placedIds.filter(
+        (id) => !names.has((byId.get(id)?.name ?? created[id]?.name ?? "").trim().toLowerCase()),
+      ).length,
       elements: imported.elements.length,
       size: `${imported.width} × ${imported.height}`,
       sizeDiffers: imported.width !== W || imported.height !== H,
     };
-  }, [imported, byName, placedIds, byId, W, H]);
+  }, [imported, byName, placedIds, byId, created, W, H]);
 
   async function applyImport(o: ImportOptions) {
     if (!imported) return;
@@ -745,6 +1002,7 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
         }
         return {
           tables: next,
+          created: d.created,
           elements: o.replaceScenery ? imported.elements : [...d.elements, ...imported.elements],
           width,
           height,
@@ -763,8 +1021,8 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
 
   function exportTables() {
     return placedIds.map((id) => ({
-      name: byId.get(id)!.name,
-      capacity: byId.get(id)!.capacity,
+      name: nameOf(id),
+      capacity: byId.get(id)?.capacity ?? created[id].capacity,
       geom: draft[id]!,
     }));
   }
@@ -791,25 +1049,46 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
   async function save() {
     const ids = new Set([...Object.keys(saved.tables), ...Object.keys(draft)]);
     const changes = Array.from(ids)
-      .filter((id) => !same(saved.tables[id] ?? null, draft[id] ?? null))
+      .filter((id) => !created[id] && !same(saved.tables[id] ?? null, draft[id] ?? null))
       .map((id) => ({ id, geom: draft[id] ?? null }));
+    const drawn = Object.entries(created)
+      .filter(([key]) => draft[key])
+      .map(([key, c]) => ({ key, ...c, name: c.name.trim(), geom: draft[key]! }));
     const sceneryChanged = !same(saved.elements, elements);
     const sizeChanged = saved.width !== W || saved.height !== H;
-    if (changes.length === 0 && !sceneryChanged && !sizeChanged) return;
+    if (changes.length === 0 && drawn.length === 0 && !sceneryChanged && !sizeChanged) return;
+    // a clash would only fail inside the save: point at the table instead
+    const clash = drawn.find((c) => !nameFree(c.name, c.key));
+    if (clash) {
+      setLayer("tables");
+      setSelection([clash.key]);
+      toast.error(t("floorMapEditor.nameTaken", { name: clash.name }));
+      return;
+    }
     setSaving(true);
     try {
-      await saveFloorMapLayout(
+      const newIds = await saveFloorMapLayout(
         map.id,
         changes,
         sceneryChanged ? elements : undefined,
         sizeChanged ? { width: W, height: H } : undefined,
+        drawn,
       );
-      const clean: Doc = {
-        tables: Object.fromEntries(Object.entries(draft).filter(([, g]) => g !== null)),
-        elements,
-        width: W,
-        height: H,
-      };
+      const clean = remapDoc(
+        {
+          tables: Object.fromEntries(Object.entries(draft).filter(([, g]) => g !== null)),
+          created,
+          elements,
+          width: W,
+          height: H,
+        },
+        newIds,
+      );
+      // the history keeps working with the real ids
+      setPast((p) => p.map((d) => remapDoc(d, newIds)));
+      setFuture((f) => f.map((d) => remapDoc(d, newIds)));
+      setSelection((sel) => sel.map((id) => newIds[id] ?? id));
+      docRef.current = clean;
       setSaved(clean);
       setDoc(clean);
       toast.success(t("floorMapEditor.saved"));
@@ -838,7 +1117,20 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
 
   const px = scale > 0 ? 1 / scale : 1; // one screen pixel in map units
   const singleGeom = single ? draft[single]! : null;
-  const singleTable = single ? byId.get(single)! : null;
+  const repeatPlan = planRepeat();
+  const singleDrawn = single ? created[single] : undefined;
+  // a drawn table shown through the same row as a saved one
+  const singleTable: TableWithTags | null = single
+    ? (byId.get(single) ??
+      (singleDrawn
+        ? {
+            id: single,
+            name: singleDrawn.name,
+            capacity: singleDrawn.capacity,
+            table_tags: tags.filter((tag) => singleDrawn.tagIds.includes(tag.id)),
+          } as TableWithTags
+        : null))
+    : null;
   const onTables = layer === "tables";
 
   const toolButton = (
@@ -863,14 +1155,55 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
   );
   const divider = <span className="mx-1 h-6 w-px bg-border" />;
 
-  const TOOLS: [Tool, React.ComponentType<{ className?: string }>, TranslationKey][] = [
+  type ToolDef = [Tool, React.ComponentType<{ className?: string }>, TranslationKey];
+  const TABLE_TOOLS: ToolDef[] = [
     ["select", MousePointer2, "floorMapEditor.toolSelect"],
+    ["tableRect", RectangleHorizontal, "floorMapEditor.toolTableRect"],
+    ["tableCircle", Circle, "floorMapEditor.toolTableCircle"],
+  ];
+  const TOOLS: ToolDef[] = [
+    ["select", MousePointer2, "floorMapEditor.toolSelect"],
+    ["line", Slash, "floorMapEditor.toolLine"],
     ["wall", Spline, "floorMapEditor.toolWall"],
+    ["freehand", Pencil, "floorMapEditor.toolFreehand"],
     ["rect", Square, "floorMapEditor.toolRect"],
     ["circle", Circle, "floorMapEditor.toolCircle"],
     ["arrow", ArrowUpRight, "floorMapEditor.toolArrow"],
     ["text", Type, "floorMapEditor.toolText"],
   ];
+  const TOOL_HELP: Partial<Record<Tool, TranslationKey>> = {
+    tableRect: "floorMapEditor.tableToolHelp",
+    tableCircle: "floorMapEditor.tableToolHelp",
+    line: "floorMapEditor.lineHelp",
+    freehand: "floorMapEditor.freehandHelp",
+    text: "floorMapEditor.textHelp",
+  };
+  // Tools with a visible name: the table ones always (they are how tables
+  // are added), the drawing ones where the toolbar has room.
+  const toolButtons = (defs: ToolDef[], labelled: "always" | "wide") =>
+    defs.map(([tl, Icon, key]) => (
+      <Button
+        key={tl}
+        variant={tool === tl ? "default" : "ghost"}
+        className={cn("h-10 gap-1.5", tl === "select" ? "w-10 px-0" : labelled === "always" ? "px-3" : "w-10 px-0 xl:w-auto xl:px-3")}
+        title={t(key)}
+        aria-label={t(key)}
+        aria-pressed={tool === tl}
+        onClick={() => {
+          setWall([]);
+          setTool(tl);
+          if (tl !== "select") {
+            setSelection([]);
+            setElSel([]);
+          }
+        }}
+      >
+        <Icon className="h-4 w-4" />
+        {tl !== "select" && (
+          <span className={cn(labelled === "wide" && "hidden xl:inline")}>{t(key)}</span>
+        )}
+      </Button>
+    ));
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-3 p-4 lg:p-6">
@@ -908,7 +1241,11 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
           ))}
         </div>
         <div className="ml-auto flex items-center gap-3">
-          {dirty && <span className="text-sm text-amber-700">{t("floorMapEditor.unsaved")}</span>}
+          {/* always laid out: appearing mid-drag, it wrapped the title bar
+              on narrow screens and slid the canvas under the pointer */}
+          <span className={cn("text-sm text-amber-700", !dirty && "invisible")} aria-hidden={!dirty}>
+            {t("floorMapEditor.unsaved")}
+          </span>
           <Button className="h-10 px-5" onClick={() => void save()} disabled={saving || !dirty}>
             <Save className="mr-2 h-4 w-4" />
             {saving ? t("common.saving") : t("common.save")}
@@ -925,6 +1262,8 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
         {divider}
         {onTables ? (
           <>
+            {toolButtons(TABLE_TOOLS, "always")}
+            {divider}
             {toolButton("floorMapEditor.rotateLeft", <RotateCcw className="h-4 w-4" />, () => updateSelected((g) => rotateBy(g, -90)), selected.length === 0)}
             {toolButton("floorMapEditor.rotateRight", <RotateCw className="h-4 w-4" />, () => updateSelected((g) => rotateBy(g, 90)), selected.length === 0)}
             {divider}
@@ -946,21 +1285,7 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
             {toolButton("floorMapEditor.distributeV", <AlignVerticalDistributeCenter className="h-4 w-4" />, () => align("vdistribute"), selected.length < 3)}
           </>
         ) : (
-          TOOLS.map(([tl, Icon, key]) => (
-            <span key={tl}>
-              {toolButton(
-                key,
-                <Icon className="h-4 w-4" />,
-                () => {
-                  setWall([]);
-                  setTool(tl);
-                  if (tl !== "select") setElSel([]);
-                },
-                false,
-                tool === tl,
-              )}
-            </span>
-          ))
+          toolButtons(TOOLS, "wide")
         )}
         {divider}
         <label
@@ -999,7 +1324,7 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
               height={H * scale}
               className={cn(
                 "mx-auto block touch-none select-none",
-                !onTables && tool !== "select" && "cursor-crosshair",
+                tool !== "select" && "cursor-crosshair",
               )}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -1042,12 +1367,17 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
               {placedIds.map((id) => (
                 <EditorTable
                   key={id}
-                  name={byId.get(id)!.name}
                   geom={draft[id]!}
+                  name={nameOf(id)}
                   selected={onTables && selected.includes(id)}
                   locked={!onTables}
+                  passive={tool !== "select"}
                   onPointerDown={(e) => startMove(e, id)}
                 />
+              ))}
+
+              {repeatPlan?.items.map((it, i) => (
+                <GhostTable key={i} name={it.name} geom={it.geom} px={px} />
               ))}
 
               {/* outlines of a multiple selection */}
@@ -1128,8 +1458,15 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
                   className="pointer-events-none fill-none stroke-blue-600"
                 />
               )}
+              {gesture?.kind === "freehand" && (
+                <path
+                  d={polylinePath(gesture.pts)}
+                  strokeWidth={1.5}
+                  className="pointer-events-none fill-none stroke-blue-600"
+                />
+              )}
               {gesture?.kind === "draw" &&
-                (gesture.tool === "rect" ? (
+                (gesture.tool === "rect" || gesture.tool === "tableRect" ? (
                   <rect
                     x={Math.min(gesture.x0, gesture.x1)}
                     y={Math.min(gesture.y0, gesture.y1)}
@@ -1138,7 +1475,7 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
                     strokeWidth={1.5}
                     className="pointer-events-none fill-none stroke-blue-600"
                   />
-                ) : gesture.tool === "circle" ? (
+                ) : gesture.tool === "circle" || gesture.tool === "tableCircle" ? (
                   <circle
                     cx={gesture.x0}
                     cy={gesture.y0}
@@ -1148,8 +1485,12 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
                   />
                 ) : (
                   <path
-                    d={arrowPath(gesture.x0, gesture.y0, gesture.x1, gesture.y1)}
-                    strokeWidth={3}
+                    d={
+                      gesture.tool === "line"
+                        ? polylinePath([[gesture.x0, gesture.y0], [gesture.x1, gesture.y1]])
+                        : arrowPath(gesture.x0, gesture.y0, gesture.x1, gesture.y1)
+                    }
+                    strokeWidth={gesture.tool === "line" ? 1.5 : 3}
                     className="pointer-events-none fill-none stroke-blue-600"
                   />
                 ))}
@@ -1187,7 +1528,7 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
               <h2 className="font-semibold text-foreground">
                 {t(TOOLS.find(([tl]) => tl === tool)![2])}
               </h2>
-              <p>{t(tool === "text" ? "floorMapEditor.textHelp" : "floorMapEditor.dragHelp")}</p>
+              <p>{t(TOOL_HELP[tool] ?? "floorMapEditor.dragHelp")}</p>
             </div>
           ) : singleEl !== null ? (
             <ElementPanel
@@ -1246,14 +1587,39 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
     </div>
   );
 
+  function renderRepeat() {
+    return repeatOpen && repeatPlan ? (
+      <RepeatPanel
+        settings={repeat}
+        fits={repeatPlan.fits}
+        tablesToAdd={repeatPlan.items.length}
+        onChange={(patch) => setRepeat((r) => ({ ...r, ...patch }))}
+        onApply={applyRepeat}
+        onClose={() => setRepeatOpen(false)}
+      />
+    ) : (
+      <Button variant="outline" className="h-10" onClick={() => setRepeatOpen(true)}>
+        <Copy className="mr-2 h-4 w-4" /> {t("floorMapEditor.repeatOpen")}
+      </Button>
+    );
+  }
+
   // The tables layer's side panel. A render function, not a component: an
   // inner component would remount on every render and drop input focus.
   function renderTablesPanel() {
     return (
       <>
-        {singleGeom && singleTable ? (
+        {isTableTool(tool) ? (
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <h2 className="font-semibold text-foreground">
+              {t(TABLE_TOOLS.find(([tl]) => tl === tool)![2])}
+            </h2>
+            <p>{t("floorMapEditor.tableToolHelp")}</p>
+          </div>
+        ) : singleGeom && singleTable ? (
           <>
             <h2 className="font-semibold">{t("floorMapsMgr.selectedTable", { name: singleTable.name })}</h2>
+            {renderRepeat()}
             <GeometryFields
               geom={singleGeom}
               onChange={(g) =>
@@ -1295,28 +1661,43 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
                 setSelection([]);
               }}
             >
-              <MapPinOff className="mr-2 h-4 w-4" /> {t("floorMapsMgr.removeFromMap")}
+              {singleDrawn ? (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" /> {t("common.delete")}
+                </>
+              ) : (
+                <>
+                  <MapPinOff className="mr-2 h-4 w-4" /> {t("floorMapsMgr.removeFromMap")}
+                </>
+              )}
             </Button>
             <div className="flex flex-col gap-1 border-t pt-3">
               <h3 className="text-sm font-medium">{t("floorMapEditor.details")}</h3>
-              <p className="text-xs text-muted-foreground">{t("floorMapEditor.detailsHelp")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t(singleDrawn ? "floorMapEditor.drawnHelp" : "floorMapEditor.detailsHelp")}
+              </p>
               <TableRow
+                key={`${singleTable.id}-${rowKey}`}
                 table={singleTable}
                 tags={tags}
                 busy={busy}
-                onSave={(fields) =>
-                  run(
-                    () => updateTable(singleTable.id, fields),
-                    t("tablesMgr.tableUpdated", { name: singleTable.name }),
-                  )
-                }
+                onSave={async (fields) => {
+                  if (singleDrawn) updateDrawn(singleTable.id, fields);
+                  else
+                    await run(
+                      () => updateTable(singleTable.id, fields),
+                      t("tablesMgr.tableUpdated", { name: singleTable.name }),
+                    );
+                }}
                 onToggleTag={(tagId) => {
                   const cur = singleTable.table_tags.map((g) => g.id);
                   const next = cur.includes(tagId) ? cur.filter((x) => x !== tagId) : [...cur, tagId];
-                  void run(
-                    () => setTableTags(singleTable.id, next),
-                    t("tablesMgr.tagsUpdated", { name: singleTable.name }),
-                  );
+                  if (singleDrawn) updateDrawn(singleTable.id, { tagIds: next });
+                  else
+                    void run(
+                      () => setTableTags(singleTable.id, next),
+                      t("tablesMgr.tagsUpdated", { name: singleTable.name }),
+                    );
                 }}
               />
             </div>
@@ -1325,6 +1706,7 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
           <>
             <h2 className="font-semibold">{t("floorMapEditor.multiSelected", { count: selected.length })}</h2>
             <p className="text-sm text-muted-foreground">{t("floorMapEditor.multiHelp")}</p>
+            {renderRepeat()}
             <Button
               variant="outline"
               className="h-10"
@@ -1335,11 +1717,28 @@ export function FloorMapEditor({ map, tables, tags, onChanged }: FloorMapEditorP
             >
               <MapPinOff className="mr-2 h-4 w-4" /> {t("floorMapsMgr.removeFromMap")}
             </Button>
+            <div className="flex flex-col gap-2 border-t pt-3">
+              <h3 className="text-sm font-medium">{t("floorMapEditor.details")}</h3>
+              <p className="text-xs text-muted-foreground">{t("floorMapEditor.bulkHelp")}</p>
+              <BulkDetails
+                key={selectionKey}
+                count={selected.length}
+                capacities={selected.map((id) => byId.get(id)?.capacity ?? created[id]?.capacity ?? 0)}
+                tags={tags}
+                tagCounts={
+                  new Map(tags.map((tag) => [tag.id, selected.filter((id) => hasTag(id, tag.id)).length]))
+                }
+                busy={busy}
+                onCapacity={setSelectedCapacity}
+                onTag={setSelectedTag}
+              />
+            </div>
           </>
         ) : (
           <div className="flex flex-col gap-2 text-sm text-muted-foreground">
             <h2 className="font-semibold text-foreground">{t("floorMapEditor.howTo")}</h2>
             <ul className="list-disc space-y-1 pl-4">
+              <li>{t("floorMapEditor.helpAddTable")}</li>
               <li>{t("floorMapEditor.helpMove")}</li>
               <li>{t("floorMapEditor.helpResize")}</li>
               <li>{t("floorMapEditor.helpSelect")}</li>

@@ -200,3 +200,63 @@ export function constrain45(
   const len = Math.hypot(x - x0, y - y0);
   return [x0 + len * Math.cos(a), y0 + len * Math.sin(a)];
 }
+
+/**
+ * Ramer–Douglas–Peucker: keep only the points that stray more than `tol`
+ * from the straight line between their neighbours, so a hand-drawn stroke
+ * of hundreds of pointer samples is stored as a few dozen corners.
+ */
+export function simplifyPoints(pts: [number, number][], tol: number): [number, number][] {
+  if (pts.length < 3) return pts;
+  const keep = new Array<boolean>(pts.length).fill(false);
+  keep[0] = true;
+  keep[pts.length - 1] = true;
+  const stack: [number, number][] = [[0, pts.length - 1]];
+  while (stack.length > 0) {
+    const [a, b] = stack.pop()!;
+    const [ax, ay] = pts[a];
+    const [bx, by] = pts[b];
+    const len = Math.hypot(bx - ax, by - ay);
+    let far = -1;
+    let dmax = tol;
+    for (let i = a + 1; i < b; i++) {
+      const [px, py] = pts[i];
+      const d =
+        len === 0
+          ? Math.hypot(px - ax, py - ay)
+          : Math.abs((bx - ax) * (ay - py) - (ax - px) * (by - ay)) / len;
+      if (d > dmax) {
+        dmax = d;
+        far = i;
+      }
+    }
+    if (far >= 0) {
+      keep[far] = true;
+      stack.push([a, far], [far, b]);
+    }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+/**
+ * Path data for a freehand stroke: simplified, and closed (Z) when it ends
+ * within `closeGap` of where it started, so a hand-drawn outline becomes a
+ * shape. Null for a stroke too short to keep.
+ */
+export function freehandPath(
+  pts: [number, number][],
+  tol: number,
+  closeGap: number,
+): string | null {
+  if (pts.length < 2) return null;
+  const box = boxOf(pts);
+  if (Math.max(box.w, box.h) < tol * 2) return null;
+  const simple = simplifyPoints(pts, tol);
+  const [x0, y0] = simple[0];
+  const [xn, yn] = simple[simple.length - 1];
+  const closed =
+    simple.length > 3 &&
+    Math.hypot(xn - x0, yn - y0) <= closeGap &&
+    Math.max(box.w, box.h) > closeGap * 2;
+  return closed ? `${polylinePath(simple.slice(0, -1))} Z` : polylinePath(simple);
+}
