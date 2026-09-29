@@ -35,16 +35,15 @@ import {
 } from "@/components/floor-plan/smart-floor-layer";
 import { useTimeFormat } from "@/components/reservations/format";
 import { useSeatFlow } from "@/components/reservations/seat-flow";
-import {
-  WalkInFinder,
-  walkInMarks,
-} from "@/components/smart-floor/walk-in-finder";
+import { WalkInPanel, type WalkInTab } from "@/components/smart-floor/walk-in-panel";
+import { walkInMarks } from "@/components/smart-floor/walk-in-shared";
 import { TableCard } from "@/components/floor-plan/table-card";
 import { TakeawayPanel } from "@/components/floor-plan/takeaway-panel";
 import { releaseReservationTables, resetDeliveryCounter } from "@/lib/api";
 import { compareTableNames } from "@/lib/floor/maps";
 import { useIsPhone } from "@/lib/device";
 import { useNow } from "@/hooks/use-now";
+import { useWaitlist } from "@/hooks/use-waitlist";
 import {
   readStoredView,
   storeView,
@@ -131,9 +130,10 @@ export default function FloorPlanPage() {
   const [viewAt, setViewAt] = useState<number | null>(null);
   /** "Trova posto" open, and the tables it shows on the map */
   const [finderOpen, setFinderOpen] = useState(false);
+  const [finderTab, setFinderTab] = useState<WalkInTab>("find");
   const [finderPick, setFinderPick] = useState<{
     option: WalkInOption;
-    size: number;
+    label: string;
   } | null>(null);
 
   const tableNameById = new Map(tables.map((tb) => [tb.id, tb.name]));
@@ -192,15 +192,16 @@ export default function FloorPlanPage() {
     at: viewAt,
   });
 
+  const waitlist = useWaitlist(layer.active);
   const finder = walkInMarks(
     layer.active && finderOpen ? (finderPick?.option ?? null) : null,
     tables,
     layer.marks,
-    t("walkIn.mapLabel", { count: finderPick?.size ?? 0 }),
+    finderPick?.label ?? "",
   );
 
-  function pickWalkIn(option: WalkInOption | null, size: number) {
-    setFinderPick(option ? { option, size } : null);
+  function pickWalkIn(option: WalkInOption | null, label: string) {
+    setFinderPick(option ? { option, label } : null);
     // bring its room on screen
     const room = option && tables.find((tb) => tb.id === option.tableIds[0])?.map_id;
     if (room) setActiveMapId(room);
@@ -450,6 +451,15 @@ export default function FloorPlanPage() {
                       onClick={toggleFinder}
                     >
                       <UserRoundSearch className="mr-2 h-4 w-4" /> {t("walkIn.open")}
+                      {waitlist.entries.length > 0 && (
+                        <span
+                          className="ml-2 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white"
+                          title={t("queue.tab", { count: waitlist.entries.length })}
+                        >
+                          <span className="sr-only">{t("queue.inLine")} </span>
+                          {waitlist.entries.length}
+                        </span>
+                      )}
                     </Button>
                   )}
                   {canReserve && (
@@ -610,15 +620,20 @@ export default function FloorPlanPage() {
 
             {layer.active && finderOpen ? (
               <div className="max-h-[55%] min-h-0 shrink-0 overflow-y-auto lg:h-full lg:max-h-none lg:w-[340px] xl:w-[380px]">
-                <WalkInFinder
+                <WalkInPanel
+                  tab={finderTab}
+                  onTab={setFinderTab}
                   tables={tables}
                   reservations={reservations}
                   links={links}
                   maps={maps}
                   openOrders={openOrders}
+                  waitlist={waitlist.entries}
                   now={now}
                   onPick={pickWalkIn}
-                  onSeated={refresh}
+                  onChanged={async () => {
+                    await Promise.all([refresh(), waitlist.refresh()]);
+                  }}
                   onClose={() => setFinderOpen(false)}
                 />
               </div>

@@ -217,6 +217,7 @@ export interface Database {
           status: WaitlistStatus;
           created_at: string;
           resolved_at: string | null;
+          skip_until: string | null;
         };
         Insert: {
           id?: string;
@@ -229,6 +230,7 @@ export interface Database {
           status?: WaitlistStatus;
           created_at?: string;
           resolved_at?: string | null;
+          skip_until?: string | null;
         };
         Update: {
           id?: string;
@@ -241,6 +243,7 @@ export interface Database {
           status?: WaitlistStatus;
           created_at?: string;
           resolved_at?: string | null;
+          skip_until?: string | null;
         };
         Relationships: [];
       };

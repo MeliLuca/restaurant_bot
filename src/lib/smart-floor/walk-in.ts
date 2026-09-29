@@ -139,12 +139,15 @@ export interface WalkInResult {
 
 const WALK_IN_ID = "__walk_in__";
 
-/** Where a party walking in now can sit, best first in each list */
+/**
+ * Where a party walking in now can sit, best first in each list. Tables in
+ * `exclude` are someone else's (kept for the waitlist).
+ */
 export function findWalkInSeats(
   ctx: FloorContext,
   walkIn: WalkIn,
   finishing: Map<string, FinishSignal>,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; exclude?: Set<string> } = {},
 ): WalkInResult {
   const limit = opts.limit ?? 4;
   const { now, rules } = ctx;
@@ -183,6 +186,7 @@ export function findWalkInSeats(
   for (const o of feasible.options) {
     // asked at the door for that room: the others aren't an answer
     if (o.otherRoom) continue;
+    if (opts.exclude && o.tableIds.some((id) => opts.exclude!.has(id))) continue;
     if (!timeline.isFree(o.tableIds, now, now + minStay)) continue;
     const tables = o.tableIds.map((id) => ctx.tables.get(id)!);
     const dirtyIds = tables.filter((t) => t.status === "dirty").map((t) => t.id);
