@@ -12,16 +12,19 @@ const REFRESH_DEBOUNCE_MS = 400;
  * Call `refresh` whenever one of `tables` changes on any device: realtime
  * postgres_changes, debounced; polling while the socket is down; and always
  * when the tab becomes visible again (phones suspend sockets constantly).
+ * `enabled` false opens no channel at all (e.g. a badge the user can't see).
  */
 export function useRealtimeRefresh(
   channelName: string,
   tables: string[],
   refresh: () => Promise<void> | void,
+  enabled = true,
 ) {
   const realtimeUp = useRef(false);
   const key = tables.join(",");
 
   useEffect(() => {
+    if (!enabled) return;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const debounced = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
@@ -60,5 +63,5 @@ export function useRealtimeRefresh(
       clearInterval(pollTimer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [channelName, key, refresh]);
+  }, [channelName, key, refresh, enabled]);
 }

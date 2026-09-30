@@ -21,26 +21,13 @@ import {
 } from "@/lib/takeaway/slots";
 import { arrangeFamilies } from "@/lib/takeaway/families";
 import type { SlotPressure } from "@/lib/takeaway/load";
+import { urgencyOf } from "@/lib/takeaway/urgency";
 import { createFollowUpOrder, type TakeawayStatusFilter } from "@/lib/takeaway/api";
 import type { Order } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 import { useTicketStore } from "@/stores/ticket-store";
 import { useAuthStore, usePermission } from "@/stores/auth-store";
-
-/** How close to the promised time an order starts asking for attention */
-const SOON_MINUTES = 15;
-
-type Urgency = "late" | "soon" | "none";
-
-function urgencyOf(order: Order, now: Date): Urgency {
-  if (order.status !== "open" || order.pickup_at === null) return "none";
-  const due = new Date(order.pickup_at).getTime();
-  if (Number.isNaN(due)) return "none";
-  if (due < now.getTime()) return "late";
-  if (due - now.getTime() <= SOON_MINUTES * 60_000) return "soon";
-  return "none";
-}
 
 const STATUSES: TakeawayStatusFilter[] = ["open", "closed", "all"];
 

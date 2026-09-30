@@ -98,6 +98,19 @@ export async function fetchTakeawayOrders(
   return data;
 }
 
+/** Just enough of the open take-aways for the nav badge: how many, how late */
+export async function fetchOpenTakeawayDue(): Promise<
+  Pick<Order, "id" | "status" | "pickup_at">[]
+> {
+  const { data, error } = await getSupabase()
+    .from("orders")
+    .select("id, status, pickup_at")
+    .eq("order_type", "takeaway")
+    .eq("status", "open");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // ---------------------------------------------------------------------------
 // Capacity settings
 // ---------------------------------------------------------------------------

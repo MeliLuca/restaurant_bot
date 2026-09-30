@@ -37,6 +37,9 @@ export const it = {
     settings: "Impostazioni",
     switchUser: "Cambia utente",
     unreadMessages: "{count} messaggi non letti",
+    takeawaysOpen: "Asporti aperti: {count}",
+    takeawaysLate: "Asporti aperti: {count}, in ritardo: {late}",
+    reservationsLate: "Prenotazioni in ritardo: {count}",
     brand: "Trattoria",
   },
   m: {
@@ -1782,6 +1785,9 @@ export const en: typeof it = {
     settings: "Settings",
     switchUser: "Switch user",
     unreadMessages: "{count} unread messages",
+    takeawaysOpen: "Open take-aways: {count}",
+    takeawaysLate: "Open take-aways: {count}, late: {late}",
+    reservationsLate: "Late reservations: {count}",
     brand: "Trattoria",
   },
   m: {

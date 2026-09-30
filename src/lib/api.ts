@@ -95,6 +95,21 @@ export async function fetchReservationsBetween(
   return (data as unknown as ReservationJoinRow[]).map(toReservation);
 }
 
+/** The parties still expected between two times, and when: for the nav badge */
+export async function fetchBookedTimes(
+  start: Date,
+  end: Date,
+): Promise<Pick<Reservation, "status" | "reserved_at">[]> {
+  const { data, error } = await getSupabase()
+    .from("reservations")
+    .select("status, reserved_at")
+    .eq("status", "booked")
+    .gte("reserved_at", start.toISOString())
+    .lt("reserved_at", end.toISOString());
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function fetchTodayReservations(): Promise<Reservation[]> {
   const start = new Date();
   start.setHours(0, 0, 0, 0);

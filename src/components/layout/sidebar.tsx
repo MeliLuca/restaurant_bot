@@ -21,7 +21,7 @@ import type { Permission } from "@/lib/auth/permissions";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore } from "@/stores/auth-store";
-import { useUnreadTotal } from "@/stores/chat-store";
+import { NavBadge, useNavBadges } from "./nav-badges";
 
 const NAV_ITEMS: {
   href: string;
@@ -50,22 +50,16 @@ export function Sidebar() {
   const t = useT();
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
-  const unread = useUnreadTotal();
+  const badges = useNavBadges();
 
   const visibleItems = NAV_ITEMS.filter(
     (item) => !item.permission || (user?.permissions.includes(item.permission) ?? false),
   );
 
-  const unreadBadge = (href: string) =>
-    href === "/chat" &&
-    unread > 0 && (
-      <span
-        className="absolute -right-2.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
-        aria-label={t("nav.unreadMessages", { count: unread })}
-      >
-        {unread > 99 ? "99+" : unread}
-      </span>
-    );
+  const badgeFor = (href: string) => {
+    const badge = badges.get(href);
+    return badge && <NavBadge badge={badge} />;
+  };
 
   return (
     <>
@@ -87,7 +81,7 @@ export function Sidebar() {
           >
             <span className="relative">
               <Icon className="h-5 w-5" />
-              {unreadBadge(href)}
+              {badgeFor(href)}
             </span>
             <span className="max-w-full truncate">{t(labelKey)}</span>
           </Link>
@@ -131,7 +125,7 @@ export function Sidebar() {
             >
               <span className="relative">
                 <Icon className="h-6 w-6" />
-                {unreadBadge(href)}
+                {badgeFor(href)}
               </span>
               <span>{t(labelKey)}</span>
             </Link>

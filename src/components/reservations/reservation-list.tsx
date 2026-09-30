@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import type { FloorMap, Reservation, TableTag } from "@/lib/database.types";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
+import { minutesLate } from "@/lib/reservations/late";
 import type { FloorContext } from "@/lib/smart-floor/types";
 import { cn } from "@/lib/utils";
 import { tableNamesOf, useTimeFormat } from "./format";
@@ -227,9 +228,7 @@ export function ReservationList({
             const booked = r.status === "booked";
             const hasTables = r.table_ids.length > 0;
             const closedRoom = closedRoomOf(r);
-            const start = Date.parse(r.reserved_at);
-            const lateMinutes =
-              isToday && booked && start <= now ? Math.floor((now - start) / 60_000) : null;
+            const lateMinutes = isToday ? minutesLate(r, now) : null;
             return (
               <li
                 key={r.id}

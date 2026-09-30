@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGrid, MessageCircle, ReceiptText, ShoppingBag } from "lucide-react";
+import { useTakeawayBadge } from "@/hooks/use-takeaway-badge";
 import type { Permission } from "@/lib/auth/permissions";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
@@ -48,8 +49,24 @@ export function MTabBar() {
   const t = useT();
   const unread = useUnreadTotal();
   const permissions = useAuthStore((s) => s.user?.permissions ?? []);
+  const takeaway = useTakeawayBadge(permissions.includes("view_takeaway"));
 
   if (isFocusedFlow(pathname)) return null;
+
+  // one number per tab at most; red = something is late
+  const badgeFor = (href: string) =>
+    href === mRoutes.chat() && unread > 0
+      ? { count: unread, alert: false, label: t("nav.unreadMessages", { count: unread }) }
+      : href === mRoutes.takeaway() && takeaway.open > 0
+        ? {
+            count: takeaway.open,
+            alert: takeaway.late > 0,
+            label:
+              takeaway.late > 0
+                ? t("nav.takeawaysLate", { count: takeaway.open, late: takeaway.late })
+                : t("nav.takeawaysOpen", { count: takeaway.open }),
+          }
+        : null;
 
   const visible = TABS.filter(
     (tab) => !tab.permission || permissions.includes(tab.permission),
@@ -59,6 +76,7 @@ export function MTabBar() {
     <nav className="flex shrink-0 border-t bg-card pb-[env(safe-area-inset-bottom)]">
       {visible.map(({ href, labelKey, icon: Icon }) => {
         const active = pathname.startsWith(href);
+        const badge = badgeFor(href);
         return (
           <Link
             key={href}
@@ -72,9 +90,16 @@ export function MTabBar() {
           >
             <span className="relative">
               <Icon className="h-6 w-6" />
-              {href === mRoutes.chat() && unread > 0 && (
-                <span className="absolute -right-2.5 -top-1.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
-                  {unread > 99 ? "99+" : unread}
+              {badge && (
+                <span
+                  title={badge.label}
+                  className={cn(
+                    "absolute -right-2.5 -top-1.5 min-w-4 rounded-full px-1 text-center text-[10px] leading-4 tabular-nums",
+                    badge.alert ? "bg-red-500 text-white" : "bg-primary text-primary-foreground",
+                  )}
+                >
+                  <span aria-hidden>{badge.count > 99 ? "99+" : badge.count}</span>
+                  <span className="sr-only">{badge.label}</span>
                 </span>
               )}
             </span>
