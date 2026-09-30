@@ -261,6 +261,7 @@ export const it = {
     base: "Base",
     added: "Aggiunti ({count})",
     diminishing: "ridotto",
+    swap: "scambio",
     total: "Totale",
     // price edit dialog
     adjustPrice: "Modifica prezzo — {name}",
@@ -1983,6 +1984,7 @@ export const en: typeof it = {
     base: "Base",
     added: "Added ({count})",
     diminishing: "diminishing",
+    swap: "swap",
     total: "Total",
     adjustPrice: "Adjust price — {name}",
     appliesThisTicket:

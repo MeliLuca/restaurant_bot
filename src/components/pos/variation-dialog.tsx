@@ -163,7 +163,7 @@ export function VariationDialog({
 
   // Live diminishing-scale preview: the linear sum of the added ingredients
   // (S) tapers to `surcharge` (P_total); removals never deduct.
-  const { addedCount, linearExtras, surcharge, tapered, total } =
+  const { addedCount, linearExtras, surcharge, tapered, swapped, total } =
     variationPricePreview(effectiveBase, selected);
 
   function confirm() {
@@ -296,14 +296,19 @@ export function VariationDialog({
               <div className="flex items-center justify-between gap-6 text-muted-foreground">
                 <span>
                   {t("pos.added", { count: addedCount })}
-                  {tapered && (
+                  {(tapered || swapped) && (
                     <span className="ml-1 text-xs text-muted-foreground/70">
-                      {t("pos.diminishing")}
+                      {[
+                        swapped && t("pos.swap"),
+                        tapered && t("pos.diminishing"),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
                   )}
                 </span>
                 <span className="tabular-nums">
-                  {tapered && (
+                  {(tapered || swapped) && (
                     <span className="mr-1.5 text-xs text-muted-foreground/60 line-through">
                       {formatMoney(linearExtras)}
                     </span>

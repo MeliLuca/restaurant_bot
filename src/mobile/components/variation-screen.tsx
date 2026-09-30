@@ -77,7 +77,7 @@ export function VariationScreen({
     query,
     MAX_PANTRY_ROWS,
   );
-  const { addedCount, linearExtras, surcharge, tapered, total } =
+  const { addedCount, linearExtras, surcharge, tapered, swapped, total } =
     variationPricePreview(effectiveBase, selected);
 
   const rowClass = (active: boolean, strike: boolean) =>
@@ -215,14 +215,19 @@ export function VariationScreen({
             <div className="flex justify-between text-muted-foreground">
               <span>
                 {t("pos.added", { count: addedCount })}
-                {tapered && (
+                {(tapered || swapped) && (
                   <span className="ml-1 text-xs opacity-70">
-                    {t("pos.diminishing")}
+                    {[
+                      swapped && t("pos.swap"),
+                      tapered && t("pos.diminishing"),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 )}
               </span>
               <span className="tabular-nums">
-                {tapered && (
+                {(tapered || swapped) && (
                   <span className="mr-1.5 text-xs line-through opacity-60">
                     {formatMoney(linearExtras)}
                   </span>

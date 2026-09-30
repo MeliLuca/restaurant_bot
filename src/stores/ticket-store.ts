@@ -9,6 +9,9 @@ export interface SelectedModifier {
   /** List price as an addition; always 0 on a removal, which never deducts */
   priceAdjustment: number;
   isRemoval: boolean;
+  /** Removals only: the ingredient's listino price, which offsets an added
+   * ingredient (swap). Pricing-only, never written to the DB. */
+  creditPrice?: number;
 }
 
 export interface TicketLine {

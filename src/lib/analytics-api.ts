@@ -9,6 +9,8 @@ export type AnalyticsOrderItem = OrderItem & {
     name: string;
     price_adjustment: number;
     is_removal: boolean;
+    /** current listino price — a removal's swap credit (not snapshotted) */
+    ingredients: { price: number } | null;
   }[];
 };
 
@@ -33,7 +35,7 @@ export async function fetchOrdersForRange(
     const { data, error } = await sb
       .from("orders")
       .select(
-        "*, order_items(*, menu_items(name, category_id), order_item_modifiers(ingredient_id, name, price_adjustment, is_removal)), tables(name)",
+        "*, order_items(*, menu_items(name, category_id), order_item_modifiers(ingredient_id, name, price_adjustment, is_removal, ingredients(price))), tables(name)",
       )
       .gte("opened_at", range.start.toISOString())
       .lt("opened_at", range.end.toISOString())

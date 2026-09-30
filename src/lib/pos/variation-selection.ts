@@ -1,6 +1,8 @@
 import {
   addedIngredientsLinearSum,
+  addedIngredientsNetSum,
   addedIngredientsSurcharge,
+  toCents,
 } from "@/lib/money";
 import type { SelectedModifier } from "@/stores/ticket-store";
 
@@ -65,7 +67,9 @@ export function toggleAddition(
  * Flatten the two sets into the SelectedModifier[] a ticket line holds.
  *
  * Removals are emitted first (they read as corrections to the dish) and always
- * at price 0 — a removal is never a discount, which the DB also enforces.
+ * at price 0 — a removal is never a discount, which the DB also enforces. They
+ * carry their listino price as `creditPrice`, so swapping one ingredient for
+ * another of the same price costs nothing (lib/money.ts).
  * Anything no longer present in the dish or the pantry is dropped: an
  * ingredient deleted from the menu should not keep charging.
  */
@@ -80,7 +84,16 @@ export function variationsToModifiers(
   const removals = state.removedIds.flatMap((id) => {
     const opt = dishById.get(id);
     return opt
-      ? [{ ingredientId: id, name: opt.name, priceAdjustment: 0, isRemoval: true }]
+      ? [
+          {
+            ingredientId: id,
+            name: opt.name,
+            priceAdjustment: 0,
+            isRemoval: true,
+            // its listino price offsets an addition (swap), never deducts
+            creditPrice: opt.price,
+          },
+        ]
       : [];
   });
   const additions = state.addedIds.flatMap((id) => {
@@ -139,23 +152,29 @@ export interface VariationPricePreview {
   linearExtras: number;
   /** What is actually charged, on the diminishing scale */
   surcharge: number;
-  /** True once the diminishing scale has actually bitten */
+  /** True once the diminishing scale (or rounding down) has actually bitten */
   tapered: boolean;
+  /** True when a removed ingredient offsets an addition (swap) */
+  swapped: boolean;
   total: number;
 }
 
-/** Live price breakdown for the picker footer. Removals never deduct. */
+/** Live price breakdown for the picker footer. Removals never deduct on
+ * their own; they only offset a swapped-in addition. */
 export function variationPricePreview(
   basePrice: number,
   selected: SelectedModifier[],
 ): VariationPricePreview {
   const linearExtras = addedIngredientsLinearSum(selected);
+  const netExtras = addedIngredientsNetSum(selected);
   const surcharge = addedIngredientsSurcharge(selected);
   return {
-    addedCount: selected.filter((m) => m.priceAdjustment > 0).length,
+    addedCount: selected.filter((m) => !m.isRemoval && m.priceAdjustment > 0)
+      .length,
     linearExtras,
     surcharge,
-    tapered: surcharge < linearExtras,
-    total: basePrice + surcharge,
+    tapered: surcharge < netExtras,
+    swapped: netExtras < linearExtras,
+    total: (toCents(basePrice) + toCents(surcharge)) / 100,
   };
 }

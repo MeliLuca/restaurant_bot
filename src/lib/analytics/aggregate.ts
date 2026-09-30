@@ -1,7 +1,7 @@
 import type { MenuItem, ReservationRow } from "@/lib/database.types";
 import type { AnalyticsOrder } from "@/lib/analytics-api";
 import type { ItemStat } from "@/lib/stats-api";
-import { toCents } from "@/lib/money";
+import { addedIngredientsCharges, toCents } from "@/lib/money";
 import { serviceDayOf, type ServiceDateRange } from "@/lib/analytics/date-range";
 
 // Pure aggregation over already-fetched rows. Math in integer cents (like
@@ -187,12 +187,13 @@ export interface ModifierStat {
 }
 
 /**
- * What each modifier actually earned. unit_price bakes in the diminishing
- * per-rank surcharge from addedIngredientsSurcharge (lib/money.ts): positive
- * adjustments ranked most-expensive-first, the i-th (1-based) charged at
- * w(i) = log2(1 + 1/i). Attribute cents·w(i)·quantity to that modifier;
- * non-positive modifiers (removals) earn 0 but still count for attach rate.
- * Keep in sync with lib/money.ts.
+ * What each modifier actually earned. unit_price bakes in the surcharge from
+ * addedIngredientsSurcharge (lib/money.ts): swaps settled, diminishing
+ * per-rank weights, rounded down to the 10 cents. addedIngredientsCharges
+ * splits that same surcharge per modifier; attribute it ×quantity. Removals
+ * earn 0 but still count for attach rate. A removal's swap credit is its
+ * CURRENT listino price (only the addition side is snapshotted), so a
+ * repriced ingredient shifts old attributions slightly.
  */
 const statKey = (m: { name: string; is_removal: boolean }) =>
   `${m.is_removal ? "−" : "+"} ${m.name}`;
@@ -207,14 +208,18 @@ export function modifierStats(orders: AnalyticsOrder[]): ModifierStat[] {
       totalQuantity += line.quantity;
       if (line.order_item_modifiers.length === 0) continue;
 
-      const positive = line.order_item_modifiers
-        .filter((m) => m.price_adjustment > 0)
-        .sort((a, b) => b.price_adjustment - a.price_adjustment);
+      const charges = addedIngredientsCharges(
+        line.order_item_modifiers.map((m) => ({
+          priceAdjustment: m.price_adjustment,
+          isRemoval: m.is_removal,
+          creditPrice: m.is_removal ? m.ingredients?.price ?? 0 : undefined,
+        })),
+      );
       const chargedByName = new Map<string, number>();
-      positive.forEach((m, i) => {
-        const charged = toCents(m.price_adjustment) * Math.log2(1 + 1 / (i + 1));
+      line.order_item_modifiers.forEach((m, i) => {
+        if (charges[i] <= 0) return;
         const k = statKey(m);
-        chargedByName.set(k, (chargedByName.get(k) ?? 0) + charged);
+        chargedByName.set(k, (chargedByName.get(k) ?? 0) + charges[i]);
       });
 
       for (const m of line.order_item_modifiers) {

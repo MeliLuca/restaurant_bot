@@ -642,6 +642,8 @@ export interface TicketLineInput {
     name: string;
     priceAdjustment: number;
     isRemoval: boolean;
+    /** swap credit of a removal — feeds unit_price, not stored */
+    creditPrice?: number;
   }>;
 }
 
