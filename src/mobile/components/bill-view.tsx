@@ -317,8 +317,20 @@ export function BillView({ orderId }: { orderId: string }) {
         )}
       </div>
 
-      <div className="relative flex shrink-0 gap-2 border-t bg-card p-3">
-        {canTakeOrders && (order.table_id || order.order_type === "takeaway") && (
+      {/* The "+" sits in a column of its own between the two actions, with a
+          gap either side, so a thumb aiming for it never lands on Pre-conto
+          or Paga (it used to float over the seam between them). */}
+      <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-t bg-card p-3">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void preReceipt()}
+          className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 text-center text-sm font-semibold leading-tight disabled:opacity-50"
+        >
+          <Printer className="h-5 w-5 shrink-0" />
+          {t("pos.preReceiptBtn")}
+        </button>
+        {canTakeOrders && (order.table_id || order.order_type === "takeaway") ? (
           <Link
             href={
               order.table_id
@@ -326,41 +338,37 @@ export function BillView({ orderId }: { orderId: string }) {
                 : mRoutes.takeawayOrder(orderId)
             }
             aria-label={t("m.addOrder")}
-            className="absolute -top-7 left-1/2 z-10 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background"
+            className="flex aspect-square h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"
           >
-            <Plus className="h-6 w-6" />
+            <Plus className="h-7 w-7" />
           </Link>
+        ) : (
+          <span aria-hidden className="w-0" />
         )}
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void preReceipt()}
-          className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-xl border text-base font-semibold disabled:opacity-50"
-        >
-          <Printer className="h-5 w-5" />
-          {t("pos.preReceiptBtn")}
-        </button>
-        {canCheckout &&
+        {canCheckout ? (
           // Unsent lines are not in this total, so paying now would settle the
           // wrong amount: the link becomes an inert button until they are sent.
-          (blockedByPending ? (
+          blockedByPending ? (
             <button
               type="button"
               disabled
-              className="flex min-h-14 flex-[1.4] items-center justify-center gap-2 rounded-xl bg-primary text-base font-semibold text-primary-foreground opacity-50"
+              className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl bg-primary px-2 text-center text-sm font-semibold leading-tight text-primary-foreground opacity-50"
             >
-              <Wallet className="h-5 w-5" />
+              <Wallet className="h-5 w-5 shrink-0" />
               {t("pos.checkoutBtn", { amount: formatMoney(balanceCents / 100) })}
             </button>
           ) : (
             <Link
               href={mRoutes.pay(orderId)}
-              className="flex min-h-14 flex-[1.4] items-center justify-center gap-2 rounded-xl bg-primary text-base font-semibold text-primary-foreground"
+              className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl bg-primary px-2 text-center text-sm font-semibold leading-tight text-primary-foreground"
             >
-              <Wallet className="h-5 w-5" />
+              <Wallet className="h-5 w-5 shrink-0" />
               {t("pos.checkoutBtn", { amount: formatMoney(balanceCents / 100) })}
             </Link>
-          ))}
+          )
+        ) : (
+          <span aria-hidden />
+        )}
       </div>
     </>
   );
