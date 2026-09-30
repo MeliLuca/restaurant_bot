@@ -17,6 +17,11 @@ import { optionNotes, reasonText, tableNamesOf } from "./format";
 
 export type TableMode = "auto" | "manual" | "none";
 
+/** Gestione Sala Smart planners: the engine's picks too */
+export const PLAN_MODES: TableMode[] = ["auto", "manual", "none"];
+/** Module off: tables are chosen by hand on the map */
+export const HAND_MODES: TableMode[] = ["manual", "none"];
+
 /** How many of the engine's picks are listed (the current tables may be one) */
 const OPTIONS_SHOWN = 5;
 const NO_TABLES: string[] = [];
@@ -51,6 +56,8 @@ export interface TablePicker {
   reason: NoTableReason | null;
   /** The tables that would be saved ([] = none) */
   chosenTables: string[];
+  /** What may be chosen from (the engine only while the module is on) */
+  modes: TableMode[];
   /** The reservation's tables before this edit */
   currentTableIds: string[];
   /** The choice is the tables it already has */
@@ -66,6 +73,7 @@ export function useTablePicker({
   booking,
   reservations,
   tags,
+  modes = PLAN_MODES,
   initialMode,
   label,
 }: {
@@ -74,13 +82,17 @@ export function useTablePicker({
   booking: Booking | null;
   reservations: Reservation[];
   tags: TableTag[];
+  modes?: TableMode[];
   initialMode: TableMode;
   /** The party's name, drawn on the chosen tables */
   label?: string;
 }): TablePicker {
   const t = useT();
   const currentTableIds = booking?.tableIds ?? NO_TABLES;
-  const [mode, setModeState] = useState<TableMode>(initialMode);
+  const canAuto = modes.includes("auto");
+  const [mode, setModeState] = useState<TableMode>(
+    modes.includes(initialMode) ? initialMode : modes[0],
+  );
   const [picked, setPicked] = useState<string[]>(currentTableIds);
   const [chosen, setChosen] = useState(0);
   const tagName = (id: string) => tags.find((tg) => tg.id === id)?.name ?? "?";
@@ -90,9 +102,10 @@ export function useTablePicker({
     ? `${booking.id}|${booking.partySize}|${booking.start}|${booking.tagIds.join()}|${booking.mapId}`
     : "";
   const suggestion = useMemo(
-    () => (ctx && booking ? suggestTables(ctx, booking, { limit: OPTIONS_SHOWN }) : null),
+    () =>
+      canAuto && ctx && booking ? suggestTables(ctx, booking, { limit: OPTIONS_SHOWN }) : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ctx, key],
+    [canAuto, ctx, key],
   );
   // new details, new list: start again from the best one
   useEffect(() => setChosen(0), [suggestion]);
@@ -158,6 +171,7 @@ export function useTablePicker({
   }
 
   function setMode(next: TableMode) {
+    if (!modes.includes(next)) return;
     // from the engine's pick to the map: start from what it proposed
     if (next === "manual" && mode === "auto") setPicked(option?.tableIds ?? []);
     setModeState(next);
@@ -182,6 +196,7 @@ export function useTablePicker({
     choose: setChosen,
     reason: suggestion?.reason ?? null,
     chosenTables,
+    modes,
     currentTableIds,
     unchanged: sameTables(chosenTables, currentTableIds),
     warnings,
@@ -218,12 +233,15 @@ export function TablePickerSection({
   const mapName = (id: string | null) =>
     maps.find((m) => m.id === id)?.name ?? t("reservations.anyRoom");
 
-  const modes: { value: TableMode; label: string }[] = [
+  // the lock and "find a fitting one" only mean something to the engine
+  const canAuto = picker.modes.includes("auto");
+  const labels: Record<TableMode, string> = {
     // a party that has tables: the engine "re-assigns"
-    { value: "auto", label: t(hasCurrent ? "reservations.modeReassign" : "reservations.modeAuto") },
-    { value: "manual", label: t("reservations.modeManual") },
-    { value: "none", label: t("reservations.modeNone") },
-  ];
+    auto: t(hasCurrent ? "reservations.modeReassign" : "reservations.modeAuto"),
+    manual: t("reservations.modeManual"),
+    none: t("reservations.modeNone"),
+  };
+  const modes = picker.modes.map((value) => ({ value, label: labels[value] }));
 
   return (
     <>
@@ -338,7 +356,7 @@ export function TablePickerSection({
               <TriangleAlert className="h-4 w-4 shrink-0 text-amber-500" /> {w}
             </p>
           ))}
-          {warnings.length > 0 && booking && (
+          {warnings.length > 0 && booking && canAuto && (
             <Button
               type="button"
               variant="outline"
@@ -353,10 +371,12 @@ export function TablePickerSection({
       )}
 
       {mode === "none" && (
-        <p className="text-sm text-muted-foreground">{t("reservations.noneHint")}</p>
+        <p className="text-sm text-muted-foreground">
+          {t(canAuto ? "reservations.noneHint" : "reservations.noneHintHand")}
+        </p>
       )}
 
-      {picker.chosenTables.length > 0 && (
+      {canAuto && picker.chosenTables.length > 0 && (
         <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
           <input
             type="checkbox"

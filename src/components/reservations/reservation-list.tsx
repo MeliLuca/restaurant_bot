@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   ArrowLeftRight,
   Armchair,
+  Hand,
   Lock,
   LockOpen,
   Pencil,
@@ -43,8 +44,10 @@ interface ReservationListProps {
   tags: TableTag[];
   /** Rooms, for naming one closed to bookings that still has some */
   maps: FloorMap[];
-  /** May assign tables (plan_floor, on a computer) */
+  /** May assign tables with the engine, one or many, and lock them (plan_floor, on a computer) */
   canPlan: boolean;
+  /** May choose tables by hand (Gestione Sala Smart off: manage_reservations). Default canPlan */
+  canPickTables?: boolean;
   /** May create/edit/seat/cancel (manage_reservations) */
   canEdit: boolean;
   /** Seating only makes sense on the day itself */
@@ -59,7 +62,7 @@ interface ReservationListProps {
   /** None: no edit button (the phone lists today's bookings, the form is desktop's) */
   onEdit?: (r: Reservation) => void;
   onAssign: (ids: string[]) => void;
-  /** A booking that has tables: see where else it could go ("Cambia tavolo") */
+  /** See where else a booking could go ("Cambia tavolo"), or pick its first tables by hand */
   onChangeTables?: (r: Reservation) => void;
   onSeat: (r: Reservation) => void;
   onCancel: (r: Reservation) => void;
@@ -72,6 +75,7 @@ export function ReservationList({
   tags,
   maps,
   canPlan,
+  canPickTables = canPlan,
   canEdit,
   isToday,
   now,
@@ -136,9 +140,14 @@ export function ReservationList({
       {toMove.length > 0 && (
         <p className="flex gap-2 text-sm">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-          {t(canPlan ? "reservations.closedRoomSummary" : "reservations.closedRoomSummaryHost", {
-            count: toMove.length,
-          })}
+          {t(
+            canPlan
+              ? "reservations.closedRoomSummary"
+              : canPickTables
+                ? "reservations.closedRoomSummaryHand"
+                : "reservations.closedRoomSummaryHost",
+            { count: toMove.length },
+          )}
         </p>
       )}
 
@@ -314,6 +323,22 @@ export function ReservationList({
                       </Badge>
                     )}
                     <div className="ml-auto flex gap-1">
+                      {!canPlan && canPickTables && booked && onChangeTables && (
+                        <Button
+                          size="sm"
+                          variant={hasTables ? "outline" : "default"}
+                          className="h-9"
+                          disabled={busyId === r.id}
+                          onClick={() => onChangeTables(r)}
+                        >
+                          {hasTables ? (
+                            <ArrowLeftRight className="mr-1 h-4 w-4" />
+                          ) : (
+                            <Hand className="mr-1 h-4 w-4" />
+                          )}
+                          {t(hasTables ? "reservations.changeTables" : "reservations.pickTables")}
+                        </Button>
+                      )}
                       {canPlan && booked && hasTables && onChangeTables && (
                         <Button
                           size="sm"

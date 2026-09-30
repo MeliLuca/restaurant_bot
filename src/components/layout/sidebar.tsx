@@ -22,15 +22,12 @@ import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUnreadTotal } from "@/stores/chat-store";
-import { useSmartFloor } from "@/stores/smart-floor-store";
 
 const NAV_ITEMS: {
   href: string;
   labelKey: TranslationKey;
   icon: typeof LayoutGrid;
   permission?: Permission;
-  /** Only while Gestione Sala Smart is switched on */
-  smartFloor?: boolean;
 }[] = [
   { href: "/floor-plan", labelKey: "nav.floorPlan", icon: LayoutGrid },
   {
@@ -38,7 +35,6 @@ const NAV_ITEMS: {
     labelKey: "nav.reservations",
     icon: CalendarClock,
     permission: "manage_reservations",
-    smartFloor: true,
   },
   { href: "/pos", labelKey: "nav.pos", icon: ReceiptText, permission: "take_orders" },
   { href: "/asporto", labelKey: "nav.takeaway", icon: ShoppingBag, permission: "view_takeaway" },
@@ -55,12 +51,9 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
   const unread = useUnreadTotal();
-  const smartFloor = useSmartFloor().enabled;
 
   const visibleItems = NAV_ITEMS.filter(
-    (item) =>
-      (!item.permission || (user?.permissions.includes(item.permission) ?? false)) &&
-      (!item.smartFloor || smartFloor),
+    (item) => !item.permission || (user?.permissions.includes(item.permission) ?? false),
   );
 
   const unreadBadge = (href: string) =>

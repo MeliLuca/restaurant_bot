@@ -57,12 +57,15 @@ interface Found {
 export function useSeatFlow({
   maps,
   canPlan,
+  canPickTables = false,
   tableNames,
   onDone,
 }: {
   maps: FloorMap[];
   /** May give the party other tables (plan_floor, on a computer) */
   canPlan: boolean;
+  /** Without the engine, may still move it by hand ("Cambia tavolo", module off) */
+  canPickTables?: boolean;
   /** "201 + 202" */
   tableNames: (ids: string[]) => string;
   onDone?: () => void | Promise<void>;
@@ -97,6 +100,7 @@ export function useSeatFlow({
       request={request}
       maps={maps}
       canPlan={canPlan}
+      canPickTables={canPickTables}
       tableNames={tableNames}
       onClose={() => setRequest(null)}
       onDone={async () => {
@@ -117,6 +121,7 @@ function AlternativeTablesDialog({
   request,
   maps,
   canPlan,
+  canPickTables,
   tableNames,
   onClose,
   onDone,
@@ -124,6 +129,7 @@ function AlternativeTablesDialog({
   request: Request | null;
   maps: FloorMap[];
   canPlan: boolean;
+  canPickTables: boolean;
   tableNames: (ids: string[]) => string;
   onClose: () => void;
   onDone: () => Promise<void>;
@@ -228,7 +234,9 @@ function AlternativeTablesDialog({
         )}
 
         {!canPlan ? (
-          <p className="text-sm text-muted-foreground">{t("smartFloor.askPlanner")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t(canPickTables ? "reservations.pickOtherHint" : "smartFloor.askPlanner")}
+          </p>
         ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : !found ? (

@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NewDeliveryDialog } from "@/components/floor-plan/new-delivery-dialog";
-import { ReservationDialog } from "@/components/floor-plan/reservation-dialog";
 import { FloorMapView } from "@/components/floor-map/floor-map-view";
 import { ReservationsPanel } from "@/components/floor-plan/reservations-panel";
 import { STATUS_CONFIG, type TableDisplayStatus } from "@/lib/floor/status";
@@ -110,7 +109,6 @@ export default function FloorPlanPage() {
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(
     null,
   );
-  const [reservationOpen, setReservationOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [reservationsExpanded, setReservationsExpanded] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -124,7 +122,7 @@ export default function FloorPlanPage() {
   const canPlanFloor = usePermission("plan_floor");
   const canManageTables = usePermission("manage_tables");
   const isPhone = useIsPhone();
-  const { enabled: smartFloor, settings: floorSettings } = useSmartFloor();
+  const { settings: floorSettings } = useSmartFloor();
   const time = useTimeFormat();
   const now = useNow(30_000);
   /** Gestione Sala Smart: a time later today to look at (null = now) */
@@ -466,12 +464,8 @@ export default function FloorPlanPage() {
                   {canReserve && (
                     <Button
                       className="h-11"
-                      onClick={() =>
-                        // Gestione Sala Smart books (and seats) from its own page
-                        smartFloor
-                          ? router.push("/prenotazioni?new=1")
-                          : setReservationOpen(true)
-                      }
+                      // bookings are made on their own page
+                      onClick={() => router.push("/prenotazioni?new=1")}
                     >
                       <CalendarPlus className="mr-2 h-4 w-4" /> {t("floor.newReservation")}
                     </Button>
@@ -708,14 +702,6 @@ export default function FloorPlanPage() {
         onReleaseBooking={canPlanFloor ? releaseBooking : undefined}
       />
       {seatFlow.element}
-      <ReservationDialog
-        open={reservationOpen}
-        tables={tables.filter(
-          (tb) => !tb.map_id || maps.find((m) => m.id === tb.map_id)?.bookable !== false,
-        )}
-        onClose={() => setReservationOpen(false)}
-        onCreated={refresh}
-      />
       <NewDeliveryDialog
         open={deliveryOpen}
         onClose={() => setDeliveryOpen(false)}

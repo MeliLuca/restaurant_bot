@@ -2,6 +2,8 @@
 
 // "Cambia tavolo" on a booked party that has tables: the tables it has, the
 // engine's other picks for it, or a hand pick on the map; saved on "Conferma".
+// With Gestione Sala Smart off it is also where a party gets its first tables,
+// by hand ("Scegli il tavolo").
 
 import { useState } from "react";
 import { toast } from "sonner";
@@ -14,7 +16,7 @@ import { reservationToBooking } from "@/lib/smart-floor/context";
 import type { FloorContext } from "@/lib/smart-floor/types";
 import { tableNamesOf, useTimeFormat } from "./format";
 import { PlanningMap } from "./planning-map";
-import { TablePickerSection, useTablePicker } from "./table-picker";
+import { TablePickerSection, useTablePicker, type TableMode } from "./table-picker";
 
 export function TableChange({
   ctx,
@@ -23,6 +25,7 @@ export function TableChange({
   tags,
   maps,
   tables,
+  modes,
   activeMapId,
   onActiveMapChange,
   onDone,
@@ -33,6 +36,8 @@ export function TableChange({
   tags: TableTag[];
   maps: FloorMap[];
   tables: RestaurantTable[];
+  /** The engine's picks too, or by hand only (module off) */
+  modes: TableMode[];
   activeMapId: string | null;
   onActiveMapChange: (id: string) => void;
   /** saved = the tables (or the lock) changed */
@@ -46,7 +51,8 @@ export function TableChange({
     booking,
     reservations,
     tags,
-    // the point of coming here: see where else it could go
+    modes,
+    // the point of coming here: see where else it could go (by hand: the map)
     initialMode: "auto",
     label: reservation.customer_name,
   });
@@ -86,7 +92,13 @@ export function TableChange({
           <Button variant="ghost" size="sm" className="h-9" onClick={() => onDone(false)}>
             <ArrowLeft className="mr-1 h-4 w-4" /> {t("reservations.backToList")}
           </Button>
-          <h2 className="text-lg font-semibold">{t("reservations.changeTables")}</h2>
+          <h2 className="text-lg font-semibold">
+            {t(
+              reservation.table_ids.length > 0
+                ? "reservations.changeTables"
+                : "reservations.pickTables",
+            )}
+          </h2>
         </div>
 
         <div className="rounded-lg border p-3">

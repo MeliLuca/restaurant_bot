@@ -20,7 +20,7 @@ import type { Booking, FloorContext } from "@/lib/smart-floor/types";
 import { cn } from "@/lib/utils";
 import { tableNamesOf, useTimeFormat } from "./format";
 import { PlanningMap } from "./planning-map";
-import { TablePickerSection, useTablePicker } from "./table-picker";
+import { TablePickerSection, useTablePicker, type TableMode } from "./table-picker";
 
 /** Stand-in id for a reservation not saved yet */
 const NEW_ID = "__new__";
@@ -41,7 +41,8 @@ interface ReservationFormProps {
   day: string;
   onDayChange: (day: string) => void;
   editing: Reservation | null;
-  canPlan: boolean;
+  /** How this user may choose the tables ([] = not at all: the planner does) */
+  tableModes: TableMode[];
   activeMapId: string | null;
   onActiveMapChange: (id: string) => void;
   onDone: (savedId: string | null) => void;
@@ -57,7 +58,7 @@ export function ReservationForm({
   day,
   onDayChange,
   editing,
-  canPlan,
+  tableModes,
   activeMapId,
   onActiveMapChange,
   onDone,
@@ -98,16 +99,20 @@ export function ReservationForm({
         }
       : null;
 
+  const canPick = tableModes.length > 0;
   // an edited party keeps its tables unless told otherwise ("Riassegna")
   const picker = useTablePicker({
     ctx,
     booking,
     reservations,
     tags,
+    modes: canPick ? tableModes : undefined,
     initialMode: editing && editing.table_ids.length > 0 ? "manual" : "auto",
     label: name.trim(),
   });
-  const chosenTables = canPlan ? picker.chosenTables : [];
+  const chosenTables = canPick ? picker.chosenTables : [];
+  // only the engine's bulk assignment reads the lock
+  const lockable = tableModes.includes("auto");
 
   function toggleTag(id: string) {
     setTagIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
@@ -127,13 +132,13 @@ export function ReservationForm({
       phone: phone.trim(),
       tagIds,
       mapId,
-      locked: canPlan && chosenTables.length > 0 ? locked : editing?.locked ?? false,
+      locked: lockable && chosenTables.length > 0 ? locked : editing?.locked ?? false,
     };
     setBusy(true);
     try {
       let id: string;
       if (editing) {
-        await updateReservation(editing.id, details, canPlan ? chosenTables : undefined);
+        await updateReservation(editing.id, details, canPick ? chosenTables : undefined);
         id = editing.id;
       } else {
         id = await createReservation({ ...details, tableIds: chosenTables });
@@ -296,7 +301,7 @@ export function ReservationForm({
 
         <div className="flex flex-col gap-3 rounded-lg border p-3">
           <h3 className="font-medium">{t("reservations.tableSection")}</h3>
-          {!canPlan ? (
+          {!canPick ? (
             <p className="text-sm text-muted-foreground">
               {editing && editing.table_ids.length > 0 && ctx
                 ? t("reservations.keepsTables", { tables: tableNamesOf(ctx, editing.table_ids) })
@@ -331,9 +336,9 @@ export function ReservationForm({
           tables={tables}
           activeMapId={activeMapId}
           onActiveMapChange={onActiveMapChange}
-          marks={canPlan ? picker.marks : new Map()}
+          marks={canPick ? picker.marks : new Map()}
           focusTableIds={chosenTables}
-          onTableClick={canPlan ? picker.clickTable : undefined}
+          onTableClick={canPick ? picker.clickTable : undefined}
           header={
             validStart && (
               <span className="text-sm text-muted-foreground">

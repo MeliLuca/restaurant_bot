@@ -1,15 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
-import {
-  CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
-  Sparkles,
-  TriangleAlert,
-} from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, TriangleAlert } from "lucide-react";
 import type { TableMark } from "@/components/floor-map/floor-map-view";
 import { PlanReview } from "@/components/reservations/plan-review";
 import { TableChange } from "@/components/reservations/table-change";
@@ -18,6 +11,7 @@ import { ReservationForm } from "@/components/reservations/reservation-form";
 import { ReservationList } from "@/components/reservations/reservation-list";
 import { tableNamesOf } from "@/components/reservations/format";
 import { useSeatFlow } from "@/components/reservations/seat-flow";
+import { HAND_MODES, PLAN_MODES, type TableMode } from "@/components/reservations/table-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,14 +38,24 @@ function shiftDay(key: string, days: number): string {
   return dayKey(d);
 }
 
+/**
+ * Reservations are a module of their own, on whether or not Gestione Sala
+ * Smart is. The module adds the engine on top: suggested tables, bulk
+ * assignment and the lock, for planners on a computer. Without it, whoever
+ * manages reservations picks the tables by hand on the map.
+ */
 export default function ReservationsPage() {
   const t = useT();
   const canEdit = usePermission("manage_reservations");
   const canPlanPerm = usePermission("plan_floor");
-  const canManageFloor = usePermission("manage_floor");
   const isPhone = useIsPhone();
-  const canPlan = canPlanPerm && !isPhone;
-  const { enabled, loaded } = useSmartFloor();
+  const smartFloor = useSmartFloor().enabled;
+  const canPlan = smartFloor && canPlanPerm && !isPhone;
+  const tableModes: TableMode[] = canPlan
+    ? PLAN_MODES
+    : !smartFloor && canEdit
+      ? HAND_MODES
+      : [];
 
   const [day, setDay] = useState(() => dayKey(new Date()));
   const [view, setView] = useState<View>({ kind: "list" });
@@ -84,6 +88,7 @@ export default function ReservationsPage() {
   const seatFlow = useSeatFlow({
     maps,
     canPlan,
+    canPickTables: tableModes.length > 0,
     tableNames: (ids) => (ctx ? tableNamesOf(ctx, ids) : ""),
     onDone: refresh,
   });
@@ -117,23 +122,6 @@ export default function ReservationsPage() {
             {t("reservations.needsPermission")}
           </CardContent>
         </Card>
-      </div>
-    );
-  }
-
-  if (loaded && !enabled) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <Sparkles className="h-10 w-10 text-muted-foreground" />
-        <h1 className="text-xl font-semibold">{t("reservations.moduleOffTitle")}</h1>
-        <p className="max-w-md text-sm text-muted-foreground">
-          {t("reservations.moduleOffBody")}
-        </p>
-        {canManageFloor && (
-          <Button asChild>
-            <Link href="/settings/modules">{t("reservations.openModules")}</Link>
-          </Button>
-        )}
       </div>
     );
   }
@@ -210,7 +198,7 @@ export default function ReservationsPage() {
           day={day}
           onDayChange={setDay}
           editing={view.editing}
-          canPlan={canPlan}
+          tableModes={tableModes}
           activeMapId={activeMapId}
           onActiveMapChange={setActiveMapId}
           onDone={(savedId) => {
@@ -238,6 +226,7 @@ export default function ReservationsPage() {
           tags={snapshot.tags}
           maps={maps}
           tables={tables}
+          modes={tableModes}
           activeMapId={activeMapId}
           onActiveMapChange={setActiveMapId}
           onDone={(saved) => {
@@ -274,6 +263,7 @@ export default function ReservationsPage() {
               tags={snapshot.tags}
               maps={maps}
               canPlan={canPlan}
+              canPickTables={tableModes.length > 0}
               canEdit={canEdit}
               isToday={isToday}
               now={now}
