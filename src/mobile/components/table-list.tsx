@@ -44,12 +44,13 @@ export function TableList() {
   const t = useT();
   const router = useRouter();
   const { tables, reservations, openOrders, links, maps, loading, error } = useFloorData();
-  // Gestione Sala Smart: the door ("Accoglienza") is one tap away
+  // The door ("Accoglienza") is one tap away: today's arrivals for whoever
+  // handles bookings, plus walk-ins and the waitlist with Gestione Sala Smart
   const { enabled: smartFloor } = useSmartFloor();
   const canSeat = usePermission("manage_tables");
   const canReserve = usePermission("manage_reservations");
-  const showHostStand = smartFloor && (canSeat || canReserve);
-  const waitlist = useWaitlist(showHostStand);
+  const showHostStand = canReserve || (smartFloor && canSeat);
+  const waitlist = useWaitlist(smartFloor && showHostStand);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [storedView, setStoredView] = useState<FloorView | null>(null);
@@ -109,7 +110,11 @@ export function TableList() {
             {showHostStand && (
               <Link
                 href={mRoutes.hostStand()}
-                aria-label={t("m.hostStandOpen", { count: waitlist.entries.length })}
+                aria-label={
+                  smartFloor
+                    ? t("m.hostStandOpen", { count: waitlist.entries.length })
+                    : t("m.hostStandOpenArrivals")
+                }
                 title={t("m.hostStand")}
                 className="relative flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
               >

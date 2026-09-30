@@ -6,6 +6,13 @@ import type { RestaurantTable } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
 import { STATUS_CONFIG, displayStatus } from "@/lib/floor/status";
 
+/** Gestione Sala Smart: the party booked on a table ("20:30 Rossi") */
+export interface TableCardBooking {
+  text: string;
+  title: string;
+  late: boolean;
+}
+
 interface TableCardProps {
   table: RestaurantTable;
   /** Labels of this table's open orders: split names, null = whole table */
@@ -13,8 +20,7 @@ interface TableCardProps {
   /** Names of linked tables/splits (empty = not linked) */
   linkedTo?: string[];
   onSelect: (table: RestaurantTable) => void;
-  /** Gestione Sala Smart: the party booked here ("20:30 Rossi") */
-  booking?: { text: string; title: string; late: boolean };
+  booking?: TableCardBooking;
 }
 
 /** Max split chips shown before collapsing the rest into an "…" chip */

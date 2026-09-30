@@ -63,17 +63,27 @@ export default function ReservationsPage() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeMapId, setActiveMapId] = useState<string | null>(null);
+  /** Sala → Accoglienza → "Modifica": the booking to open once the day is read */
+  const [editId, setEditId] = useState<string | null>(null);
   const { snapshot, maps, error, refresh } = useReservationsDay(day);
   const now = useNow(30_000);
 
-  // Sala → "Nuova prenotazione" lands here with ?new=1 (and maybe ?d=)
+  // Sala → Accoglienza lands here with ?new=1 or ?edit=<id> (and maybe ?d=)
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const d = q.get("d");
     if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setDay(d);
     if (q.get("new") === "1") setView({ kind: "form", editing: null });
+    const edit = q.get("edit");
+    if (edit) setEditId(edit);
     if (window.location.search) window.history.replaceState(null, "", "/prenotazioni");
   }, []);
+  useEffect(() => {
+    if (!editId || !snapshot) return;
+    const editing = snapshot.reservations.find((r) => r.id === editId);
+    if (editing) setView({ kind: "form", editing });
+    setEditId(null);
+  }, [editId, snapshot]);
 
   // a new day, a new selection
   useEffect(() => setSelected(new Set()), [day]);

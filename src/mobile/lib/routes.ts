@@ -1,6 +1,6 @@
 import { MOBILE_ROOT } from "@/lib/mobile-route";
 
-/** The "Accoglienza" screen's tabs (Gestione Sala Smart) */
+/** The "Accoglienza" screen's tabs (find + queue need Gestione Sala Smart) */
 export type HostStandTab = "find" | "queue" | "today";
 
 /**

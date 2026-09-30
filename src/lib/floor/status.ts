@@ -57,3 +57,26 @@ export function displayStatus(
 ): TableDisplayStatus {
   return status === "occupied" && hasOrder ? "ordered" : status;
 }
+
+/** The four states in the order the Sala shows them (legend and filter) */
+export const DISPLAY_STATUSES: TableDisplayStatus[] = [
+  "available",
+  "occupied",
+  "ordered",
+  "dirty",
+];
+
+/** How many tables are in each visual state: the Sala at a glance */
+export function countByStatus(
+  tables: { id: string; status: TableStatus }[],
+  hasOrder: (tableId: string) => boolean,
+): Record<TableDisplayStatus, number> {
+  const counts: Record<TableDisplayStatus, number> = {
+    available: 0,
+    occupied: 0,
+    ordered: 0,
+    dirty: 0,
+  };
+  for (const tb of tables) counts[displayStatus(tb.status, hasOrder(tb.id))] += 1;
+  return counts;
+}

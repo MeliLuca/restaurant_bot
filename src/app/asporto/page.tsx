@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { RotateCcw, ShoppingBag, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { NewDeliveryDialog } from "@/components/floor-plan/new-delivery-dialog";
+import { NewDeliveryDialog } from "@/components/takeaway/new-delivery-dialog";
 import { TakeawayBoard } from "@/components/takeaway/takeaway-board";
 import {
   fetchTakeawayOrders,

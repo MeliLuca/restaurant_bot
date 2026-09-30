@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  fetchOpenDineInOrders,
-  fetchOpenTakeaways,
-  fetchTodayReservations,
-} from "@/lib/api";
+import { fetchOpenDineInOrders, fetchTodayReservations } from "@/lib/api";
 import { fetchTableLinks } from "@/lib/floor/links";
 import { fetchFloorMaps } from "@/lib/floor/maps";
 import { fetchTablesWithTags, type TableWithTags } from "@/lib/settings-api";
@@ -26,7 +22,6 @@ interface FloorData {
   /** Tables including their feature tags (TV screen, accessible…) */
   tables: TableWithTags[];
   reservations: Reservation[];
-  takeaways: Order[];
   /** Open dine-in orders across all tables (split badges) */
   openOrders: Order[];
   /** Linked-table members (🔗 badges) */
@@ -41,7 +36,6 @@ interface FloorData {
 export function useFloorData(): FloorData {
   const [tables, setTables] = useState<TableWithTags[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [takeaways, setTakeaways] = useState<Order[]>([]);
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
   const [links, setLinks] = useState<TableLink[]>([]);
   const [maps, setMaps] = useState<FloorMap[]>([]);
@@ -50,17 +44,15 @@ export function useFloorData(): FloorData {
 
   const refresh = useCallback(async () => {
     try {
-      const [t, r, ta, oo, li, fm] = await Promise.all([
+      const [t, r, oo, li, fm] = await Promise.all([
         fetchTablesWithTags(),
         fetchTodayReservations(),
-        fetchOpenTakeaways(),
         fetchOpenDineInOrders(),
         fetchTableLinks(),
         fetchFloorMaps(),
       ]);
       setTables(t);
       setReservations(r);
-      setTakeaways(ta);
       setOpenOrders(oo);
       setLinks(li);
       setMaps(fm);
@@ -149,7 +141,6 @@ export function useFloorData(): FloorData {
   return {
     tables,
     reservations,
-    takeaways,
     openOrders,
     links,
     maps,

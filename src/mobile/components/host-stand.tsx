@@ -1,12 +1,13 @@
 "use client";
 
-// "Accoglienza" on the phone (Gestione Sala Smart): whoever is at the door
-// finds a table for a party walking in, runs the waitlist and sees today's
-// bookings. No planning here — assigning tables is done from a computer.
+// "Accoglienza" on the phone: whoever is at the door sees today's arrivals
+// and, with Gestione Sala Smart, finds a table for a party walking in and runs
+// the waitlist. No planning here — assigning tables is done from a computer.
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useListContext } from "@/components/reservations/list-context";
 import { ReservationList } from "@/components/reservations/reservation-list";
 import { useSeatFlow } from "@/components/reservations/seat-flow";
 import { tableNamesOf } from "@/components/reservations/format";
@@ -38,7 +39,8 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
   const now = useNow(30_000);
   const { tables, reservations, links, maps, openOrders, loading, refresh } = useFloorData();
   const waitlist = useWaitlist(enabled);
-  const floor = useWalkInFloor({ tables, reservations, links, maps, openOrders, now });
+  const floor = useWalkInFloor({ tables, reservations, links, maps, openOrders, now, enabled });
+  const list = useListContext({ tables, reservations, maps });
   const { matches, claims } = useWalkInQueue(floor, waitlist.entries);
   const [tab, setTab] = useState<HostStandTab>(initialTab);
   const [dialog, setDialog] = useState<{
@@ -55,9 +57,15 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
   }
 
   const active = reservations.filter((r) => r.status === "booked" || r.status === "seated");
+  // module off: only today's arrivals
+  const shown: HostStandTab = enabled ? tab : "today";
   const tabs: { value: HostStandTab; label: string }[] = [
-    { value: "find", label: t("walkIn.title") },
-    { value: "queue", label: t("queue.tab", { count: waitlist.entries.length }) },
+    ...(enabled
+      ? [
+          { value: "find" as const, label: t("walkIn.title") },
+          { value: "queue" as const, label: t("queue.tab", { count: waitlist.entries.length }) },
+        ]
+      : []),
     { value: "today", label: t("m.todayTab", { count: active.length }) },
   ];
 
@@ -65,15 +73,6 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
     setTab(next);
     // the tab is in the URL, so "back" from a table returns to it
     router.replace(mRoutes.hostStand(next));
-  }
-
-  if (!enabled) {
-    return (
-      <>
-        <MHeader title={t("m.hostStand")} backHref={mRoutes.tables()} />
-        <p className="p-4 text-sm text-muted-foreground">{t("m.smartFloorOff")}</p>
-      </>
-    );
   }
 
   return (
@@ -85,11 +84,11 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
             key={tb.value}
             type="button"
             role="tab"
-            aria-selected={tab === tb.value}
+            aria-selected={shown === tb.value}
             onClick={() => pickTab(tb.value)}
             className={cn(
               "flex h-11 flex-1 items-center justify-center rounded-lg px-2 text-sm font-medium transition-colors",
-              tab === tb.value
+              shown === tb.value
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent",
             )}
@@ -103,12 +102,12 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
         role="tabpanel"
         className={cn(
           "min-h-0 flex-1",
-          tab === "today" ? "flex flex-col p-3" : "overflow-y-auto",
+          shown === "today" ? "flex flex-col p-3" : "overflow-y-auto",
         )}
       >
-        {loading || !floor.ctx ? (
+        {loading || (shown !== "today" && !floor.ctx) ? (
           <p className="p-4 text-muted-foreground">{t("common.loading")}</p>
-        ) : tab === "find" ? (
+        ) : shown === "find" ? (
           <WalkInFinder
             floor={floor}
             reservations={reservations}
@@ -122,7 +121,7 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
               router.push(mRoutes.tables());
             }}
           />
-        ) : tab === "queue" ? (
+        ) : shown === "queue" ? (
           <WaitlistQueue
             floor={floor}
             entries={waitlist.entries}
@@ -135,10 +134,11 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
             onChanged={changed}
           />
         ) : (
+          list.ctx && (
           <ReservationList
             reservations={reservations}
-            ctx={floor.ctx}
-            tags={floor.tags}
+            ctx={list.ctx}
+            tags={list.tags}
             maps={maps}
             canPlan={false}
             canEdit={canEdit}
@@ -171,6 +171,7 @@ export function HostStand({ initialTab }: { initialTab: HostStandTab }) {
               }
             }}
           />
+          )
         )}
       </div>
 

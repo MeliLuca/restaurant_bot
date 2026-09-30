@@ -75,6 +75,7 @@ export interface WalkInFloor {
  * The floor as the walk-in engine sees it: the page's live tables and
  * bookings, plus the joinable-pair exceptions and the open bills (for
  * pre-conto and desserts), read again whenever a bill changes.
+ * `enabled` false (module off, or nobody here seats walk-ins) reads nothing.
  */
 export function useWalkInFloor({
   tables,
@@ -83,6 +84,7 @@ export function useWalkInFloor({
   maps,
   openOrders,
   now,
+  enabled = true,
 }: {
   tables: TableWithTags[];
   reservations: Reservation[];
@@ -91,19 +93,22 @@ export function useWalkInFloor({
   maps: FloorMap[];
   openOrders: Order[];
   now: number;
+  enabled?: boolean;
 }): WalkInFloor {
   const { settings } = useSmartFloor();
   const [joinRules, setJoinRules] = useState<TableJoinRule[] | null>(null);
   const [bills, setBills] = useState<OpenBill[] | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     fetchJoinRules()
       .then(setJoinRules)
       .catch(() => setJoinRules([]));
-  }, []);
+  }, [enabled]);
 
   const finishingIds = settings?.finishing_category_ids.join(",") ?? "";
   useEffect(() => {
+    if (!enabled) return;
     let live = true;
     fetchOpenBills(finishingIds ? finishingIds.split(",") : [])
       .then((b) => live && setBills(b))
@@ -111,7 +116,7 @@ export function useWalkInFloor({
     return () => {
       live = false;
     };
-  }, [openOrders, finishingIds]);
+  }, [openOrders, finishingIds, enabled]);
 
   const tags = useMemo(
     () =>
@@ -122,10 +127,10 @@ export function useWalkInFloor({
   );
   const ctx = useMemo(
     () =>
-      settings && joinRules && bills
+      enabled && settings && joinRules && bills
         ? buildFloorContext({ settings, tables, tags, reservations, joinRules, maps }, now)
         : null,
-    [settings, tables, tags, reservations, joinRules, maps, bills, now],
+    [enabled, settings, tables, tags, reservations, joinRules, maps, bills, now],
   );
   const finishing = useMemo(
     () =>
