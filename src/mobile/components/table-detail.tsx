@@ -118,7 +118,7 @@ export function TableDetail({ tableId }: { tableId: string }) {
             <ul className="text-sm text-muted-foreground">
               {o.order_items.slice(0, 4).map((it) => (
                 <li key={it.id} className="truncate">
-                  {it.quantity}× {menuLabelText(orderItemLabel(it.menu_items, "—"))}
+                  {it.quantity}× {menuLabelText(orderItemLabel(it.menu_items, "—", it.custom_name))}
                 </li>
               ))}
               {o.order_items.length > 4 && (

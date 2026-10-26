@@ -72,6 +72,14 @@ interface MenuManagerProps {
 /** How many result rows to render before asking for a "show more" click. */
 const PAGE_SIZE = 50;
 
+/** Optional cost input: "" = unknown (null), else a number ≥ 0; undefined = invalid */
+function parseCost(raw: string): number | null | undefined {
+  const s = raw.trim().replace(",", ".");
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : undefined;
+}
+
 export function MenuManager({
   categories,
   items,
@@ -688,6 +696,14 @@ function ItemRow({
             </span>
           )}
           <span className="truncate font-medium">{item.name}</span>
+          {item.is_custom && (
+            <span
+              title={t("ai.analytics.customBadgeHint")}
+              className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-xs font-medium text-amber-700"
+            >
+              {t("ai.analytics.customBadge")}
+            </span>
+          )}
         </div>
         <div className="truncate text-xs text-muted-foreground">
           {item.ingredients.length > 0
@@ -1032,11 +1048,13 @@ function IngredientDialog({
   const t = useT();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [cost, setCost] = useState("");
 
   useEffect(() => {
     if (!ingredient) return;
     setName(ingredient.name);
     setPrice(ingredient.price.toFixed(2));
+    setCost(ingredient.cost == null ? "" : Number(ingredient.cost).toFixed(2));
   }, [ingredient]);
 
   async function submit(e: React.FormEvent) {
@@ -1052,8 +1070,18 @@ function IngredientDialog({
       toast.error(t("menu.validIngredientPrice"));
       return;
     }
+    const parsedCost = parseCost(cost);
+    if (parsedCost === undefined) {
+      toast.error(t("ai.analytics.validCost"));
+      return;
+    }
     await run(
-      () => updateIngredient(ingredient.id, { name: trimmed, price: parsed }),
+      () =>
+        updateIngredient(ingredient.id, {
+          name: trimmed,
+          price: parsed,
+          cost: parsedCost,
+        }),
       t("menu.ingredientSaved", { name: trimmed }),
     );
     onClose();
@@ -1090,6 +1118,23 @@ function IngredientDialog({
             />
             <p className="text-xs text-muted-foreground">
               {t("menu.ingredientPriceHelp")}
+            </p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="ing-cost">{t("ai.analytics.costLabel")}</Label>
+            <Input
+              id="ing-cost"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+              type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              placeholder="—"
+              className="h-12"
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("ai.analytics.ingredientCostHelp")}
             </p>
           </div>
           <DialogFooter>
@@ -1134,6 +1179,7 @@ function MenuItemDialog({
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [codice, setCodice] = useState("");
+  const [cost, setCost] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [ingredientIds, setIngredientIds] = useState<string[]>([]);
   const [allowsVariations, setAllowsVariations] = useState(false);
@@ -1146,6 +1192,7 @@ function MenuItemDialog({
     setName(item?.name ?? "");
     setPrice(item ? item.price.toFixed(2) : "");
     setCodice(item?.codice ?? "");
+    setCost(item?.cost == null ? "" : Number(item.cost).toFixed(2));
     setCategoryId(item?.category_id ?? defaultCategoryId);
     setIngredientIds(item ? item.ingredients.map((g) => g.id) : []);
     setAllowsVariations(item?.allows_variations ?? false);
@@ -1187,6 +1234,11 @@ function MenuItemDialog({
       toast.error(t("menu.pickCategory"));
       return;
     }
+    const parsedCost = parseCost(cost);
+    if (parsedCost === undefined) {
+      toast.error(t("ai.analytics.validCost"));
+      return;
+    }
 
     const targetPrinterId = printerId === NO_PRINTER ? null : printerId;
     const trimmedCodice = codice.trim() || null;
@@ -1201,6 +1253,7 @@ function MenuItemDialog({
           target_printer_id: targetPrinterId,
           codice: trimmedCodice,
           allows_variations: allowsVariations,
+          cost: parsedCost,
         });
       } else {
         const maxSort = Math.max(
@@ -1217,6 +1270,7 @@ function MenuItemDialog({
           targetPrinterId,
           codice: trimmedCodice,
           allowsVariations,
+          cost: parsedCost,
         });
       }
       await setMenuItemIngredients(itemId, ingredientIds);
@@ -1284,16 +1338,35 @@ function MenuItemDialog({
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="item-codice">{t("menu.code")}</Label>
-            <Input
-              id="item-codice"
-              className="h-12"
-              value={codice}
-              onChange={(e) => setCodice(e.target.value)}
-              placeholder={t("menu.codePlaceholder")}
-              inputMode="numeric"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="item-codice">{t("menu.code")}</Label>
+              <Input
+                id="item-codice"
+                className="h-12"
+                value={codice}
+                onChange={(e) => setCodice(e.target.value)}
+                placeholder={t("menu.codePlaceholder")}
+                inputMode="numeric"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="item-cost">{t("ai.analytics.costLabel")}</Label>
+              <Input
+                id="item-cost"
+                className="h-12"
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="—"
+              />
+            </div>
+            <p className="col-span-2 -mt-2 text-xs text-muted-foreground">
+              {t("ai.analytics.costHelp")}
+            </p>
           </div>
 
           <div className="grid gap-2">

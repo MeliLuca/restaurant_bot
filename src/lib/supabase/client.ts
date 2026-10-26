@@ -20,8 +20,13 @@ function fetchWithTimeout(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  // Never let Next's data cache keep a query: on the server, a GET route
+  // handler would otherwise serve the first answer forever (seen with
+  // /api/ai/health reporting a module switch flipped long ago).
+  init = { ...init, cache: "no-store" };
+
   // a caller-supplied signal still wins; this only adds a ceiling
-  if (init?.signal) return fetch(input, init);
+  if (init.signal) return fetch(input, init);
 
   // AbortController rather than AbortSignal.timeout, deliberately:
   // postgrest-js retries any fetch rejection whose name is not "AbortError",

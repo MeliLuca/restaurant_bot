@@ -223,7 +223,7 @@ export function MoveBillForm({
           ) : (
             <ul className="flex min-h-0 flex-col gap-1.5 md:overflow-y-auto md:pr-1">
               {movable.map((i) => {
-                const label = orderItemLabel(i.menu_items, t("floor.itemFallback"));
+                const label = orderItemLabel(i.menu_items, t("floor.itemFallback"), i.custom_name);
                 const n = qty[i.id] ?? 0;
                 return (
                   <li

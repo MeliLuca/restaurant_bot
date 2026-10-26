@@ -70,7 +70,10 @@ export type OrderItemMenuRef = {
 export function orderItemLabel(
   menuItem: OrderItemMenuRef,
   fallbackName: string,
+  /** order_items.custom_name — a "Fuori menù" line reads as its own name */
+  customName?: string | null,
 ): MenuLabel {
+  if (customName) return { title: customName, ingredients: null };
   if (!menuItem) return { title: fallbackName, ingredients: null };
   return menuLabel(
     { name: menuItem.name, codice: menuItem.codice },

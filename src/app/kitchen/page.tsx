@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/use-translation";
+import { orderThreshold } from "@/lib/ai/kitchen/watch";
+import { useAiModule } from "@/stores/ai-store";
 import {
   useKitchenOrders,
   type KitchenOrder,
@@ -17,7 +19,9 @@ type StationFilter = "all" | Station;
 
 /** Minutes an order has been waiting drive the header colour: fresh → calm,
  * 10+ → warning, 20+ → alarm. Times restart per un-bumped item, so a bumped
- * order that gets a new round starts counting again. */
+ * order that gets a new round starts counting again. With the Assistente AI
+ * on, the alarm is its station threshold instead (the smallest among the
+ * stations still pending) and the warning half of it. */
 function waitingMinutes(order: KitchenOrder, now: number): number {
   const pending = order.items.filter((i) => !i.readyAt);
   const since = pending.length
@@ -31,6 +35,11 @@ export default function KitchenPage() {
   const { orders, loading, error, refresh, setItemReady, setOrderReady } =
     useKitchenOrders();
   const [station, setStation] = useState<StationFilter>("all");
+  const ai = useAiModule();
+  const thresholds =
+    ai.enabled && ai.settings
+      ? { CUCINA: ai.settings.kitchen_late_minutes, BAR: ai.settings.bar_late_minutes }
+      : null;
 
   // re-render every 30s so the elapsed-time badges keep counting
   const [now, setNow] = useState(() => Date.now());
@@ -104,6 +113,9 @@ export default function KitchenPage() {
         <div className="grid content-start gap-3 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {visible.map((order) => {
             const minutes = waitingMinutes(order, now);
+            const limit = thresholds ? orderThreshold(order, thresholds) : null;
+            const alarm = limit != null ? minutes >= limit : minutes >= 20;
+            const warning = limit != null ? minutes >= limit / 2 : minutes >= 10;
             const readyCount = order.items.filter((i) => i.readyAt).length;
             return (
               <div
@@ -113,9 +125,9 @@ export default function KitchenPage() {
                 <div
                   className={cn(
                     "flex items-center justify-between gap-2 px-3 py-2 text-sm font-semibold",
-                    minutes >= 20
+                    alarm
                       ? "bg-red-500 text-white"
-                      : minutes >= 10
+                      : warning
                         ? "bg-amber-500 text-white"
                         : "bg-muted",
                   )}

@@ -177,7 +177,7 @@ export function TableActionsDialog({
                         >
                           {i.quantity} ×{" "}
                           {menuLabelText(
-                            orderItemLabel(i.menu_items, t("floor.itemFallback")),
+                            orderItemLabel(i.menu_items, t("floor.itemFallback"), i.custom_name),
                           )}
                         </span>
                       ))}

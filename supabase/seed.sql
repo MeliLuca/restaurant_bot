@@ -1335,14 +1335,14 @@ insert into roles (id, name, permissions) values
   ('70000000-0000-0000-0000-000000000001', 'Admin',
    array['manage_tables','manage_reservations','take_orders','checkout_orders','manage_staff',
          'manage_menu','manage_floor','manage_availability','view_stats','manage_printers',
-         'override_price','plan_floor','floor_alerts']),
+         'override_price','plan_floor','floor_alerts','use_ai']),
   ('70000000-0000-0000-0000-000000000002', 'Host',
    array['manage_tables','manage_reservations']),
   ('70000000-0000-0000-0000-000000000003', 'Server',
    array['manage_tables','take_orders','checkout_orders']),
   -- also created by the smart_floor migration (same id), for existing DBs
   ('70000000-0000-0000-0000-000000000004', 'Sala Manager',
-   array['manage_tables','manage_reservations','plan_floor','floor_alerts'])
+   array['manage_tables','manage_reservations','plan_floor','floor_alerts','use_ai'])
 on conflict (id) do nothing;
 
 insert into app_users (id, name, role_id, pin_hash) values

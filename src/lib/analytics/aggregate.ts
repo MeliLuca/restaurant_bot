@@ -1,8 +1,12 @@
 import type { MenuItem, ReservationRow } from "@/lib/database.types";
 import type { AnalyticsOrder } from "@/lib/analytics-api";
-import type { ItemStat } from "@/lib/stats-api";
+import { rankItems, serviceDayEnd, type ItemStat } from "@/lib/stats-api";
 import { addedIngredientsCharges, toCents } from "@/lib/money";
-import { serviceDayOf, type ServiceDateRange } from "@/lib/analytics/date-range";
+import {
+  previousPeriod,
+  serviceDayOf,
+  type ServiceDateRange,
+} from "@/lib/analytics/date-range";
 
 // Pure aggregation over already-fetched rows. Math in integer cents (like
 // lib/money.ts); only status === "paid" orders count toward revenue, matching
@@ -445,5 +449,475 @@ export function reservationStats(
     coversPerNight: Array.from(covers.values()).sort(
       (a, b) => a.date.getTime() - b.date.getTime(),
     ),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Table rotation & revenue per table (Assistente AI → Analisi)
+// ---------------------------------------------------------------------------
+
+export interface TableRef {
+  id: string;
+  name: string;
+  capacity: number;
+  mapName: string | null;
+}
+
+export interface TableStatRow {
+  tableId: string;
+  tableName: string;
+  mapName: string | null;
+  capacity: number;
+  /** seatings: a party's splits/subtables count once */
+  bills: number;
+  rotationsPerService: number;
+  covers: number;
+  revenue: number;
+  revenuePerCover: number | null;
+  avgMinutes: number | null;
+  revenuePerTableHour: number | null;
+  revenuePerSeatHour: number | null;
+  share: number;
+}
+
+export interface WeekdayTableStat {
+  weekday: number; // 0 = Sunday … 6 = Saturday, of the SERVICE day
+  openDays: number;
+  revenue: number;
+  bills: number;
+  covers: number;
+  /** seatings across the whole room per open service day */
+  seatingsPerService: number;
+}
+
+export interface TableStatsResult {
+  /** service days in range (after the weekday filter) */
+  days: number;
+  /** …of which the venue had at least one paid order: the rotation base */
+  openDays: number;
+  /** Σ open span of those days (first opened_at → last closed_at, dine-in) */
+  openHours: number;
+  tables: TableStatRow[];
+  totals: {
+    revenue: number;
+    bills: number;
+    covers: number;
+    avgMinutes: number | null;
+    revenuePerCover: number | null;
+    rotationsPerService: number;
+    occupiedHours: number;
+  };
+  byWeekday: WeekdayTableStat[];
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const ratio = (num: number, den: number) => (den > 0 ? num / den : null);
+const money = (cents: number | null) => (cents === null ? null : Math.round(cents) / 100);
+
+function inRange(iso: string, range: ServiceDateRange): boolean {
+  const t = new Date(iso).getTime();
+  return t >= range.start.getTime() && t < range.end.getTime();
+}
+
+/** Service days [start, end) of the range, optionally one weekday only. */
+function serviceDaysOf(range: ServiceDateRange, weekday: number | null): Date[] {
+  const days: Date[] = [];
+  for (let d = serviceDayOf(range.start); d < range.end; d = nextBucket(d, "day")) {
+    if (weekday === null || d.getDay() === weekday) days.push(d);
+  }
+  return days;
+}
+
+interface Seating {
+  tableId: string;
+  day: string; // service-day key
+  weekday: number;
+  orderIds: Set<string>;
+  start: number;
+  end: number; // ms; = start while no order of the party has closed_at
+  cents: number;
+  covers: number;
+}
+
+/**
+ * Per-table rotation and revenue over PAID DINE-IN orders opened in `range`
+ * (optionally on one service weekday, 0 = Sunday).
+ *
+ * Definitions, chosen to match the rest of /analytics:
+ * - Revenue = Σ orders.total (what the table paid, tax included) — the same
+ *   figure as bucketRevenue's dineInTotal, so the Tavoli total equals the
+ *   Sala revenue on the Revenue tab. Line revenue (unit_price × quantity, as
+ *   rankItems) is what productStats uses; the two differ by the tax.
+ * - A seating is one party: the paid orders of one table whose
+ *   [opened_at, closed_at] overlap, or that were split off one another
+ *   (parent_order_id). Splits/subtables of the same party count once.
+ * - Occupied time = Σ seating durations (last closed_at − first opened_at),
+ *   like turnoverStats; seatings without a closed_at add no time.
+ * - rotationsPerService = seatings / service days on which the venue had any
+ *   paid order (a closed night is not a slow night).
+ * - Seat-hours = capacity × Σ open spans, the span of a service day being the
+ *   first opened_at → last closed_at of that day's paid dine-in orders
+ *   (clipped to the 6 AM day end).
+ * Tables without a bill are listed too (zeros), so dead tables show up.
+ */
+export function tableStats(
+  orders: AnalyticsOrder[],
+  tables: TableRef[],
+  range: ServiceDateRange,
+  weekday: number | null = null,
+): TableStatsResult {
+  const days = serviceDaysOf(range, weekday);
+  const dayKeys = new Set(days.map((d) => bucketKey(d, "day")));
+
+  // Orders in the selected service days; open days need any paid order
+  const openDayKeys = new Set<string>();
+  const dineIn: { o: AnalyticsOrder; day: Date; key: string }[] = [];
+  for (const o of orders) {
+    if (o.status !== "paid" || !inRange(o.opened_at, range)) continue;
+    const day = serviceDayOf(new Date(o.opened_at));
+    const key = bucketKey(day, "day");
+    if (!dayKeys.has(key)) continue;
+    openDayKeys.add(key);
+    if (o.order_type === "dine_in" && o.table_id) dineIn.push({ o, day, key });
+  }
+
+  // Open span per service day (dine-in), clipped to the day's end
+  const spans = new Map<string, { start: number; end: number }>();
+  for (const { o, day, key } of dineIn) {
+    const start = new Date(o.opened_at).getTime();
+    const closed = o.closed_at ? new Date(o.closed_at).getTime() : start;
+    const end = Math.min(closed, serviceDayEnd(day).getTime());
+    const s = spans.get(key);
+    if (!s) spans.set(key, { start, end: Math.max(start, end) });
+    else {
+      s.start = Math.min(s.start, start);
+      s.end = Math.max(s.end, end);
+    }
+  }
+  let openMs = 0;
+  spans.forEach((s) => (openMs += s.end - s.start));
+
+  // Seatings: per table, sweep the orders by opened_at and merge overlaps
+  const byTable = new Map<string, typeof dineIn>();
+  for (const entry of dineIn) {
+    const list = byTable.get(entry.o.table_id!) ?? [];
+    list.push(entry);
+    byTable.set(entry.o.table_id!, list);
+  }
+  const seatings: Seating[] = [];
+  byTable.forEach((list, tableId) => {
+    list.sort(
+      (a, b) => new Date(a.o.opened_at).getTime() - new Date(b.o.opened_at).getTime(),
+    );
+    let cur: Seating | null = null;
+    for (const { o, day, key } of list) {
+      const start = new Date(o.opened_at).getTime();
+      const end = o.closed_at ? Math.max(start, new Date(o.closed_at).getTime()) : start;
+      const sameParty =
+        cur !== null &&
+        cur.day === key &&
+        (start < cur.end || (!!o.parent_order_id && cur.orderIds.has(o.parent_order_id)));
+      if (cur && sameParty) {
+        cur.orderIds.add(o.id);
+        cur.end = Math.max(cur.end, end);
+        cur.cents += toCents(o.total);
+        cur.covers += o.covers ?? 0;
+      } else {
+        cur = {
+          tableId,
+          day: key,
+          weekday: day.getDay(),
+          orderIds: new Set([o.id]),
+          start,
+          end,
+          cents: toCents(o.total),
+          covers: o.covers ?? 0,
+        };
+        seatings.push(cur);
+      }
+    }
+  });
+
+  const openDays = openDayKeys.size;
+  const acc = new Map<string, { bills: number; cents: number; covers: number; ms: number; timed: number }>();
+  for (const s of seatings) {
+    const e = acc.get(s.tableId) ?? { bills: 0, cents: 0, covers: 0, ms: 0, timed: 0 };
+    e.bills += 1;
+    e.cents += s.cents;
+    e.covers += s.covers;
+    if (s.end > s.start) {
+      e.ms += s.end - s.start;
+      e.timed += 1;
+    }
+    acc.set(s.tableId, e);
+  }
+
+  const totalCents = seatings.reduce((sum, s) => sum + s.cents, 0);
+  const known = new Map(tables.map((t) => [t.id, t]));
+  // a table deleted since still has its history
+  acc.forEach((_, id) => {
+    if (!known.has(id)) known.set(id, { id, name: "—", capacity: 0, mapName: null });
+  });
+
+  const rows: TableStatRow[] = Array.from(known.values()).map((t) => {
+    const e = acc.get(t.id) ?? { bills: 0, cents: 0, covers: 0, ms: 0, timed: 0 };
+    const hours = e.ms / 3600000;
+    const seatHours = (t.capacity * openMs) / 3600000;
+    return {
+      tableId: t.id,
+      tableName: t.name,
+      mapName: t.mapName,
+      capacity: t.capacity,
+      bills: e.bills,
+      rotationsPerService: openDays > 0 ? round2(e.bills / openDays) : 0,
+      covers: e.covers,
+      revenue: e.cents / 100,
+      revenuePerCover: money(ratio(e.cents, e.covers)),
+      avgMinutes: e.timed > 0 ? Math.round(e.ms / e.timed / 60000) : null,
+      revenuePerTableHour: money(ratio(e.cents, hours)),
+      revenuePerSeatHour: money(ratio(e.cents, seatHours)),
+      share: totalCents > 0 ? e.cents / totalCents : 0,
+    };
+  });
+  rows.sort((a, b) => b.revenue - a.revenue || b.bills - a.bills || a.tableName.localeCompare(b.tableName));
+
+  // By weekday: open days per weekday from the open-day keys
+  const openPerWeekday = new Array<number>(7).fill(0);
+  days.forEach((d) => {
+    if (openDayKeys.has(bucketKey(d, "day"))) openPerWeekday[d.getDay()] += 1;
+  });
+  const wk = Array.from({ length: 7 }, () => ({ cents: 0, bills: 0, covers: 0 }));
+  for (const s of seatings) {
+    wk[s.weekday].cents += s.cents;
+    wk[s.weekday].bills += 1;
+    wk[s.weekday].covers += s.covers;
+  }
+
+  const timed = seatings.filter((s) => s.end > s.start);
+  const occupiedMs = timed.reduce((sum, s) => sum + (s.end - s.start), 0);
+  const totalCovers = seatings.reduce((sum, s) => sum + s.covers, 0);
+  const usedTables = rows.filter((r) => r.bills > 0).length;
+  return {
+    days: days.length,
+    openDays,
+    openHours: round2(openMs / 3600000),
+    tables: rows,
+    totals: {
+      revenue: totalCents / 100,
+      bills: seatings.length,
+      covers: totalCovers,
+      avgMinutes: timed.length > 0 ? Math.round(occupiedMs / timed.length / 60000) : null,
+      revenuePerCover: money(ratio(totalCents, totalCovers)),
+      // per table that seated anyone, so 90 tables with 3 busy ones isn't ~0
+      rotationsPerService:
+        openDays > 0 && usedTables > 0 ? round2(seatings.length / openDays / usedTables) : 0,
+      occupiedHours: round2(occupiedMs / 3600000),
+    },
+    byWeekday: wk.map((w, i) => ({
+      weekday: i,
+      openDays: openPerWeekday[i],
+      revenue: w.cents / 100,
+      bills: w.bills,
+      covers: w.covers,
+      seatingsPerService: openPerWeekday[i] > 0 ? round2(w.bills / openPerWeekday[i]) : 0,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Revenue & margin per product (Assistente AI → Analisi)
+// ---------------------------------------------------------------------------
+
+export interface ProductStatRow {
+  menuItemId: string;
+  name: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  isCoperto: boolean;
+  /** a "Fuori menù" placeholder: every off-menu dish of its category */
+  isCustom: boolean;
+  quantity: number;
+  revenue: number;
+  share: number;
+  prevQuantity: number;
+  prevRevenue: number;
+  trend: number | null;
+  unitCost: number | null;
+  /** cost of the add-ons with a known cost included */
+  totalCost: number | null;
+  margin: number | null;
+  foodCostPct: number | null;
+  /** engineerMenu quadrant; null for the coperto (a charge, not a dish) */
+  class: Quadrant | null;
+}
+
+export interface ProductStatsResult {
+  days: number;
+  openDays: number;
+  products: ProductStatRow[];
+  totals: {
+    revenue: number;
+    quantity: number;
+    prevRevenue: number;
+    trend: number | null;
+    /** over the products with a known cost only */
+    costedRevenue: number;
+    cost: number;
+    margin: number;
+    foodCostPct: number | null;
+  };
+  /** share of (non-coperto) revenue whose cost is known, 0..1 */
+  costCoverage: number;
+}
+
+interface LineCost {
+  /** null = the dish has no cost (or is a "Fuori menù" line) */
+  cents: number | null;
+}
+
+/** Food cost of one line: (dish cost + Σ added ingredients' cost) × qty.
+ * An add-on without a cost counts 0 — the dish cost is what makes a line
+ * "costed"; add-on costs only refine it. Costs are CURRENT values (not
+ * snapshotted), like a removal's swap credit in modifierStats. */
+function lineCost(line: AnalyticsOrder["order_items"][number]): LineCost {
+  const item = line.menu_items;
+  if (!item || item.is_custom || item.cost === null || item.cost === undefined) {
+    return { cents: null };
+  }
+  let unit = toCents(Number(item.cost));
+  for (const m of line.order_item_modifiers) {
+    if (!m.is_removal && m.ingredients?.cost != null) unit += toCents(Number(m.ingredients.cost));
+  }
+  return { cents: unit * line.quantity };
+}
+
+function paidInDays(
+  orders: AnalyticsOrder[],
+  range: ServiceDateRange,
+  weekday: number | null,
+): { kept: AnalyticsOrder[]; days: number; openDays: number } {
+  const days = serviceDaysOf(range, weekday);
+  const keys = new Set(days.map((d) => bucketKey(d, "day")));
+  const open = new Set<string>();
+  const kept = orders.filter((o) => {
+    if (o.status !== "paid" || !inRange(o.opened_at, range)) return false;
+    const key = bucketKey(serviceDayOf(new Date(o.opened_at)), "day");
+    if (!keys.has(key)) return false;
+    open.add(key);
+    return true;
+  });
+  return { kept, days: days.length, openDays: open.size };
+}
+
+/**
+ * Per-product quantity, revenue, trend and (where a cost is set) margin over
+ * PAID orders — dine-in and take-away — opened in `range`, optionally one
+ * service weekday (0 = Sunday) and one category. Unlike rankItems' live view
+ * (paid + open), a range analysis counts what was actually cashed.
+ *
+ * - Revenue per line = unit_price × quantity via rankItems (unit_price is
+ *   authoritative: modifiers already baked in, never re-derived).
+ * - Previous range: same length, immediately before, same filters.
+ * - class: engineerMenu's quadrant over the selection, coperto left out — it
+ *   stays in revenue (as on the Menu tab) but is never a dish to judge, and
+ *   is left out of costCoverage for the same reason.
+ * - share is within the selection (the category, when filtered).
+ */
+export function productStats(
+  orders: AnalyticsOrder[],
+  prevOrders: AnalyticsOrder[],
+  range: ServiceDateRange,
+  opts: {
+    weekday?: number | null;
+    categoryId?: string | null;
+    categoryNames?: Map<string, string>;
+  } = {},
+): ProductStatsResult {
+  const weekday = opts.weekday ?? null;
+  const cur = paidInDays(orders, range, weekday);
+  const prev = paidInDays(prevOrders, previousPeriod(range), weekday);
+
+  const inCategory = (categoryId: string | null) =>
+    !opts.categoryId || categoryId === opts.categoryId;
+  const ranked = rankItems(cur.kept).filter((i) => inCategory(i.categoryId));
+  const prevRanked = new Map(rankItems(prev.kept).map((i) => [i.menuItemId, i]));
+
+  // Cost and flags per menu item, from the lines
+  const meta = new Map<string, { costCents: number | null; unitCost: number | null; coperto: boolean; custom: boolean }>();
+  for (const o of cur.kept) {
+    for (const line of o.order_items) {
+      const item = line.menu_items;
+      const m = meta.get(line.menu_item_id) ?? {
+        costCents: 0 as number | null,
+        unitCost:
+          item && !item.is_custom && item.cost != null ? Number(item.cost) : null,
+        coperto: !!item?.is_coperto,
+        custom: !!item?.is_custom,
+      };
+      const c = lineCost(line);
+      m.costCents = c.cents === null || m.costCents === null ? null : m.costCents + c.cents;
+      meta.set(line.menu_item_id, m);
+    }
+  }
+
+  const engineered = engineerMenu(
+    ranked.filter((i) => !meta.get(i.menuItemId)?.coperto),
+  );
+  const quadrant = new Map(engineered.items.map((i) => [i.menuItemId, i.quadrant]));
+  const totalCents = ranked.reduce((s, i) => s + toCents(i.revenue), 0);
+
+  let costedCents = 0;
+  let costCents = 0;
+  let foodCents = 0;
+  const products: ProductStatRow[] = ranked.map((i) => {
+    const m = meta.get(i.menuItemId);
+    const cents = toCents(i.revenue);
+    const p = prevRanked.get(i.menuItemId);
+    const cost = m?.costCents ?? null;
+    if (!m?.coperto) foodCents += cents;
+    if (cost !== null && !m?.coperto) {
+      costedCents += cents;
+      costCents += cost;
+    }
+    return {
+      menuItemId: i.menuItemId,
+      name: i.name,
+      categoryId: i.categoryId,
+      categoryName: i.categoryId ? (opts.categoryNames?.get(i.categoryId) ?? null) : null,
+      isCoperto: !!m?.coperto,
+      isCustom: !!m?.custom,
+      quantity: i.quantity,
+      revenue: i.revenue,
+      share: totalCents > 0 ? cents / totalCents : 0,
+      prevQuantity: p?.quantity ?? 0,
+      prevRevenue: p?.revenue ?? 0,
+      trend: percentChange(i.revenue, p?.revenue ?? 0),
+      unitCost: m?.unitCost ?? null,
+      totalCost: cost === null ? null : cost / 100,
+      margin: cost === null ? null : (cents - cost) / 100,
+      foodCostPct: cost === null || cents === 0 ? null : cost / cents,
+      class: m?.coperto ? null : (quadrant.get(i.menuItemId) ?? null),
+    };
+  });
+  products.sort((a, b) => b.revenue - a.revenue || b.quantity - a.quantity);
+
+  const prevCents = Array.from(prevRanked.values())
+    .filter((i) => inCategory(i.categoryId))
+    .reduce((s, i) => s + toCents(i.revenue), 0);
+  return {
+    days: cur.days,
+    openDays: cur.openDays,
+    products,
+    totals: {
+      revenue: totalCents / 100,
+      quantity: ranked.reduce((s, i) => s + i.quantity, 0),
+      prevRevenue: prevCents / 100,
+      trend: percentChange(totalCents, prevCents),
+      costedRevenue: costedCents / 100,
+      cost: costCents / 100,
+      margin: (costedCents - costCents) / 100,
+      foodCostPct: costedCents > 0 ? costCents / costedCents : null,
+    },
+    costCoverage: foodCents > 0 ? costedCents / foodCents : 0,
   };
 }

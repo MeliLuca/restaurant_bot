@@ -49,7 +49,7 @@ type PayMode = "all" | "even" | "items";
 function itemDisplayName(item: OpenOrder["items"][number], t: TFn): string {
   // one line, so a code-named item carries its toppings inline — "1202" alone
   // would leave the picker unable to tell two pizzas apart
-  const base = menuLabelText(orderItemLabel(item.menu_items, t("floor.itemFallback")));
+  const base = menuLabelText(orderItemLabel(item.menu_items, t("floor.itemFallback"), item.custom_name));
   return item.fraction_of ? `${base} (1/${item.fraction_of})` : base;
 }
 

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { isMobileRoute } from "@/lib/mobile-route";
 import { FloorAlerts } from "@/components/smart-floor/floor-alerts";
+import { AiKitchenAlerts } from "@/components/ai/kitchen-alerts";
 import { Sidebar } from "./sidebar";
 
 /**
@@ -30,6 +31,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       {/* Gestione Sala Smart: late / still-occupied bookings (floor_alerts) */}
       <FloorAlerts />
+      {/* Assistente AI prototype: items waiting too long (floor_alerts) */}
+      <AiKitchenAlerts />
     </div>
   );
 }

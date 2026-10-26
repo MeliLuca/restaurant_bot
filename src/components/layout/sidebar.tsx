@@ -12,6 +12,7 @@ import {
   ReceiptText,
   Settings,
   ShoppingBag,
+  Sparkles,
   TrendingUp,
   UserRound,
   UtensilsCrossed,
@@ -21,6 +22,7 @@ import type { Permission } from "@/lib/auth/permissions";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
 import { useT } from "@/lib/i18n/use-translation";
 import { useAuthStore } from "@/stores/auth-store";
+import { useAiModule } from "@/stores/ai-store";
 import { NavBadge, useNavBadges } from "./nav-badges";
 
 const NAV_ITEMS: {
@@ -28,6 +30,8 @@ const NAV_ITEMS: {
   labelKey: TranslationKey;
   icon: typeof LayoutGrid;
   permission?: Permission;
+  /** Shown only while the Assistente AI prototype is on; desktop rail only */
+  aiModule?: boolean;
 }[] = [
   { href: "/floor-plan", labelKey: "nav.floorPlan", icon: LayoutGrid },
   {
@@ -42,6 +46,7 @@ const NAV_ITEMS: {
   { href: "/chat", labelKey: "nav.chat", icon: MessageCircle },
   { href: "/stats", labelKey: "nav.stats", icon: BarChart3, permission: "view_stats" },
   { href: "/analytics", labelKey: "nav.analytics", icon: TrendingUp, permission: "view_stats" },
+  { href: "/assistente", labelKey: "nav.assistant", icon: Sparkles, permission: "use_ai", aiModule: true },
   { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
@@ -51,10 +56,15 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
   const badges = useNavBadges();
+  const ai = useAiModule();
 
   const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.permission || (user?.permissions.includes(item.permission) ?? false),
+    (item) =>
+      (!item.permission || (user?.permissions.includes(item.permission) ?? false)) &&
+      (!item.aiModule || ai.enabled),
   );
+  // the prototype is desktop only: the phone bottom nav never shows it
+  const phoneItems = visibleItems.filter((item) => !item.aiModule);
 
   const badgeFor = (href: string) => {
     const badge = badges.get(href);
@@ -66,7 +76,7 @@ export function Sidebar() {
     {/* Phones: the side rail would eat a quarter of the width — swap it for a
         fixed bottom nav; <main> reserves the height via pb-14 sm:pb-0 */}
     <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t bg-card print:hidden sm:hidden">
-      {visibleItems.map(({ href, labelKey, icon: Icon }) => {
+      {phoneItems.map(({ href, labelKey, icon: Icon }) => {
         const active = pathname.startsWith(href);
         return (
           <Link

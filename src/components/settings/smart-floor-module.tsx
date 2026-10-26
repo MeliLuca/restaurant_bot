@@ -361,7 +361,7 @@ export function SmartFloorModule({
   );
 }
 
-function NumberField({
+export function NumberField({
   id,
   label,
   suffix,
@@ -407,7 +407,7 @@ function NumberField({
   );
 }
 
-function ModuleSwitch({
+export function ModuleSwitch({
   checked,
   disabled,
   label,

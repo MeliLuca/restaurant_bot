@@ -80,6 +80,12 @@ export const PERMISSIONS = [
     label: "View stats",
     description: "See the night's sales totals, items ordered, and past bills",
   },
+  {
+    key: "use_ai",
+    label: "AI assistant (prototype)",
+    description:
+      "Open the Assistente AI page: write orders, find tables, kitchen delays, table and product analysis",
+  },
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number]["key"];

@@ -82,6 +82,7 @@ import { TakeawayCapacityBanner } from "@/components/takeaway/capacity-banner";
 import { TakeawayCaption } from "@/components/takeaway/takeaway-caption";
 import { PickupTimeControl } from "@/components/takeaway/pickup-time-control";
 import { TakeawayPicker } from "./takeaway-picker";
+import { OrderAssistButton } from "@/components/ai/order-dialog";
 
 /** Selected variations, indented right under their parent line. Additions show
  * their list price as detail (the line price carries the diminishing-scaled
@@ -596,6 +597,7 @@ export function TicketPanel({
                 const label = orderItemLabel(
                   i.menu_items,
                   t("floor.itemFallback"),
+                  i.custom_name,
                 );
                 const name =
                   label.title + (i.fraction_of ? ` (1/${i.fraction_of})` : "");
@@ -886,6 +888,8 @@ export function TicketPanel({
         </div>
 
         <div className="flex flex-col gap-2">
+          {/* AI prototype: free text → pending lines (self-gated) */}
+          {hasTarget && <OrderAssistButton disabled={busy} />}
           <Button
             size="lg"
             className="h-14 text-base"

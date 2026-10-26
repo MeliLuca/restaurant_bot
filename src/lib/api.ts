@@ -265,13 +265,15 @@ export async function fetchMenuItems(): Promise<MenuItemView[]> {
     .from("menu_items")
     .select("*, ingredients(name, is_available)")
     .eq("is_available", true)
+    // "Fuori menù" placeholders (AI prototype) are never tapped from the menu
+    .eq("is_custom", false)
     .order("sort_order");
   if (error) throw new Error(error.message);
   return (data as unknown as (MenuItem & {
     ingredients: { name: string; is_available: boolean }[];
   })[])
     .filter((item) => item.ingredients.every((i) => i.is_available))
-    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice, is_coperto, allows_variations, ingredients }) => ({
+    .map(({ id, category_id, name, price, is_available, sort_order, target_printer_id, codice, is_coperto, allows_variations, is_custom, cost, ingredients }) => ({
       id,
       category_id,
       name,
@@ -282,6 +284,8 @@ export async function fetchMenuItems(): Promise<MenuItemView[]> {
       codice,
       is_coperto,
       allows_variations,
+      is_custom,
+      cost,
       // the listino's ingredienti column, for the caption under the dish name
       ingredients: ingredients.map((i) => i.name),
     }));
@@ -641,6 +645,8 @@ export interface TicketLineInput {
   quantity: number;
   /** Note rapide picked for this line; stored comma-joined in order_items.notes */
   notes?: string[];
+  /** "Fuori menù" line's own name (order_items.custom_name) */
+  customName?: string;
   /** Ingredients added to / removed from this line */
   modifiers?: Array<{
     ingredientId: string;
@@ -674,6 +680,7 @@ async function insertOrderItems(
         // snapshot the price actually charged per unit, modifiers included
         unit_price: unitPriceWithModifiers(l.unitPrice, l.modifiers ?? []),
         notes: l.notes?.length ? l.notes.join(", ") : null,
+        custom_name: l.customName?.trim() || null,
       })),
     )
     .select("id");

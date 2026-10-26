@@ -204,16 +204,18 @@ export async function createIngredient(
   if (error) throw new Error(error.message);
 }
 
-/** Rename an ingredient or reprice it as an add-on (0 = free to add). */
+/** Rename an ingredient, reprice it as an add-on (0 = free to add) or set
+ * its optional cost per added portion (null = unknown; margin analysis). */
 export async function updateIngredient(
   ingredientId: string,
-  fields: { name?: string; price?: number },
+  fields: { name?: string; price?: number; cost?: number | null },
 ): Promise<void> {
   const { error } = await getSupabase()
     .from("ingredients")
     .update({
       ...(fields.name !== undefined ? { name: fields.name.trim() } : {}),
       ...(fields.price !== undefined ? { price: fields.price } : {}),
+      ...(fields.cost !== undefined ? { cost: fields.cost } : {}),
     })
     .eq("id", ingredientId);
   if (error) throw new Error(error.message);
@@ -328,6 +330,8 @@ export async function createMenuItem(item: {
   targetPrinterId: string | null;
   codice: string | null;
   allowsVariations: boolean;
+  /** optional food cost of one portion (null = unknown) */
+  cost?: number | null;
 }): Promise<string> {
   const { data, error } = await getSupabase()
     .from("menu_items")
@@ -339,6 +343,7 @@ export async function createMenuItem(item: {
       target_printer_id: item.targetPrinterId,
       codice: item.codice,
       allows_variations: item.allowsVariations,
+      cost: item.cost ?? null,
     })
     .select("id")
     .single();
@@ -356,6 +361,8 @@ export async function updateMenuItem(
     target_printer_id?: string | null;
     codice?: string | null;
     allows_variations?: boolean;
+    /** optional food cost of one portion (null = unknown) */
+    cost?: number | null;
   },
 ): Promise<void> {
   const { error } = await getSupabase()

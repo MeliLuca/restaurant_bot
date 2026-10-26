@@ -6,18 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SettingsNav } from "@/components/settings/settings-nav";
 import { SmartFloorModule } from "@/components/settings/smart-floor-module";
+import { AiModule } from "@/components/settings/ai-module";
 import { fetchCategories } from "@/lib/api";
 import { fetchTableTags } from "@/lib/settings-api";
 import type { Category, TableTag } from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
 import { usePermission } from "@/stores/auth-store";
 import { useSmartFloor, useSmartFloorStore } from "@/stores/smart-floor-store";
+import { useAiModule } from "@/stores/ai-store";
 
 export default function ModulesSettingsPage() {
   const t = useT();
   const canManage = usePermission("manage_floor");
   const { settings, error: settingsError } = useSmartFloor();
   const refreshSettings = useSmartFloorStore((s) => s.refresh);
+  // Assistente AI prototype: only in a build that carries it
+  const ai = useAiModule();
   const [tags, setTags] = useState<TableTag[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +85,8 @@ export default function ModulesSettingsPage() {
           onChanged={refresh}
         />
       )}
+
+      {canManage && ai.available && ai.settings && <AiModule settings={ai.settings} />}
     </div>
   );
 }

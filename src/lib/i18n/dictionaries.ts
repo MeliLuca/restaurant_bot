@@ -5,6 +5,9 @@
 // Keys are looked up by dotted path (e.g. "floor.status.available") and may
 // contain {name}-style placeholders interpolated by useT().
 
+// The Assistente AI prototype's strings live in their own files (one per task)
+import { aiEn, aiIt } from "./ai";
+
 export const it = {
   common: {
     cancel: "Annulla",
@@ -40,6 +43,7 @@ export const it = {
     takeawaysOpen: "Asporti aperti: {count}",
     takeawaysLate: "Asporti aperti: {count}, in ritardo: {late}",
     reservationsLate: "Prenotazioni in ritardo: {count}",
+    assistant: "Assistente",
     brand: "Trattoria",
   },
   m: {
@@ -1718,6 +1722,11 @@ export const it = {
       label: "Vedi statistiche",
       description: "Vedi totali di vendita, voci ordinate e conti passati",
     },
+    use_ai: {
+      label: "Assistente AI (prototipo)",
+      description:
+        "Apri la pagina Assistente AI: scrivere ordini, trovare tavoli, ritardi in cucina, analisi di tavoli e prodotti",
+    },
   },
   printQueue: {
     stopped: "{printer} ferma · {count} in attesa",
@@ -1749,6 +1758,7 @@ export const it = {
     stoppedAgain: "{printed} ristampate, la stampante si è fermata di nuovo ({reason}): {remaining} ancora in attesa",
     reprintFailed: "Ristampa non riuscita",
   },
+  ai: aiIt,
 };
 
 type DeepStringRecord = { [key: string]: string | DeepStringRecord };
@@ -1789,6 +1799,7 @@ export const en: typeof it = {
     takeawaysOpen: "Open take-aways: {count}",
     takeawaysLate: "Open take-aways: {count}, late: {late}",
     reservationsLate: "Late reservations: {count}",
+    assistant: "Assistant",
     brand: "Trattoria",
   },
   m: {
@@ -3437,6 +3448,11 @@ export const en: typeof it = {
       label: "View stats",
       description: "See the night's sales totals, items ordered, and past bills",
     },
+    use_ai: {
+      label: "AI assistant (prototype)",
+      description:
+        "Open the AI assistant page: write orders, find tables, kitchen delays, table and product analysis",
+    },
   },
   printQueue: {
     stopped: "{printer} stopped · {count} waiting",
@@ -3468,6 +3484,7 @@ export const en: typeof it = {
     stoppedAgain: "{printed} reprinted, the printer stopped again ({reason}): {remaining} still waiting",
     reprintFailed: "Reprint failed",
   },
+  ai: aiEn,
 };
 
 // Dotted-path key union derived from the Italian shape, for autocomplete and

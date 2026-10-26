@@ -109,7 +109,7 @@ export function BillsList({ orders }: BillsListProps) {
                     >
                       <span className="min-w-0 truncate">
                         <span className="tabular-nums">{line.quantity}×</span>{" "}
-                        {line.menu_items?.name ?? t("stats.deletedItem")}
+                        {line.custom_name ?? line.menu_items?.name ?? t("stats.deletedItem")}
                       </span>
                       <span className="shrink-0 tabular-nums">
                         {formatMoney(line.unit_price * line.quantity)}

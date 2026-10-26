@@ -61,7 +61,7 @@ function sortedForBill(items: OrderItemWithName[]): OrderItemWithName[] {
     if (i.menu_items?.is_coperto) return { group: -1, name: "" };
     return {
       group: i.menu_items?.categories?.sort_order ?? Number.MAX_SAFE_INTEGER,
-      name: orderItemLabel(i.menu_items, "").title,
+      name: orderItemLabel(i.menu_items, "", i.custom_name).title,
     };
   };
   return [...items].sort((a, b) => {
@@ -206,7 +206,7 @@ export function BillView({ orderId }: { orderId: string }) {
           {sortedForBill(collapseCoperto(items)).map((i) => {
             // labelled the same way the menu labelled it: pizze and bruschette
             // by codice, with the toppings on the line underneath
-            const label = orderItemLabel(i.menu_items, t("floor.itemFallback"));
+            const label = orderItemLabel(i.menu_items, t("floor.itemFallback"), i.custom_name);
             const name =
               label.title + (i.fraction_of ? ` (1/${i.fraction_of})` : "");
             const paid = i.paid_by_payment_id !== null;

@@ -303,6 +303,34 @@ export interface Database {
         };
         Relationships: [];
       };
+      ai_settings: {
+        // Singleton (Assistente AI prototype): exactly one row, primary key is the constant `true`.
+        Row: {
+          id: boolean;
+          enabled: boolean;
+          kitchen_late_minutes: number;
+          bar_late_minutes: number;
+          custom_dish_min_overlap: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          enabled?: boolean;
+          kitchen_late_minutes?: number;
+          bar_late_minutes?: number;
+          custom_dish_min_overlap?: number;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          enabled?: boolean;
+          kitchen_late_minutes?: number;
+          bar_late_minutes?: number;
+          custom_dish_min_overlap?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       smart_floor_settings: {
         // Singleton: exactly one row, primary key is the constant `true`.
         Row: {
@@ -387,6 +415,10 @@ export interface Database {
           is_coperto: boolean;
           /** Staff may add/remove ingredients on this dish in the POS */
           allows_variations: boolean;
+          /** "Fuori menù" placeholder (one per category, AI prototype); the line's real name is order_items.custom_name */
+          is_custom: boolean;
+          /** Optional food cost of one portion (margin analytics) */
+          cost: number | null;
         };
         Insert: {
           id?: string;
@@ -399,6 +431,8 @@ export interface Database {
           codice?: string | null;
           is_coperto?: boolean;
           allows_variations?: boolean;
+          is_custom?: boolean;
+          cost?: number | null;
         };
         Update: {
           id?: string;
@@ -411,6 +445,8 @@ export interface Database {
           codice?: string | null;
           is_coperto?: boolean;
           allows_variations?: boolean;
+          is_custom?: boolean;
+          cost?: number | null;
         };
         Relationships: [
           {
@@ -536,6 +572,8 @@ export interface Database {
           /** Kitchen display bump time; null = still to prepare */
           ready_at: string | null;
           created_at: string;
+          /** Free name of a "Fuori menù" line; prints instead of menu_items.name */
+          custom_name: string | null;
         };
         Insert: {
           id?: string;
@@ -548,6 +586,7 @@ export interface Database {
           fraction_of?: number | null;
           ready_at?: string | null;
           created_at?: string;
+          custom_name?: string | null;
         };
         Update: {
           id?: string;
@@ -560,6 +599,7 @@ export interface Database {
           fraction_of?: number | null;
           ready_at?: string | null;
           created_at?: string;
+          custom_name?: string | null;
         };
         Relationships: [
           {
@@ -680,6 +720,8 @@ export interface Database {
           /** What it costs to ADD this to a dish; 0 = free. Removals never deduct. */
           price: number;
           created_at: string;
+          /** Optional cost of one portion when added (margin analytics) */
+          cost: number | null;
         };
         Insert: {
           id?: string;
@@ -687,6 +729,7 @@ export interface Database {
           is_available?: boolean;
           price?: number;
           created_at?: string;
+          cost?: number | null;
         };
         Update: {
           id?: string;
@@ -694,6 +737,7 @@ export interface Database {
           is_available?: boolean;
           price?: number;
           created_at?: string;
+          cost?: number | null;
         };
         Relationships: [];
       };
@@ -1279,6 +1323,7 @@ export type Reservation = ReservationRow & { table_ids: string[] };
 export type WaitlistEntry = Database["public"]["Tables"]["waitlist"]["Row"];
 export type TableJoinRule = Database["public"]["Tables"]["table_join_rules"]["Row"];
 export type FloorZone = Database["public"]["Tables"]["floor_zones"]["Row"];
+export type AiSettings = Database["public"]["Tables"]["ai_settings"]["Row"];
 export type SmartFloorSettings =
   Database["public"]["Tables"]["smart_floor_settings"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];

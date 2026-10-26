@@ -36,6 +36,10 @@ export interface TicketLine {
   notes?: string[];
   /** Price manually overridden for this ticket only (never the menu) */
   priceOverridden?: boolean;
+  /** "Fuori menù" line (AI prototype): its own name, written to
+   * order_items.custom_name and printed instead of the placeholder item's.
+   * Such a line is never merged with another. */
+  customName?: string;
 }
 
 /** Price charged per unit of a line: base price + modifier adjustments */
@@ -108,6 +112,9 @@ interface TicketState {
     item: Pick<MenuItem, "id" | "name" | "price">,
     quantity: number,
   ) => void;
+  /** Append ready-made lines (AI "Scrivi l'ordine"), each as its own line —
+   * never merged, since the reader already checked them one by one */
+  addLines: (lines: Omit<TicketLine, "lineId">[]) => void;
   removeItem: (lineId: string) => void;
   /** Quantities below 1 remove the line */
   setQuantity: (lineId: string, quantity: number) => void;
@@ -243,6 +250,7 @@ export const useTicketStore = create<TicketState>((set) => ({
         (l) =>
           l.menuItemId === item.id &&
           !l.notes?.length &&
+          !l.customName &&
           sameModifiers(l.modifiers, modifiers),
       );
       if (existing) {
@@ -305,6 +313,14 @@ export const useTicketStore = create<TicketState>((set) => ({
         ],
       };
     }),
+
+  addLines: (lines) =>
+    set((state) => ({
+      lines: [
+        ...state.lines,
+        ...lines.map((l) => ({ ...l, lineId: nextLineId() })),
+      ],
+    })),
 
   removeItem: (lineId) =>
     set((state) => ({
