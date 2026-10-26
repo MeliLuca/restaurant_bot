@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Minus, Plus, Search, X } from "lucide-react";
 import { formatMoney } from "@/lib/constants";
 import { useT } from "@/lib/i18n/use-translation";
@@ -8,6 +8,7 @@ import {
   addablePantry,
   seedVariations,
   toggleAddition,
+  toggleNote,
   toggleRemoval,
   variationPricePreview,
   variationsToModifiers,
@@ -18,8 +19,8 @@ import { cn } from "@/lib/utils";
 import { useKeyboardInset } from "@/mobile/hooks/use-keyboard-inset";
 import type { SelectedModifier } from "@/stores/ticket-store";
 
-/** The pantry is long; show a screenful and let the search box reach the rest. */
-const MAX_PANTRY_ROWS = 30;
+/** Suggestions under the search box; typing more narrows past the rest. */
+const MAX_SUGGESTIONS = 8;
 
 /**
  * Ingredient picker as a full-height sheet rather than a centred dialog: on a
@@ -27,7 +28,8 @@ const MAX_PANTRY_ROWS = 30;
  * a dialog's margins anyway.
  *
  * Two sections — take OFF the dish's own ingredients (always free), put ON
- * anything from the pantry (charged on the diminishing scale). All the
+ * anything from the pantry (found by typing, charged on the diminishing
+ * scale) — then the note rapide, offered on every dish. All the
  * selection rules and pricing come from @/lib/pos/variation-selection, the same
  * module the desktop dialog uses — only the chrome differs.
  */
@@ -39,6 +41,8 @@ export function VariationScreen({
   variationsAllowed,
   canEditPrice = false,
   initialModifiers = [],
+  quickNotes = [],
+  initialNotes = [],
   onClose,
   onConfirm,
 }: {
@@ -51,14 +55,23 @@ export function VariationScreen({
   /** `override_price` permission — same gate as the desktop dialog */
   canEditPrice?: boolean;
   initialModifiers?: SelectedModifier[];
+  /** Note rapide on offer, in display order */
+  quickNotes?: string[];
+  initialNotes?: string[];
   onClose: () => void;
-  onConfirm: (modifiers: SelectedModifier[], basePrice: number | null) => void;
+  onConfirm: (
+    modifiers: SelectedModifier[],
+    basePrice: number | null,
+    notes: string[],
+  ) => void;
 }) {
   const t = useT();
   const [state, setState] = useState<VariationState>(() =>
     seedVariations(initialModifiers),
   );
+  const [notes, setNotes] = useState<string[]>(initialNotes);
   const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [priceText, setPriceText] = useState(() => basePrice.toFixed(2));
   // this screen has a text input, so the footer has to stay above the keyboard
   const keyboardInset = useKeyboardInset();
@@ -75,10 +88,17 @@ export function VariationScreen({
     dishIngredients,
     state,
     query,
-    MAX_PANTRY_ROWS,
+    MAX_SUGGESTIONS,
   );
   const { addedCount, linearExtras, surcharge, tapered, swapped, total } =
     variationPricePreview(effectiveBase, selected);
+
+  // Picking a suggestion clears the box and keeps the keyboard up for the next
+  function addSuggestion(id: string) {
+    setState((s) => toggleAddition(s, id));
+    setQuery("");
+    searchRef.current?.focus();
+  }
 
   const rowClass = (active: boolean, strike: boolean) =>
     cn(
@@ -139,29 +159,67 @@ export function VariationScreen({
         )}
 
         {variationsAllowed && (
-        <section>
-          <h3 className="mb-2 font-semibold">{t("pos.addSection")}</h3>
-          <div className="relative mb-2">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("pos.searchIngredients")}
-              aria-label={t("pos.searchIngredientsAria")}
-              className="h-12 w-full rounded-xl border bg-card pl-9 pr-3 text-base outline-none focus:border-primary"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            {/* picked first, so a search can never hide what is selected */}
-            {[...picked, ...matches].map((i) => {
-              const active = state.addedIds.includes(i.id);
-              return (
+          <section className="mb-5">
+            <h3 className="mb-2 font-semibold">{t("pos.addSection")}</h3>
+            <div className="relative mb-2">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && matches.length > 0) {
+                    e.preventDefault();
+                    addSuggestion(matches[0].id);
+                  }
+                }}
+                placeholder={t("pos.searchIngredients")}
+                aria-label={t("pos.searchIngredientsAria")}
+                autoComplete="off"
+                enterKeyHint="done"
+                className="h-12 w-full rounded-xl border bg-card pl-9 pr-3 text-base outline-none focus:border-primary"
+              />
+            </div>
+            {query.trim() && (
+              <ul className="mb-2 flex flex-col divide-y overflow-hidden rounded-xl border">
+                {matches.map((i) => (
+                  <li key={i.id}>
+                    <button
+                      type="button"
+                      onClick={() => addSuggestion(i.id)}
+                      className="flex min-h-12 w-full items-center gap-2 px-4 text-left text-base active:bg-accent"
+                    >
+                      <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{i.name}</span>
+                      {i.price > 0 && (
+                        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                          +{formatMoney(i.price)}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+                {matches.length === 0 && (
+                  <li className="px-4 py-3 text-sm text-muted-foreground">
+                    {t("pos.noIngredientsMatch", { query: query.trim() })}
+                  </li>
+                )}
+                {hiddenCount > 0 && (
+                  <li className="px-4 py-2 text-xs text-muted-foreground">
+                    {t("pos.moreMatches", { count: hiddenCount })}
+                  </li>
+                )}
+              </ul>
+            )}
+            {/* what is added so far — tap one to take it off again */}
+            <div className="flex flex-col gap-2">
+              {picked.map((i) => (
                 <button
                   key={i.id}
                   type="button"
-                  aria-pressed={active}
+                  aria-pressed
                   onClick={() => setState((s) => toggleAddition(s, i.id))}
-                  className={rowClass(active, false)}
+                  className={rowClass(true, false)}
                 >
                   <Plus className="h-4 w-4 shrink-0" />
                   <span className="min-w-0 flex-1">{i.name}</span>
@@ -170,21 +228,40 @@ export function VariationScreen({
                       +{formatMoney(i.price)}
                     </span>
                   )}
+                  <X className="h-4 w-4 shrink-0 opacity-80" />
                 </button>
-              );
-            })}
-            {picked.length + matches.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                {t("pos.noIngredientsMatch", { query: query.trim() })}
-              </p>
-            )}
-            {hiddenCount > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {t("menu.moreIngredients", { count: hiddenCount })}
-              </p>
-            )}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {quickNotes.length > 0 && (
+          <section>
+            <h3 className="mb-2 font-semibold">{t("pos.notesSection")}</h3>
+            <div className="flex flex-wrap gap-2">
+              {quickNotes.map((n) => {
+                const active = notes.includes(n);
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() =>
+                      setNotes((ns) => toggleNote(ns, n, quickNotes))
+                    }
+                    className={cn(
+                      "flex min-h-12 items-center rounded-xl border px-4 text-base transition-colors",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "text-foreground",
+                    )}
+                  >
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         )}
       </div>
 
@@ -245,7 +322,7 @@ export function VariationScreen({
           type="button"
           disabled={canEditPrice && !priceValid}
           onClick={() => {
-            onConfirm(selected, priceChanged ? effectiveBase : null);
+            onConfirm(selected, priceChanged ? effectiveBase : null, notes);
             onClose();
           }}
           className="flex min-h-14 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground disabled:opacity-50"

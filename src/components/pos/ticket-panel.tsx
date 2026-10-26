@@ -50,6 +50,7 @@ import { orderItemLabel } from "@/lib/menu-display";
 import { calcTotals, toCents } from "@/lib/money";
 import { collapseCoperto } from "@/lib/pos/coperto";
 import type {
+  MenuItem,
   Order,
   RestaurantTable,
   TableLink,
@@ -70,6 +71,7 @@ import { useT } from "@/lib/i18n/use-translation";
 import { useOrderActions } from "@/hooks/use-order-actions";
 import { useAuthStore, usePermission } from "@/stores/auth-store";
 import { VariationDialog } from "./variation-dialog";
+import { parseModifiers } from "@/lib/printing/route-order";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
 import { SplitBillDialog } from "./split-bill-dialog";
 import { SplitPicker } from "./split-picker";
@@ -83,9 +85,11 @@ import { TakeawayPicker } from "./takeaway-picker";
 
 /** Selected variations, indented right under their parent line. Additions show
  * their list price as detail (the line price carries the diminishing-scaled
- * surcharge); removals never deduct, so they show no amount. */
+ * surcharge); removals never deduct, so they show no amount. Note rapide
+ * follow in italics, with no sign — they are instructions, not ingredients. */
 function ModifierRows({
   modifiers,
+  notes = [],
   muted,
 }: {
   modifiers: Array<{
@@ -94,9 +98,10 @@ function ModifierRows({
     priceAdjustment: number;
     isRemoval: boolean;
   }>;
+  notes?: string[];
   muted?: boolean;
 }) {
-  if (modifiers.length === 0) return null;
+  if (modifiers.length === 0 && notes.length === 0) return null;
   return (
     <ul
       className={
@@ -118,6 +123,11 @@ function ModifierRows({
           )}
         </li>
       ))}
+      {notes.map((n) => (
+        <li key={`note:${n}`} className="truncate italic">
+          {n}
+        </li>
+      ))}
     </ul>
   );
 }
@@ -125,6 +135,11 @@ function ModifierRows({
 interface TicketPanelProps {
   tables: RestaurantTable[];
   openOrder: OpenOrder | null;
+  /** Whether `openOrder` is loaded for the current target (see useOpenOrder) */
+  openOrderLoaded: boolean;
+  /** The menu's coperto product, which the covers prompt puts on the ticket;
+   * null when the house charges none */
+  copertoItem: Pick<MenuItem, "id" | "name" | "price"> | null;
   openSplits: Order[];
   openTakeaways: Order[];
   /** Pantry + per-dish ingredients; key presence in `byItem` gates the editor */
@@ -138,6 +153,8 @@ interface TicketPanelProps {
 export function TicketPanel({
   tables,
   openOrder,
+  openOrderLoaded,
+  copertoItem,
   openSplits,
   openTakeaways,
   variations,
@@ -162,6 +179,7 @@ export function TicketPanel({
     setLinePrice,
     setLineModifiers,
     setDraftCovers,
+    setCopertoLine,
     clearTicket,
   } = useTicketStore();
   const t = useT();
@@ -171,6 +189,7 @@ export function TicketPanel({
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [priceEdit, setPriceEdit] = useState<PriceEditTarget | null>(null);
   const [editLine, setEditLine] = useState<TicketLine | null>(null);
+  const hasNotes = variations.quickNotes.length > 0;
   const [splitOpen, setSplitOpen] = useState(false);
   // Reusable customer-name labels, shown as quick-picks when starting a
   // take-away (same saved-labels list as the floor-plan New Delivery flow).
@@ -205,7 +224,7 @@ export function TicketPanel({
     preReceipt: handlePreReceipt,
     covers,
     needsCovers,
-  } = useOrderActions({ openOrder, onOrderChanged });
+  } = useOrderActions({ openOrder, openOrderLoaded, onOrderChanged });
 
   const [coversOpen, setCoversOpen] = useState(false);
 
@@ -225,9 +244,17 @@ export function TicketPanel({
       }
     } else {
       setDraftCovers(next);
+      // the answer becomes the order's first line, sent and printed with it
+      if (copertoItem) setCopertoLine(copertoItem, next);
     }
     setCoversOpen(false);
   }
+
+  // covers already settled by a split payment; the unpaid coperto row on
+  // screen is the rest of the count
+  const paidCovers = (openOrder?.items ?? [])
+    .filter((i) => i.menu_items?.is_coperto && i.paid_by_payment_id !== null)
+    .reduce((n, i) => n + i.quantity, 0);
 
   // Take-away creation and the cleanup prompt stay panel-local (the phone has
   // its own flows for both), so they carry their own busy flag.
@@ -604,53 +631,36 @@ export function TicketPanel({
                           {formatMoney(i.unit_price * i.quantity)}
                         </span>
                       </div>
-                      <ModifierRows modifiers={modifierRows} muted />
+                      <ModifierRows
+                        modifiers={modifierRows}
+                        notes={parseModifiers(i.notes)}
+                        muted
+                      />
                     </div>
                   );
                 }
-                if (i.menu_items?.is_coperto) {
-                  // The cover charge is derived from the guest count, so it
-                  // carries none of the per-line controls: a trash button here
-                  // would drop the charge outright, and a stepper would let the
-                  // quantity drift away from covers — which is the hand-managed
-                  // cover charge this feature exists to replace. The pencil goes
-                  // to the count instead, the one number that owns this line.
-                  // The empty span holds the column where the trash sits on
-                  // every other row, so the prices stay in one line.
-                  return (
-                    <div
-                      key={i.id}
-                      className="flex items-center gap-2 text-sm text-muted-foreground"
-                    >
-                      <Users className="h-3.5 w-3.5 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">
-                        {i.quantity > 1 ? `${i.quantity}× ` : ""}
-                        {name}
-                      </span>
-                      <span className="w-14 text-right tabular-nums">
-                        {formatMoney(i.unit_price * i.quantity)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        aria-label={t("pos.coversEditAria")}
-                        disabled={busy}
-                        onClick={() => setCoversOpen(true)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <span className="w-8" aria-hidden />
-                    </div>
-                  );
-                }
+                // The coperto is a product like any other, but its row can
+                // stand for several (collapseCoperto folds the per-guest rows
+                // a split leaves behind), so its steps go through the count:
+                // updateOrderCovers folds the unpaid rows into one at the new
+                // total. Its price comes from the menu, so no re-price here.
+                const isCoperto = i.menu_items?.is_coperto ?? false;
+                const setSentQty = (q: number) =>
+                  isCoperto
+                    ? handleCovers(paidCovers + Math.max(0, q))
+                    : amendSentItem(i.id, q);
                 return (
                   <div key={i.id}>
                   <div
                     className="flex items-center gap-2 text-sm text-muted-foreground"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate">{name}</span>
+                      <span className="flex items-center gap-1.5 truncate">
+                        {isCoperto && (
+                          <Users className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                        {name}
+                      </span>
                       {label.ingredients && (
                         <span className="block truncate text-xs leading-snug">
                           {label.ingredients}
@@ -664,7 +674,7 @@ export function TicketPanel({
                         className="h-8 w-8"
                         aria-label={t("pos.decreaseSent", { name })}
                         disabled={busy}
-                        onClick={() => amendSentItem(i.id, i.quantity - 1)}
+                        onClick={() => void setSentQty(i.quantity - 1)}
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </Button>
@@ -677,7 +687,7 @@ export function TicketPanel({
                         className="h-8 w-8"
                         aria-label={t("pos.increaseSent", { name })}
                         disabled={busy}
-                        onClick={() => amendSentItem(i.id, i.quantity + 1)}
+                        onClick={() => void setSentQty(i.quantity + 1)}
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </Button>
@@ -688,7 +698,7 @@ export function TicketPanel({
                     {/* Sent lines are re-priced, not re-composed: the kitchen
                         already has the slip. The spacer keeps the totals
                         column aligned for staff who may not re-price. */}
-                    {canOverridePrice ? (
+                    {canOverridePrice && !isCoperto ? (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -715,12 +725,15 @@ export function TicketPanel({
                       className="h-8 w-8"
                       aria-label={t("pos.removeSent", { name })}
                       disabled={busy}
-                      onClick={() => amendSentItem(i.id, 0)}
+                      onClick={() => void setSentQty(0)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                  <ModifierRows modifiers={modifierRows} />
+                  <ModifierRows
+                    modifiers={modifierRows}
+                    notes={parseModifiers(i.notes)}
+                  />
                   </div>
                 );
               })}
@@ -756,10 +769,13 @@ export function TicketPanel({
                     )}
                   </div>
                 </div>
-                {/* One door for the whole line: ingredients for everyone,
-                    price for those allowed. Hidden only when the user may do
-                    neither, so it never opens onto an empty dialog. */}
-                {(l.menuItemId in variations.byItem || canOverridePrice) && (
+                {/* One door for the whole line: ingredients and notes for
+                    everyone, price for those allowed. Hidden only when there
+                    is nothing to change, so it never opens onto an empty
+                    dialog. */}
+                {(l.menuItemId in variations.byItem ||
+                  hasNotes ||
+                  canOverridePrice) && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -771,7 +787,11 @@ export function TicketPanel({
                         ? canOverridePrice
                           ? "pos.editLineAria"
                           : "pos.editLineIngredientsAria"
-                        : "pos.editLinePriceAria",
+                        : hasNotes
+                          ? canOverridePrice
+                            ? "pos.editLineNotesPriceAria"
+                            : "pos.editLineNotesAria"
+                          : "pos.editLinePriceAria",
                       { name: l.name },
                     )}
                     onClick={() => setEditLine(l)}
@@ -822,6 +842,7 @@ export function TicketPanel({
                   priceAdjustment: m.priceAdjustment,
                   isRemoval: m.isRemoval,
                 }))}
+                notes={l.notes}
               />
             </div>
           ))}
@@ -982,10 +1003,12 @@ export function TicketPanel({
         }
         canEditPrice={canOverridePrice}
         initialModifiers={editLine?.modifiers ?? []}
+        quickNotes={variations.quickNotes}
+        initialNotes={editLine?.notes ?? []}
         onClose={() => setEditLine(null)}
-        onConfirm={(modifiers, basePrice) => {
+        onConfirm={(modifiers, basePrice, notes) => {
           if (!editLine) return;
-          setLineModifiers(editLine.lineId, modifiers);
+          setLineModifiers(editLine.lineId, modifiers, notes);
           // null means the base was left alone — don't flag the line as
           // manually priced just because the editor was opened.
           if (basePrice !== null) setLinePrice(editLine.lineId, basePrice);

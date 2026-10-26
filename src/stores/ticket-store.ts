@@ -31,6 +31,9 @@ export interface TicketLine {
   unitPrice: number;
   quantity: number;
   modifiers: SelectedModifier[];
+  /** Note rapide for the kitchen ("Ben cotta", "Prima"); free, printed under
+   * the line. Absent and [] both mean none. */
+  notes?: string[];
   /** Price manually overridden for this ticket only (never the menu) */
   priceOverridden?: boolean;
 }
@@ -90,11 +93,20 @@ interface TicketState {
   setSubtable: (subtable: string | null) => void;
   /** Target a take-away: an existing open order, or a new customer name */
   setTakeaway: (orderId: string | null, name: string) => void;
+  /** A fresh tap never carries notes, so it only merges into a line that
+   * has none — "ben cotta" must not quietly apply to the next pizza too. */
   addItem: (
     item: Pick<MenuItem, "id" | "name" | "price"> & {
       ingredients?: string | null;
     },
     modifiers?: SelectedModifier[],
+  ) => void;
+  /** The covers prompt's answer, as a ticket line: the pending coperto line
+   * becomes `quantity` — added at the top so it reads (and prints) first,
+   * removed at 0. Only the plain line is touched, never one carrying notes. */
+  setCopertoLine: (
+    item: Pick<MenuItem, "id" | "name" | "price">,
+    quantity: number,
   ) => void;
   removeItem: (lineId: string) => void;
   /** Quantities below 1 remove the line */
@@ -102,13 +114,24 @@ interface TicketState {
   /** Override a pending line's BASE price for this ticket only */
   setLinePrice: (lineId: string, unitPrice: number) => void;
   /** Replace a pending line's ingredients (add/remove after it's on the
-   * ticket); the charged price re-derives from the new modifier set */
-  setLineModifiers: (lineId: string, modifiers: SelectedModifier[]) => void;
+   * ticket) and its notes; the charged price re-derives from the new
+   * modifier set */
+  setLineModifiers: (
+    lineId: string,
+    modifiers: SelectedModifier[],
+    notes: string[],
+  ) => void;
   /** Record how many guests the current target is for, before its order
    * exists. Once it does, orders.covers is the truth and this is dropped. */
   setDraftCovers: (covers: number) => void;
-  /** Drop pending lines AND their draft (after Send to Kitchen) */
+  /** Drop pending lines AND their draft (after Send to Kitchen). The draft
+   * guest count survives: until the new order has been re-fetched it is the
+   * only answer on record, and dropping it here re-opened the covers prompt
+   * the moment the first round went out. */
   clearLines: () => void;
+  /** Forget the current target's draft guest count, once its order exists
+   * and owns the number (orders.covers) */
+  dropDraftCovers: () => void;
   clearTicket: () => void;
 }
 
@@ -218,7 +241,9 @@ export const useTicketStore = create<TicketState>((set) => ({
     set((state) => {
       const existing = state.lines.find(
         (l) =>
-          l.menuItemId === item.id && sameModifiers(l.modifiers, modifiers),
+          l.menuItemId === item.id &&
+          !l.notes?.length &&
+          sameModifiers(l.modifiers, modifiers),
       );
       if (existing) {
         return {
@@ -245,6 +270,42 @@ export const useTicketStore = create<TicketState>((set) => ({
       };
     }),
 
+  setCopertoLine: (item, quantity) =>
+    set((state) => {
+      const existing = state.lines.find(
+        (l) =>
+          l.menuItemId === item.id &&
+          l.modifiers.length === 0 &&
+          !l.notes?.length,
+      );
+      if (quantity <= 0) {
+        return existing
+          ? { lines: state.lines.filter((l) => l.lineId !== existing.lineId) }
+          : {};
+      }
+      if (existing) {
+        return {
+          lines: state.lines.map((l) =>
+            l.lineId === existing.lineId ? { ...l, quantity } : l,
+          ),
+        };
+      }
+      return {
+        lines: [
+          {
+            lineId: nextLineId(),
+            menuItemId: item.id,
+            name: item.name,
+            ingredients: null,
+            unitPrice: item.price,
+            quantity,
+            modifiers: [],
+          },
+          ...state.lines,
+        ],
+      };
+    }),
+
   removeItem: (lineId) =>
     set((state) => ({
       lines: state.lines.filter((l) => l.lineId !== lineId),
@@ -267,10 +328,10 @@ export const useTicketStore = create<TicketState>((set) => ({
       ),
     })),
 
-  setLineModifiers: (lineId, modifiers) =>
+  setLineModifiers: (lineId, modifiers, notes) =>
     set((state) => ({
       lines: state.lines.map((l) =>
-        l.lineId === lineId ? { ...l, modifiers } : l,
+        l.lineId === lineId ? { ...l, modifiers, notes } : l,
       ),
     })),
 
@@ -284,15 +345,20 @@ export const useTicketStore = create<TicketState>((set) => ({
   clearLines: () =>
     set((state) => {
       const drafts = { ...state.drafts };
-      const draftCovers = { ...state.draftCovers };
       const key = draftKey(state);
-      if (key) {
-        delete drafts[key];
-        // the order now exists and owns its covers; a stale draft here would
-        // shadow a number the waiter has since corrected on the bill
-        delete draftCovers[key];
-      }
-      return { lines: [], drafts, draftCovers };
+      if (key) delete drafts[key];
+      return { lines: [], drafts };
+    }),
+
+  dropDraftCovers: () =>
+    set((state) => {
+      const key = draftKey(state);
+      if (!key || !(key in state.draftCovers)) return {};
+      // the order now exists and owns its covers; a stale draft here would
+      // shadow a number the waiter has since corrected on the bill
+      const draftCovers = { ...state.draftCovers };
+      delete draftCovers[key];
+      return { draftCovers };
     }),
 
   clearTicket: () =>

@@ -74,7 +74,8 @@ export default function AnalyticsPage() {
       setPrevOrders(po);
       setReservations(r);
       setCategories(c);
-      setMenuItems(m);
+      // the cover charge is a menu product, but never dead stock
+      setMenuItems(m.filter((i) => !i.is_coperto));
       setStaff(s);
       setError(null);
     } catch (e) {

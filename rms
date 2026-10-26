@@ -46,6 +46,10 @@ cmd_start() {
   load_nvm
 
   echo "→ Avvio Supabase locale..."
+  if ! docker info >/dev/null 2>&1; then
+    echo "✖ Docker non è acceso. Avvialo con: open -a Docker (poi riprova)."
+    exit 1
+  fi
   if is_supabase_running; then
     echo "  già in esecuzione."
   else

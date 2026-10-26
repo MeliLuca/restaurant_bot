@@ -254,22 +254,17 @@ export async function fetchCategories(): Promise<Category[]> {
 /**
  * Items orderable right now: available AND no out-of-stock ingredient (86'd).
  *
- * The cover charge is not among them. It is generated per check from the guest
- * count, so a waiter who could find it in the menu could also add it twice, or
- * to the wrong table, or not at all — the failure this whole feature exists to
- * remove. Excluding it here leaves it with no tap target anywhere.
- *
- * Nothing downstream loses sight of it: analytics reads sold lines through its
- * own join (stats-api), so coperto revenue still ranks and reports normally.
- * The only other consumer of this list is the dead-stock report, where a cover
- * charge would be noise — it is not an item anyone is deciding whether to cull.
+ * The cover charge is among them (since 2026-09-30): it is an ordinary
+ * product now — the covers prompt puts it on the ticket, and it can be tapped
+ * for a latecomer like any dish. `is_coperto` rides along so screens can tell
+ * it apart; the dead-stock report filters it out, since a cover charge is not
+ * an item anyone is deciding whether to cull.
  */
 export async function fetchMenuItems(): Promise<MenuItemView[]> {
   const { data, error } = await getSupabase()
     .from("menu_items")
     .select("*, ingredients(name, is_available)")
     .eq("is_available", true)
-    .eq("is_coperto", false)
     .order("sort_order");
   if (error) throw new Error(error.message);
   return (data as unknown as (MenuItem & {
@@ -303,10 +298,13 @@ export interface VariationData {
    * to remove but the whole pantry to add. Gating on `.length > 0` would strip
    * those dishes of the affordance permanently. */
   byItem: Record<string, VariationOption[]>;
+  /** Note rapide ("Ben cotta", "Prima"), in display order. Offered on EVERY
+   * line, not just modifiable dishes — "Con ghiaccio" belongs on a drink. */
+  quickNotes: string[];
 }
 
 /**
- * Everything the POS variation picker needs, in two round trips.
+ * Everything the POS variation picker needs, in three parallel round trips.
  *
  * Replaces the old modifier-group fetch: there is nothing to configure per
  * dish beyond the `allows_variations` switch, so this is just the pantry plus
@@ -314,7 +312,7 @@ export interface VariationData {
  */
 export async function fetchVariationData(): Promise<VariationData> {
   const sb = getSupabase();
-  const [pantryRes, dishRes] = await Promise.all([
+  const [pantryRes, dishRes, notesRes] = await Promise.all([
     sb
       .from("ingredients")
       .select("id, name, price")
@@ -324,9 +322,11 @@ export async function fetchVariationData(): Promise<VariationData> {
       .from("menu_items")
       .select("id, ingredients(id, name, price)")
       .eq("allows_variations", true),
+    sb.from("line_notes").select("name").order("sort_order").order("name"),
   ]);
   if (pantryRes.error) throw new Error(pantryRes.error.message);
   if (dishRes.error) throw new Error(dishRes.error.message);
+  if (notesRes.error) throw new Error(notesRes.error.message);
 
   const byItem: Record<string, VariationOption[]> = {};
   for (const row of dishRes.data as unknown as Array<{
@@ -338,7 +338,11 @@ export async function fetchVariationData(): Promise<VariationData> {
       a.name.localeCompare(b.name),
     );
   }
-  return { pantry: pantryRes.data as VariationOption[], byItem };
+  return {
+    pantry: pantryRes.data as VariationOption[],
+    byItem,
+    quickNotes: notesRes.data.map((n) => n.name),
+  };
 }
 
 export type OrderItemWithName = OrderItem & {
@@ -531,11 +535,11 @@ export async function fetchCoverCharge(): Promise<number | null> {
 /**
  * Make the order's coperto line match its guest count.
  *
- * The waiter never touches this line: they state how many people are at the
- * table and the charge follows, here, every time the count changes. That is
- * the whole design — a per-person line punched in by hand is a line that gets
- * forgotten on a busy Saturday, and a forgotten coperto leaves nothing on the
- * bill to notice it by.
+ * Used when the COUNT is what changed — the covers chip, or a table merge.
+ * The other direction (someone steps or removes a coperto line by hand, or a
+ * round brings one in) is handled in the database: the trigger
+ * sync_order_covers_from_lines keeps orders.covers equal to the lines, so the
+ * two never drift and re-applying either one is a no-op.
  *
  * Covers already paid for are honoured: on a split bill the coperto may have
  * been settled before the count changed, so only the still-unpaid remainder is
@@ -635,7 +639,8 @@ export interface TicketLineInput {
   /** BASE menu price; modifier adjustments are added on insert */
   unitPrice: number;
   quantity: number;
-  notes?: string | null;
+  /** Note rapide picked for this line; stored comma-joined in order_items.notes */
+  notes?: string[];
   /** Ingredients added to / removed from this line */
   modifiers?: Array<{
     ingredientId: string;
@@ -668,7 +673,7 @@ async function insertOrderItems(
         quantity: l.quantity,
         // snapshot the price actually charged per unit, modifiers included
         unit_price: unitPriceWithModifiers(l.unitPrice, l.modifiers ?? []),
-        notes: l.notes ?? null,
+        notes: l.notes?.length ? l.notes.join(", ") : null,
       })),
     )
     .select("id");
@@ -700,15 +705,15 @@ async function insertOrderItems(
  * (creating one if needed, stamped with the ordering user), recomputes stored
  * totals, and marks the table occupied.
  *
- * `covers` is the guest count collected when the check was opened. It is
- * applied on creation, and adopted by an order that has none yet — which is
- * how the checks already sitting open when this shipped pick up their cover
- * charge instead of going without one forever. It never overwrites a count
- * that is already set: changing it is updateOrderCovers' job, so sending a
- * round can't silently rewrite a number the waiter corrected by hand.
+ * `covers` is the guest count collected when the check was opened. The
+ * prompt already turned it into a "N× Coperto" line among `lines`, which goes
+ * out, prints and is charged like any dish; from then on orders.covers follows
+ * the coperto lines (DB trigger sync_order_covers_from_lines). So a new order
+ * starts from what the lines actually carry — if the waiter took the coperto
+ * off before sending, the table was deliberately not charged one, and the
+ * count says 0 rather than a number nothing on the bill backs up.
  *
- * The returned newItemIds hold only the lines from this round, so the coperto
- * never reaches a production slip.
+ * The returned newItemIds hold only the lines from this round.
  */
 export async function sendToKitchen(
   tableId: string,
@@ -722,10 +727,14 @@ export async function sendToKitchen(
 
   const existing = await fetchOpenOrder(tableId, subtable);
   let orderId = existing?.order.id;
-  const adoptCovers =
-    covers != null && (!existing || existing.order.covers == null);
 
   if (!orderId) {
+    const coperto = await fetchCopertoItem();
+    const startCovers = coperto
+      ? lines
+          .filter((l) => l.menuItemId === coperto.id)
+          .reduce((n, l) => n + l.quantity, 0)
+      : (covers ?? null);
     const { data, error } = await sb
       .from("orders")
       .insert({
@@ -733,22 +742,15 @@ export async function sendToKitchen(
         subtable,
         tax_rate: TAX_RATE,
         opened_by: openedBy,
-        covers: covers ?? null,
+        covers: startCovers,
       })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
     orderId = data.id;
-  } else if (adoptCovers) {
-    const { error } = await sb
-      .from("orders")
-      .update({ covers })
-      .eq("id", orderId);
-    if (error) throw new Error(error.message);
   }
 
   const newItemIds = await insertOrderItems(orderId, lines);
-  if (adoptCovers) await syncCoperto(orderId, covers as number);
   await recomputeOrderTotals(orderId);
   await updateTableStatus(tableId, "occupied");
   return { orderId, newItemIds };
@@ -1049,15 +1051,14 @@ export async function setSentItemQuantity(
     if (error) throw new Error(error.message);
   }
 
-  // A check whose last real line just came off is cancelled — and the coperto
-  // does not count as a real line. It is derived from the guest count, so an
-  // order holding nothing but a cover charge is an order with nothing on it,
-  // and leaving it open would strand the table as occupied.
+  // A check whose last line just came off is cancelled, or it would strand
+  // the table as occupied. The coperto counts as a line: it is a product now,
+  // often the first thing sent (the table is seated, nothing ordered yet), so
+  // taking a mistaken dish off must not close a check that still has it.
   const { count, error: countError } = await sb
     .from("order_items")
-    .select("id, menu_items!inner(is_coperto)", { count: "exact", head: true })
-    .eq("order_id", orderId)
-    .eq("menu_items.is_coperto", false);
+    .select("id", { count: "exact", head: true })
+    .eq("order_id", orderId);
   if (countError) throw new Error(countError.message);
 
   if (count === 0) {

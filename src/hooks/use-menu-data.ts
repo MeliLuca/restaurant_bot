@@ -12,12 +12,12 @@ import type { Category, RestaurantTable } from "@/lib/database.types";
 import type { MenuItemView } from "@/lib/menu-display";
 import { useT } from "@/lib/i18n/use-translation";
 
-const NO_VARIATIONS: VariationData = { pantry: [], byItem: {} };
+const NO_VARIATIONS: VariationData = { pantry: [], byItem: {}, quickNotes: [] };
 
 interface MenuData {
   categories: Category[];
   items: MenuItemView[];
-  /** The pantry, plus each modifiable dish's own ingredients */
+  /** The pantry, each modifiable dish's own ingredients, and the note rapide */
   variations: VariationData;
   tables: RestaurantTable[];
   loading: boolean;

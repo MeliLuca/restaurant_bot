@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   fetchOpenOrder,
@@ -16,6 +16,12 @@ import { useTicketStore } from "@/stores/ticket-store";
 interface OpenOrderData {
   /** The open order for the ticket store's current target, if any */
   openOrder: OpenOrder | null;
+  /** True once `openOrder` has been fetched for the CURRENT target. Until then
+   * a null `openOrder` means "not known yet", not "no order": the ticket store
+   * outlives the page, so coming back to the Cassa re-targets the table at
+   * once while its order is still loading — and treating that gap as a table
+   * with no check re-asked for covers on every return. */
+  loaded: boolean;
   /** Other open splits on the same table */
   openSplits: Order[];
   openTakeaways: Order[];
@@ -44,22 +50,40 @@ export function useOpenOrder(): OpenOrderData {
   const [openSplits, setOpenSplits] = useState<Order[]>([]);
   const [openTakeaways, setOpenTakeaways] = useState<Order[]>([]);
 
+  // Which target `openOrder` was fetched for. The ref is the target being
+  // asked for right now, so a slow answer for the previous table can't land
+  // on top of the current one.
+  const targetKey =
+    mode === "table"
+      ? `t:${tableId ?? ""}:${subtable ?? ""}`
+      : `ta:${takeawayOrderId ?? ""}`;
+  const currentKey = useRef(targetKey);
+  currentKey.current = targetKey;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+
   const refresh = useCallback(async () => {
+    const key = targetKey;
     try {
+      let order: OpenOrder | null;
+      let splits: Order[];
       if (mode === "table") {
-        setOpenOrder(tableId ? await fetchOpenOrder(tableId, subtable) : null);
-        setOpenSplits(tableId ? await fetchOpenOrdersForTable(tableId) : []);
+        order = tableId ? await fetchOpenOrder(tableId, subtable) : null;
+        splits = tableId ? await fetchOpenOrdersForTable(tableId) : [];
       } else {
-        setOpenOrder(
-          takeawayOrderId ? await fetchOpenOrderById(takeawayOrderId) : null,
-        );
-        setOpenSplits([]);
+        order = takeawayOrderId
+          ? await fetchOpenOrderById(takeawayOrderId)
+          : null;
+        splits = [];
       }
+      if (currentKey.current !== key) return;
+      setOpenOrder(order);
+      setOpenSplits(splits);
+      setLoadedKey(key);
       setOpenTakeaways(await fetchOpenTakeaways());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("pos.failedLoadOrder"));
     }
-  }, [mode, tableId, subtable, takeawayOrderId, t]);
+  }, [targetKey, mode, tableId, subtable, takeawayOrderId, t]);
 
   useEffect(() => {
     void refresh();
@@ -73,5 +97,11 @@ export function useOpenOrder(): OpenOrderData {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refresh]);
 
-  return { openOrder, openSplits, openTakeaways, refresh };
+  return {
+    openOrder,
+    loaded: loadedKey === targetKey,
+    openSplits,
+    openTakeaways,
+    refresh,
+  };
 }

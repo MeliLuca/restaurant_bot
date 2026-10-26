@@ -697,6 +697,29 @@ export interface Database {
         };
         Relationships: [];
       };
+      line_notes: {
+        Row: {
+          id: string;
+          /** Preset kitchen instruction ("Ben cotta", "Prima"); never a comma,
+           * since picked notes are stored comma-joined in order_items.notes */
+          name: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       menu_item_ingredients: {
         Row: {
           menu_item_id: string;
@@ -1266,6 +1289,7 @@ export type OrderPayment = Database["public"]["Tables"]["order_payments"]["Row"]
 export type Role = Database["public"]["Tables"]["roles"]["Row"];
 export type AppUser = Database["public"]["Tables"]["app_users"]["Row"];
 export type TableTag = Database["public"]["Tables"]["table_tags"]["Row"];
+export type LineNote = Database["public"]["Tables"]["line_notes"]["Row"];
 export type Ingredient = Database["public"]["Tables"]["ingredients"]["Row"];
 export type OrderItemModifier =
   Database["public"]["Tables"]["order_item_modifiers"]["Row"];

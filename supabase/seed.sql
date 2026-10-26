@@ -1371,7 +1371,7 @@ update smart_floor_settings
   where finishing_category_ids = '{}';
 
 -- ---------------------------------------------------------------------------
--- Pantry hygiene + demo add-on prices
+-- Pantry hygiene
 -- ---------------------------------------------------------------------------
 -- The listino's "ingredienti" column split a few beer strengths into the
 -- pantry ('5% vol.') plus the bare counts '4' and '6'. Harmless while the
@@ -1381,11 +1381,78 @@ update smart_floor_settings
 -- Narrow on purpose: '^[0-9]' would also take '4 formaggi' and '2 hamburger'.
 delete from ingredients where name ~ '^[0-9]+$' or name like '%vol.%';
 
--- A few realistic add-on prices so the diminishing scale is visible out of the
--- box; everything else stays free until someone prices it in Settings → Menu.
-update ingredients set price = 2.00 where name in ('bufala', 'crudo', 'speck', 'gorgonzola', 'brie');
-update ingredients set price = 1.50 where name in ('funghi', 'salsiccia', 'tonno', 'grana', 'asiago');
-update ingredients set price = 1.00 where name in ('rucola', 'cipolla', 'olive', 'capperi', 'pomodorini');
+-- Tabella variazioni (house add-on price list, 2026-09-30).
+-- The listino split the same ingredient under several names ('crudo',
+-- 'crudo di Parma', 'prosciutto crudo'). The house list prices each ingredient
+-- once, so the synonyms fold into the longer name the pantry already had, and
+-- the dishes (and any past order rows) follow it.
+create temp table ingredient_merge (from_name text primary key, into_name text not null);
+insert into ingredient_merge (from_name, into_name) values
+  ('bufala', 'mozzarella di bufala'),
+  ('chiodini', 'funghi chiodini'),
+  ('porcini', 'funghi porcini'),
+  ('cotto', 'prosciutto cotto'),
+  ('prosc. cotto', 'prosciutto cotto'),
+  ('crudo', 'prosciutto crudo'),
+  ('crudo di Parma', 'prosciutto crudo'),
+  ('pom. secco', 'pomodori secchi'),
+  ('pomodorini secchi', 'pomodori secchi'),
+  ('speck', 'speck di Sauris'),
+  ('speck saurius', 'speck di Sauris'),
+  ('peperoni piastra', 'peperoni alla piastra'),
+  ('olive', 'olive nere'),
+  ('alici', 'acciughe');
+
+insert into menu_item_ingredients (menu_item_id, ingredient_id)
+select mi.menu_item_id, t.id
+from menu_item_ingredients mi
+join ingredients f on f.id = mi.ingredient_id
+join ingredient_merge m on m.from_name = f.name
+join ingredients t on t.name = m.into_name
+on conflict do nothing;
+
+update order_item_modifiers o set ingredient_id = t.id
+from ingredients f, ingredient_merge m, ingredients t
+where o.ingredient_id = f.id and m.from_name = f.name and t.name = m.into_name;
+
+-- cascades the old menu_item_ingredients links
+delete from ingredients where name in (select from_name from ingredient_merge);
+drop table ingredient_merge;
+
+-- Add-on prices. The listino price is also what a removed ingredient credits
+-- against a swapped-in one (lib/money.ts), so it matters for removals too.
+insert into ingredients (name, price) values
+  ('acciughe', 1.50), ('asiago', 2.00), ('asparagi', 2.00), ('basilico', 0),
+  ('bresaola', 2.00), ('brie', 1.50), ('mozzarella di bufala', 2.50),
+  ('burrata', 2.50), ('capperi', 0.50), ('carciofi', 2.00), ('carote', 1.00),
+  ('funghi chiodini', 2.50), ('cipolla', 1.50), ('prosciutto cotto', 2.00),
+  ('crocchette di patate', 1.50), ('prosciutto crudo', 2.50),
+  ('philadelphia', 1.00), ('formaggio', 1.50), ('funghi', 1.50),
+  ('gamberetti', 2.50), ('gorgonzola', 1.50), ('grana', 1.00),
+  ('insalata', 0.50), ('mais', 1.00), ('maionese', 0.50), ('melanzane', 1.50),
+  ('misticanza', 1.50), ('mortadella', 1.50), ('mozzarella', 1.50),
+  ('noci', 1.50), ('olive nere', 1.50), ('olive taggiasche', 1.50),
+  ('origano', 0), ('pancetta', 1.20), ('pancetta arrotolata', 1.50),
+  ('panna', 1.00), ('patate', 2.50), ('peperoni', 1.50),
+  ('pepite di pollo', 1.50), ('piselli', 0.50), ('pomodori secchi', 1.50),
+  ('pomodorini', 1.50), ('pomodoro', 1.50), ('pomodoro fresco', 1.20),
+  ('porchetta', 2.00), ('funghi porcini', 2.50), ('provola', 1.00),
+  ('radicchio', 2.00), ('ricotta', 1.00), ('rucola', 1.50), ('salame', 1.50),
+  ('salamino', 1.50), ('salmone', 3.50), ('salsa piccante', 0.50),
+  ('salsa rosa', 0.50), ('salsiccia', 1.50), ('sfilacci', 2.00),
+  ('speck di Sauris', 2.00), ('spinaci', 1.50), ('stracchino', 1.50),
+  ('tonno', 1.50), ('uovo', 0.50), ('uova', 0.50), ('wurstel', 1.50),
+  ('zucchine', 1.50),
+  -- not in any dish yet: offered as additions only
+  ('aglio', 0), ('peperoncino', 0), ('ketchup', 0.50), ('senape', 0.50),
+  ('salsa barbecue', 0.50), ('zucca', 2.50),
+  ('abbondante mozzarella', 1.30), ('abbondante pomodoro', 0.50),
+  -- generic extra for anything not in the list; the detail goes in a note
+  ('aggiunta', 1.00),
+  -- dough variants
+  ('doppia pasta', 1.50), ('integrale', 2.00), ('kamut', 2.00),
+  ('battuta', 3.00)
+on conflict (name) do update set price = excluded.price;
 
 -- Pizze and bruschette are what actually get customized at the counter.
 update menu_items m set allows_variations = true

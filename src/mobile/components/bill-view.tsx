@@ -20,6 +20,7 @@ import { orderItemLabel } from "@/lib/menu-display";
 import { useT } from "@/lib/i18n/use-translation";
 import { remainingBalanceCents } from "@/lib/money";
 import { collapseCoperto } from "@/lib/pos/coperto";
+import { parseModifiers } from "@/lib/printing/route-order";
 import { calcTotals, lineUnitPrice, useTicketStore } from "@/stores/ticket-store";
 import { usePermission } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
@@ -256,6 +257,14 @@ export function BillView({ orderId }: { orderId: string }) {
                     className="pl-9 text-sm text-muted-foreground"
                   >
                     {m.is_removal ? "−" : "+"} {m.name}
+                  </div>
+                ))}
+                {parseModifiers(i.notes).map((n) => (
+                  <div
+                    key={`note:${n}`}
+                    className="pl-9 text-sm italic text-muted-foreground"
+                  >
+                    {n}
                   </div>
                 ))}
                 {paid && (

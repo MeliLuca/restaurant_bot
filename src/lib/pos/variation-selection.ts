@@ -113,14 +113,16 @@ export function variationsToModifiers(
 }
 
 /**
- * The pantry as the "add" section should render it.
+ * The pantry as the "add" section should render it: the picked additions, plus
+ * search suggestions for the query. Nothing is suggested until something is
+ * typed — the pantry runs to a couple of hundred rows and browsing it was
+ * slower than typing three letters.
  *
  * The dish's own ingredients are excluded — they belong to the "remove"
  * section, and letting them appear in both would allow one line to carry the
- * same ingredient added AND removed. Already-picked additions are always
- * returned even when the query filters them out, so a search never silently
- * hides something the waiter has selected (and the total always matches what
- * is on screen).
+ * same ingredient added AND removed. Picked additions are returned apart from
+ * the suggestions and never filtered, so a search never hides something the
+ * waiter has selected (and the total always matches what is on screen).
  */
 export function addablePantry(
   pantry: VariationOption[],
@@ -135,14 +137,45 @@ export function addablePantry(
 
   const picked = addable.filter((i) => pickedIds.has(i.id));
   const q = query.trim().toLowerCase();
-  const rest = addable.filter(
-    (i) => !pickedIds.has(i.id) && (!q || i.name.toLowerCase().includes(q)),
-  );
+  if (!q) return { picked, matches: [], hiddenCount: 0 };
+
+  // Names starting with the query first, then a later word starting with it,
+  // then anywhere: "sal" offers salame before "2 salsicce" before insalata.
+  // Within a tier, priced rows first: those are the house's add-on list, the
+  // free ones are mostly dish descriptions the listino import split into the
+  // pantry ("involtino di speck … di bufala" must not beat "mozzarella di
+  // bufala" to the Enter key). The sort is stable, so the rest stays A–Z.
+  const tier = (i: VariationOption) => {
+    const name = i.name.toLowerCase();
+    const t = name.startsWith(q) ? 0 : name.includes(` ${q}`) ? 1 : 2;
+    return t * 2 + (i.price > 0 ? 0 : 1);
+  };
+  const rest = addable
+    .filter((i) => !pickedIds.has(i.id) && i.name.toLowerCase().includes(q))
+    .sort((a, b) => tier(a) - tier(b));
   return {
     picked,
     matches: rest.slice(0, limit),
     hiddenCount: Math.max(0, rest.length - limit),
   };
+}
+
+/** Toggle a note rapida on a line. The result follows the configured list's
+ * order, not tap order, so the kitchen always reads them the same way round;
+ * a note deleted from the list since goes last rather than vanishing. */
+export function toggleNote(
+  notes: string[],
+  note: string,
+  order: string[],
+): string[] {
+  const next = notes.includes(note)
+    ? notes.filter((n) => n !== note)
+    : [...notes, note];
+  const rank = (n: string) => {
+    const i = order.indexOf(n);
+    return i < 0 ? order.length : i;
+  };
+  return next.sort((a, b) => rank(a) - rank(b));
 }
 
 export interface VariationPricePreview {

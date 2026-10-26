@@ -40,6 +40,7 @@ export default function PosPage() {
   } = useMenuData();
   const {
     openOrder,
+    loaded: openOrderLoaded,
     openSplits,
     openTakeaways,
     refresh: refreshOrder,
@@ -70,6 +71,8 @@ export default function PosPage() {
   }, [lines.length]);
 
   const labelOf = makeMenuLabeller(categories);
+  // what the covers prompt puts on the ticket; null when the house has none
+  const copertoItem = items.find((i) => i.is_coperto) ?? null;
 
   function handleAdd(item: MenuItemView): boolean {
     const hasTarget = mode === "table" ? !!tableId : !!takeawayName;
@@ -206,6 +209,8 @@ export default function PosPage() {
           <TicketPanel
             tables={tables}
             openOrder={openOrder}
+            openOrderLoaded={openOrderLoaded}
+            copertoItem={copertoItem}
             openSplits={openSplits}
             openTakeaways={openTakeaways}
             variations={variations}
@@ -221,6 +226,8 @@ export default function PosPage() {
         <TicketPanel
           tables={tables}
           openOrder={openOrder}
+          openOrderLoaded={openOrderLoaded}
+          copertoItem={copertoItem}
           openSplits={openSplits}
           openTakeaways={openTakeaways}
           variations={variations}

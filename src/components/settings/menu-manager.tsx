@@ -7,6 +7,7 @@ import {
   Carrot,
   Check,
   LayoutGrid,
+  MessageSquareText,
   Pencil,
   Plus,
   Search,
@@ -37,17 +38,25 @@ import { formatMoney } from "@/lib/constants";
 import {
   createCategory,
   createIngredient,
+  createLineNote,
   createMenuItem,
   deleteCategory,
   deleteIngredient,
+  deleteLineNote,
   deleteMenuItem,
+  fetchLineNotes,
   setMenuItemIngredients,
   updateIngredient,
   updateMenuItem,
   updateMenuItems,
   type MenuItemWithIngredients,
 } from "@/lib/settings-api";
-import type { Category, Ingredient, Printer } from "@/lib/database.types";
+import type {
+  Category,
+  Ingredient,
+  LineNote,
+  Printer,
+} from "@/lib/database.types";
 import { useT } from "@/lib/i18n/use-translation";
 import { buildHaystack, normalize, tokenize } from "@/lib/menu-search";
 import { cn } from "@/lib/utils";
@@ -459,6 +468,8 @@ export function MenuManager({
             busy={busy}
             run={run}
           />
+
+          <LineNotesCard />
         </>
       )}
 
@@ -897,6 +908,109 @@ function IngredientsCard({
         run={run}
         onClose={() => setEditing(null)}
       />
+    </Card>
+  );
+}
+
+/**
+ * Note rapide: the free kitchen instructions ("Ben cotta", "Prima") offered as
+ * one-tap buttons in the POS line editor. Owns its own list rather than riding
+ * the page's refresh — nothing else on this page reads it.
+ */
+function LineNotesCard() {
+  const t = useT();
+  const [notes, setNotes] = useState<LineNote[]>([]);
+  const [newNote, setNewNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetchLineNotes()
+      .then(setNotes)
+      .catch((e) =>
+        toast.error(e instanceof Error ? e.message : t("common.somethingWrong")),
+      );
+  }, [t]);
+
+  async function run(action: () => Promise<void>, success: string) {
+    setBusy(true);
+    try {
+      await action();
+      setNotes(await fetchLineNotes());
+      toast.success(success);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("common.somethingWrong"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newNote.trim();
+    if (!name) return;
+    // picked notes are stored comma-joined on the line, so a comma would
+    // split one note into two on the comanda
+    if (name.includes(",")) {
+      toast.error(t("menu.lineNoteNoComma"));
+      return;
+    }
+    await run(() => createLineNote(name), t("menu.lineNoteAdded", { name }));
+    setNewNote("");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <MessageSquareText className="h-5 w-5" /> {t("menu.lineNotesTitle")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-2">
+          {notes.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t("menu.noLineNotesYet")}
+            </p>
+          )}
+          {notes.map((n) => (
+            <span
+              key={n.id}
+              className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm"
+            >
+              {n.name}
+              <button
+                type="button"
+                aria-label={t("menu.deleteLineNoteAria", { name: n.name })}
+                disabled={busy}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                onClick={() =>
+                  run(
+                    () => deleteLineNote(n.id),
+                    t("menu.nameDeleted", { name: n.name }),
+                  )
+                }
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <form onSubmit={handleAdd} className="flex gap-2">
+          <Input
+            value={newNote}
+            onChange={(e) => setNewNote(e.target.value)}
+            placeholder={t("menu.newLineNotePlaceholder")}
+            className="h-12"
+            aria-label={t("menu.newLineNoteAria")}
+          />
+          <Button type="submit" className="h-12" disabled={busy || !newNote.trim()}>
+            <Plus className="mr-1 h-4 w-4" /> {t("common.add")}
+          </Button>
+        </form>
+        <p className="text-xs text-muted-foreground">
+          {t("menu.lineNotesHelp")}
+        </p>
+      </CardContent>
     </Card>
   );
 }

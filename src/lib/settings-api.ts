@@ -3,6 +3,7 @@ import { compareTableNames, type MapTableGeometry } from "@/lib/floor/maps";
 import type {
   Database,
   Ingredient,
+  LineNote,
   MenuItem,
   Printer,
   PrintTemplateRow,
@@ -234,6 +235,40 @@ export async function setIngredientAvailability(
     .from("ingredients")
     .update({ is_available: isAvailable })
     .eq("id", ingredientId);
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// Note rapide (line_notes)
+// ---------------------------------------------------------------------------
+
+export async function fetchLineNotes(): Promise<LineNote[]> {
+  const { data, error } = await getSupabase()
+    .from("line_notes")
+    .select("*")
+    .order("sort_order")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** New notes go to the end of the list, after the house's own. */
+export async function createLineNote(name: string): Promise<void> {
+  const sb = getSupabase();
+  const { data: last, error: lastError } = await sb
+    .from("line_notes")
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  if (lastError) throw new Error(lastError.message);
+  const { error } = await sb
+    .from("line_notes")
+    .insert({ name: name.trim(), sort_order: (last[0]?.sort_order ?? 0) + 10 });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteLineNote(id: string): Promise<void> {
+  const { error } = await getSupabase().from("line_notes").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
 

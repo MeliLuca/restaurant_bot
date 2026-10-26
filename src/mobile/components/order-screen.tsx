@@ -76,9 +76,10 @@ export function OrderScreen({ target }: { target: OrderTarget }) {
       ? mRoutes.bill(target.orderId)
       : mRoutes.table(tableId);
 
-  const { openOrder, refresh } = useOpenOrder();
+  const { openOrder, loaded, refresh } = useOpenOrder();
   const { send, busy, covers, needsCovers } = useOrderActions({
     openOrder,
+    openOrderLoaded: loaded,
     onOrderChanged: refresh,
   });
 
@@ -87,6 +88,7 @@ export function OrderScreen({ target }: { target: OrderTarget }) {
   const setLineModifiers = useTicketStore((s) => s.setLineModifiers);
   const setLinePrice = useTicketStore((s) => s.setLinePrice);
   const setDraftCovers = useTicketStore((s) => s.setDraftCovers);
+  const setCopertoLine = useTicketStore((s) => s.setCopertoLine);
 
   const [ticketOpen, setTicketOpen] = useState(false);
   const [editLine, setEditLine] = useState<TicketLine | null>(null);
@@ -117,9 +119,11 @@ export function OrderScreen({ target }: { target: OrderTarget }) {
   // remove but the whole pantry to add.
   const hasVariations = (menuItemId: string) => menuItemId in variations.byItem;
   // Same rule as the POS: the editor is offered when the user can change
-  // something here — ingredients, the price, or both.
+  // something here — ingredients, notes, the price.
   const canEditLine = (menuItemId: string) =>
-    hasVariations(menuItemId) || canOverridePrice;
+    hasVariations(menuItemId) ||
+    variations.quickNotes.length > 0 ||
+    canOverridePrice;
 
   if (!canTakeOrders) {
     return (
@@ -148,6 +152,9 @@ export function OrderScreen({ target }: { target: OrderTarget }) {
       }
     } else {
       setDraftCovers(next);
+      // the answer becomes the order's first line, sent and printed with it
+      const coperto = items.find((i) => i.is_coperto);
+      if (coperto) setCopertoLine(coperto, next);
     }
     setCoversOpen(false);
   }
@@ -321,9 +328,11 @@ export function OrderScreen({ target }: { target: OrderTarget }) {
           variationsAllowed={hasVariations(editLine.menuItemId)}
           canEditPrice={canOverridePrice}
           initialModifiers={editLine.modifiers}
+          quickNotes={variations.quickNotes}
+          initialNotes={editLine.notes ?? []}
           onClose={() => setEditLine(null)}
-          onConfirm={(mods, basePrice) => {
-            setLineModifiers(editLine.lineId, mods);
+          onConfirm={(mods, basePrice, notes) => {
+            setLineModifiers(editLine.lineId, mods, notes);
             if (basePrice !== null) setLinePrice(editLine.lineId, basePrice);
           }}
         />

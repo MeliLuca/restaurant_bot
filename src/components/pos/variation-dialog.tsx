@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Minus, Plus, Search } from "lucide-react";
+import { Minus, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,6 +18,7 @@ import {
   EMPTY_VARIATIONS,
   seedVariations,
   toggleAddition,
+  toggleNote,
   toggleRemoval,
   variationPricePreview,
   variationsToModifiers,
@@ -28,9 +29,8 @@ import type { SelectedModifier } from "@/stores/ticket-store";
 import { useT } from "@/lib/i18n/use-translation";
 import { cn } from "@/lib/utils";
 
-/** The pantry runs to a couple of hundred rows; show a screenful and let the
- * search box reach the rest, the way the menu manager caps its chip lists. */
-const MAX_PANTRY_CHIPS = 40;
+/** Suggestions under the search box; typing more narrows past the rest. */
+const MAX_SUGGESTIONS = 8;
 
 interface VariationDialogProps {
   /** Whether the editor is open */
@@ -51,10 +51,18 @@ interface VariationDialogProps {
   canEditPrice?: boolean;
   /** The line's current variations — the picker opens pre-filled with these */
   initialModifiers?: SelectedModifier[];
+  /** Note rapide on offer, in display order; shown for every dish */
+  quickNotes?: string[];
+  /** The line's current notes */
+  initialNotes?: string[];
   onClose: () => void;
   /** `basePrice` is null unless an authorized user actually changed it, so an
    * untouched line never gets flagged as manually priced. */
-  onConfirm: (modifiers: SelectedModifier[], basePrice: number | null) => void;
+  onConfirm: (
+    modifiers: SelectedModifier[],
+    basePrice: number | null,
+    notes: string[],
+  ) => void;
 }
 
 function Chip({
@@ -64,6 +72,7 @@ function Chip({
   label,
   price,
   strike,
+  removable,
 }: {
   active: boolean;
   onClick: () => void;
@@ -71,6 +80,8 @@ function Chip({
   label: string;
   price?: number;
   strike?: boolean;
+  /** Trailing ×, for a pill whose tap takes it off */
+  removable?: boolean;
 }) {
   return (
     <button
@@ -98,6 +109,7 @@ function Chip({
           +{formatMoney(price)}
         </span>
       )}
+      {removable && <X className="h-3.5 w-3.5 shrink-0 opacity-80" />}
     </button>
   );
 }
@@ -109,7 +121,9 @@ function Chip({
  *
  * Two sections, because they are two different questions: what to take OFF this
  * dish (its own ingredients, always free) and what to put ON it (anything in
- * the pantry, charged on the diminishing scale). Previewed live.
+ * the pantry, found by typing, charged on the diminishing scale). Previewed
+ * live. Below them the note rapide — free kitchen instructions offered on any
+ * dish, even one with variations off.
  */
 export function VariationDialog({
   open,
@@ -120,13 +134,17 @@ export function VariationDialog({
   variationsAllowed,
   canEditPrice = false,
   initialModifiers = [],
+  quickNotes = [],
+  initialNotes = [],
   onClose,
   onConfirm,
 }: VariationDialogProps) {
   const t = useT();
   const [state, setState] = useState<VariationState>(EMPTY_VARIATIONS);
-  // free-text filter over the pantry, for the "add" section only
+  const [notes, setNotes] = useState<string[]>([]);
+  // search over the pantry, for the "add" section only
   const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   // Base price as typed. Kept as text so a half-finished "12." doesn't fight
   // the user by snapping back to a number mid-keystroke.
   const [priceText, setPriceText] = useState("");
@@ -137,11 +155,12 @@ export function VariationDialog({
   useEffect(() => {
     if (open && !wasOpen.current) {
       setState(seedVariations(initialModifiers));
+      setNotes(initialNotes);
       setQuery("");
       setPriceText(basePrice.toFixed(2));
     }
     wasOpen.current = open;
-  }, [open, initialModifiers, basePrice]);
+  }, [open, initialModifiers, initialNotes, basePrice]);
 
   const parsedPrice = Number.parseFloat(priceText);
   const priceValid = Number.isFinite(parsedPrice) && parsedPrice >= 0;
@@ -157,7 +176,7 @@ export function VariationDialog({
   );
 
   const { picked, matches, hiddenCount } = useMemo(
-    () => addablePantry(pantry, dishIngredients, state, query, MAX_PANTRY_CHIPS),
+    () => addablePantry(pantry, dishIngredients, state, query, MAX_SUGGESTIONS),
     [pantry, dishIngredients, state, query],
   );
 
@@ -166,18 +185,43 @@ export function VariationDialog({
   const { addedCount, linearExtras, surcharge, tapered, swapped, total } =
     variationPricePreview(effectiveBase, selected);
 
+  // Picking a suggestion clears the box and keeps focus there, so the next
+  // ingredient is just more typing.
+  function addSuggestion(id: string) {
+    setState((s) => toggleAddition(s, id));
+    setQuery("");
+    searchRef.current?.focus();
+  }
+
   function confirm() {
     if (canEditPrice && !priceValid) return;
-    onConfirm(selected, priceChanged ? effectiveBase : null);
+    onConfirm(selected, priceChanged ? effectiveBase : null, notes);
     onClose();
   }
+
+  const notesSection = quickNotes.length > 0 && (
+    <div className="flex flex-col gap-2">
+      <span className="font-semibold">{t("pos.notesSection")}</span>
+      <div className="flex flex-wrap gap-2">
+        {quickNotes.map((n) => (
+          <Chip
+            key={n}
+            active={notes.includes(n)}
+            onClick={() => setNotes((ns) => toggleNote(ns, n, quickNotes))}
+            icon={null}
+            label={n}
+          />
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className="max-w-lg"
         // don't grab focus into the search box on open — keeps the on-screen
-        // keyboard from popping when staff just want to tap ingredient pills
+        // keyboard from popping when staff just want to tap a removal or a note
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
@@ -216,44 +260,82 @@ export function VariationDialog({
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={searchRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Enter takes the top suggestion, the one the eye is on
+                    if (e.key === "Enter" && matches.length > 0) {
+                      e.preventDefault();
+                      addSuggestion(matches[0].id);
+                    }
+                  }}
                   placeholder={t("pos.searchIngredients")}
                   className="h-11 pl-9"
                   aria-label={t("pos.searchIngredientsAria")}
+                  autoComplete="off"
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
-                {/* picked first, so a search can never hide what is selected */}
-                {[...picked, ...matches].map((i) => (
-                  <Chip
-                    key={i.id}
-                    active={state.addedIds.includes(i.id)}
-                    onClick={() => setState((s) => toggleAddition(s, i.id))}
-                    icon={<Plus className="h-3.5 w-3.5 shrink-0" />}
-                    label={i.name}
-                    price={i.price}
-                  />
-                ))}
-                {picked.length + matches.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {t("pos.noIngredientsMatch", { query: query.trim() })}
-                  </p>
-                )}
-                {hiddenCount > 0 && (
-                  <span className="self-center text-xs text-muted-foreground">
-                    {t("menu.moreIngredients", { count: hiddenCount })}
-                  </span>
-                )}
-              </div>
+              {query.trim() && (
+                <ul className="flex flex-col divide-y overflow-hidden rounded-md border">
+                  {matches.map((i) => (
+                    <li key={i.id}>
+                      <button
+                        type="button"
+                        onClick={() => addSuggestion(i.id)}
+                        className="flex min-h-11 w-full items-center gap-2 px-3 text-left text-sm hover:bg-accent"
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">{i.name}</span>
+                        {i.price > 0 && (
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            +{formatMoney(i.price)}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                  {matches.length === 0 && (
+                    <li className="px-3 py-2.5 text-sm text-muted-foreground">
+                      {t("pos.noIngredientsMatch", { query: query.trim() })}
+                    </li>
+                  )}
+                  {hiddenCount > 0 && (
+                    <li className="px-3 py-1.5 text-xs text-muted-foreground">
+                      {t("pos.moreMatches", { count: hiddenCount })}
+                    </li>
+                  )}
+                </ul>
+              )}
+              {/* what is added so far — tap one to take it off again */}
+              {picked.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {picked.map((i) => (
+                    <Chip
+                      key={i.id}
+                      active
+                      removable
+                      onClick={() => setState((s) => toggleAddition(s, i.id))}
+                      icon={<Plus className="h-3.5 w-3.5 shrink-0" />}
+                      label={i.name}
+                      price={i.price}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
+
+            {notesSection}
           </div>
         ) : (
-          // Price-only editor. Saying why beats showing two empty sections:
-          // the switch lives in Settings → Menu, one click away.
-          <p className="text-sm text-muted-foreground">
-            {t("pos.variationsOffHint")}
-          </p>
+          // No ingredients to edit. Saying why beats showing two empty
+          // sections: the switch lives in Settings → Menu, one click away.
+          <div className="flex max-h-[55vh] flex-col gap-5 overflow-y-auto pr-1">
+            {notesSection}
+            <p className="text-sm text-muted-foreground">
+              {t("pos.variationsOffHint")}
+            </p>
+          </div>
         )}
 
         <DialogFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-end sm:justify-between">

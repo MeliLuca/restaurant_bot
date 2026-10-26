@@ -76,9 +76,13 @@ interface OrderActions {
  */
 export function useOrderActions({
   openOrder,
+  openOrderLoaded = true,
   onOrderChanged,
 }: {
   openOrder: OpenOrder | null;
+  /** False while `openOrder` is still being fetched for the current target
+   * (useOpenOrder's `loaded`); screens that already hold the order omit it */
+  openOrderLoaded?: boolean;
   onOrderChanged: () => Promise<void>;
 }): OrderActions {
   const t = useT();
@@ -93,6 +97,7 @@ export function useOrderActions({
   const draftCovers = useDraftCovers();
   const setTakeaway = useTicketStore((s) => s.setTakeaway);
   const clearLines = useTicketStore((s) => s.clearLines);
+  const dropDraftCovers = useTicketStore((s) => s.dropDraftCovers);
   const clearTicket = useTicketStore((s) => s.clearTicket);
 
   const [busy, setBusy] = useState(false);
@@ -102,9 +107,15 @@ export function useOrderActions({
   const covers = openOrder?.order.covers ?? draftCovers;
   // Only the table's first order asks — once any order exists (even a
   // drinks-only one that skipped the cover charge), adding another round
-  // never re-prompts, per house rule.
+  // never re-prompts, per house rule. And only once the order has loaded: a
+  // null openOrder mid-fetch is "don't know yet", and asking then re-prompted
+  // every time the waiter came back to an already open table.
   const needsCovers =
-    mode === "table" && hasTarget && !openOrder && covers == null;
+    mode === "table" &&
+    hasTarget &&
+    openOrderLoaded &&
+    !openOrder &&
+    covers == null;
   const targetLabel =
     mode === "table"
       ? subtable
@@ -161,6 +172,9 @@ export function useOrderActions({
       const round = await sendPendingLines();
       clearLines();
       await onOrderChanged();
+      // Only now: until the refetch lands there is no order on screen, and
+      // the draft is what keeps the covers prompt from re-opening meanwhile.
+      dropDraftCovers();
       toast.success(t("pos.orderSent", { label: targetLabel ?? "" }));
       await printRound(round);
       return true;
@@ -195,6 +209,9 @@ export function useOrderActions({
       const closedLabel = targetLabel;
       const closedTableId = tableId;
       const closedTableName = tableName ?? "";
+      // before clearTicket moves the target away, or the answer would be
+      // waiting for the next party at this table instead of asking them
+      dropDraftCovers();
       clearTicket();
       await onOrderChanged();
 

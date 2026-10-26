@@ -72,7 +72,7 @@ export function TicketLinesSheet({
               </span>
             </div>
 
-            {l.modifiers.length > 0 && (
+            {(l.modifiers.length > 0 || !!l.notes?.length) && (
               <ul className="pl-3 text-xs text-muted-foreground">
                 {l.modifiers.map((m) => (
                   <li
@@ -88,6 +88,11 @@ export function TicketLinesSheet({
                         +{formatMoney(m.priceAdjustment)}
                       </span>
                     )}
+                  </li>
+                ))}
+                {l.notes?.map((n) => (
+                  <li key={`note:${n}`} className="truncate italic">
+                    {n}
                   </li>
                 ))}
               </ul>
@@ -120,7 +125,7 @@ export function TicketLinesSheet({
                   onClick={() => onEditModifiers(l)}
                   className="ml-1 min-h-11 rounded-lg border px-3 text-sm font-medium text-primary"
                 >
-                  {t("m.ingredients")}
+                  {t("m.variations")}
                 </button>
               )}
 
