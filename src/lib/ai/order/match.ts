@@ -36,6 +36,7 @@ import {
   splitPhrases,
   validateCategoryHint,
   wordMatches,
+  writtenSize,
 } from "./text";
 
 export type MatchResult =
@@ -64,6 +65,21 @@ const SIZE_WORDS: Record<string, string[]> = {
   medium: ["40", "50"],
 };
 
+/** Words the listino writes in another language: "leffe rossa" is the
+ * Leffe Rouge, "birra bianca" the Hoegaarden Blanche (stemmed, both ways) */
+const WORD_SYNONYMS: Record<string, string[]> = {
+  ross: ["roug"],
+  roug: ["ross"],
+  red: ["ross", "roug"],
+  biond: ["blond"],
+  blond: ["biond"],
+  bianc: ["blanch"],
+  blanch: ["bianc"],
+  white: ["bianc", "blanch"],
+};
+
+const SIZE_WORD = "#size";
+
 /** Above this a word-matched dish is taken as is */
 const SURE = 0.75;
 /** Below this nothing is proposed */
@@ -79,7 +95,14 @@ interface Candidate {
 }
 
 type Resolution =
-  | { kind: "items"; candidates: Candidate[]; sure: boolean; score: number }
+  | {
+      kind: "items";
+      candidates: Candidate[];
+      sure: boolean;
+      score: number;
+      /** found by its own ingredients ("bruschetta con patate e porchetta" = 235) */
+      byIngredients?: boolean;
+    }
   | {
       kind: "description";
       categories: Category[];
@@ -120,14 +143,26 @@ function nameWords(item: MenuItemView): string[] {
  * ingredients, category — the POS search haystack), and how much of the
  * dish's own name was written. Size words stand for any of their numbers.
  */
-function wordScore(words: string[], item: MenuItemView, categoryName: string): { score: number; precision: number } {
+function wordScore(
+  words: string[],
+  item: MenuItemView,
+  categoryName: string,
+  sizeCl: number | null = null,
+): { score: number; precision: number } {
   if (words.length === 0) return { score: 0, precision: 0 };
   const hay = buildHaystack([item.codice, item.name, ...(item.ingredients ?? []), categoryName]);
   const hayWords = hay.split(" ");
+  // a written size ("0,33cl") stands for the item's whole size ("cl 0,33")
+  const itemSize = sizeCl === null ? null : writtenSize(item.name);
+  const sizeWords = itemSize?.cl === sizeCl ? sigWords(itemSize.text) : [];
+  const same = (w: string, target: string) =>
+    w === SIZE_WORD
+      ? sizeWords.includes(target)
+      : wordMatches(w, target) || (WORD_SYNONYMS[w] ?? []).some((s) => wordMatches(s, target));
   const covers = (w: string) => {
     const sizes = SIZE_WORDS[w];
     if (sizes) return sizes.some((n) => hayWords.includes(n));
-    return hayWords.some((h) => wordMatches(w, h));
+    return hayWords.some((h) => same(w, h));
   };
   const coverage = words.filter(covers).length / words.length;
   const own = nameWords(item);
@@ -135,7 +170,7 @@ function wordScore(words: string[], item: MenuItemView, categoryName: string): {
     own.length === 0
       ? 0
       : own.filter((o) =>
-          words.some((w) => (SIZE_WORDS[w] ? SIZE_WORDS[w].includes(o) : wordMatches(w, o))),
+          words.some((w) => (SIZE_WORDS[w] ? SIZE_WORDS[w].includes(o) : same(w, o))),
         ).length / own.length;
   return { score: 0.6 * coverage + 0.4 * precision, precision };
 }
@@ -181,8 +216,11 @@ function resolveDish(piatto: string, extras: string[], hint: string | undefined,
   });
   const withCat = (i: MenuItemView): Candidate => ({ item: i, category: catById.get(i.category_id)!, score: 1 });
 
-  // 1. codice ("1202", "01")
-  const numbers = norm.split(" ").filter((w) => /^\d+$/.test(w));
+  // 1. codice ("1202", "01"), not the numbers of a size ("da 0,25")
+  const size = writtenSize(piatto);
+  const numbers = normalize(size ? piatto.replace(size.text, " ") : piatto)
+    .split(" ")
+    .filter((w) => /^\d+$/.test(w));
   for (const n of numbers) {
     const hits = items.filter(
       (i) => i.codice && (i.codice === n || (n.length >= 3 && Number(i.codice) === Number(n))),
@@ -256,16 +294,26 @@ function resolveDish(piatto: string, extras: string[], hint: string | undefined,
     });
   }
   const exactSet = byIngredients.filter((c) => c.score >= 0.999);
-  if (exactSet.length > 0) return itemsResult(exactSet, exactSet.length === 1);
+  if (exactSet.length > 0) {
+    return { ...itemsResult(exactSet, exactSet.length === 1), byIngredients: qWords.length === 0 } as Resolution;
+  }
 
-  // 4. everything else by its words
+  // 4. everything else by its words; a written size ("da 0,33cl") rules out
+  // the other sizes of the same drink (and the 3,5 litri giraffa)
+  const scoreWords = size
+    ? [...sigWords(piatto.replace(size.text, " ")), SIZE_WORD]
+    : allWords;
   const byWords: Candidate[] = [];
   if (!aliased) {
     usable
       .filter((i) => inScope(i) && !isCodeNamedCategory(catById.get(i.category_id)!.name))
+      .filter((i) => {
+        const own = size ? writtenSize(i.name) : null;
+        return !own || own.cl === size!.cl;
+      })
       .forEach((i) => {
         const c = catById.get(i.category_id)!;
-        const { score, precision } = wordScore(allWords, i, c.name);
+        const { score, precision } = wordScore(scoreWords, i, c.name, size?.cl ?? null);
         // a category word alone ("piadina") names no particular dish
         if (precision > 0) byWords.push({ item: i, category: c, score });
       });
@@ -475,8 +523,9 @@ export function matchItem(ex: ExtractedItem, ctx: MatchContext): MatchResult {
     return { kind: "unresolved", text: sourceText, reason: "not_found", categoryName: null };
   }
 
-  // extras that described the dish ("1202 con bufala" keeps them as additions)
-  const variation = { senza, extra: usedExtras, note: ex.note };
+  // extras that described the dish are not additions ("bruschetta con patate
+  // e porchetta" = 235 as is); "1202 con bufala" keeps them
+  const variation = { senza, extra: res.byIngredients ? [] : usedExtras, note: ex.note };
   const [top, ...rest] = res.candidates;
   const choice = buildChoice(top.item, top.category, variation, ctx.data);
   const alternatives = rest

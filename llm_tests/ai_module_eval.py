@@ -95,6 +95,21 @@ CASI = [
          ("proposta fuori menù/variazione", lambda d: len(d["customDishes"]) == 1 or len(d["lines"]) == 1),
          ("prezzo > 0", lambda d: all(c["price"] > 0 for c in d["customDishes"])),
      ]),
+    ("order", "ord_plurali_formati", "POST", "/api/ai/order/parse",
+     {"text": "1 piadine crudo mozzarella insalata, 1 bruschette porchetta patate, 2 leffe rosse da 0,33cl"}, [
+         ("piadina fuori menù", lambda d: len(d["customDishes"]) == 1
+          and d["customDishes"][0]["categoryName"] == "Piadine"
+          and {"prosciutto crudo", "mozzarella", "insalata"} <= {i["name"] for i in d["customDishes"][0]["ingredients"]}),
+         ("bruschetta 235", lambda d: any(l["name"] == "235" and l["quantity"] == 1 for l in d["lines"])),
+         ("2 Leffe Rouge 0,33", lambda d: any(l["name"] == "Leffe Rouge — cl 0,33" and l["quantity"] == 2 for l in d["lines"])),
+         ("niente altro", lambda d: len(d["lines"]) == 2 and not d["unresolved"]),
+     ]),
+    ("order", "ord_refuso", "POST", "/api/ai/order/parse",
+     {"text": "bruschetta patate e prochetta"}, [
+         ("bruschetta 235", lambda d: any(l["name"] == "235" for l in d["lines"])),
+         ("nessun ingrediente inventato", lambda d: not d["customDishes"]
+          and all(not l["modifiers"] and not l["unknownIngredients"] for l in d["lines"])),
+     ]),
     ("order", "price_testo", "POST", "/api/ai/order/price",
      {"text": "pizza con salmone, rucola e zucca"}, [
          ("prezzo > 0", lambda d: d["price"] > 0),

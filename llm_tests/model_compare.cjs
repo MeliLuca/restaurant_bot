@@ -59,6 +59,17 @@ const ORDER = [
   ["una 1215 senza asiago con poco pomodoro", (r) => [
     qty(r, /^1215/, 1), (line(r, /^1215/)?.modifiers ?? []).some((m) => /asiago/i.test(m.name)),
     (line(r, /^1215/)?.notes ?? []).includes("Poco pomodoro")]],
+  // plurali, piadina descritta per ingredienti (fuori menù), bruschetta senza codice,
+  // "rosse" = Rouge e il formato "0,33cl" (non la giraffa da 3,5 litri)
+  ["1 piadine crudo mozzarella insalata, 1 bruschette porchetta patate, 2 leffe rosse da 0,33cl", (r) => [
+    r.customDishes.length === 1 && r.customDishes[0].categoryName === "Piadine" &&
+      ["prosciutto crudo", "mozzarella", "insalata"].every((n) => r.customDishes[0].ingredients.some((i) => i.name === n)),
+    qty(r, /^235\b/, 1), qty(r, /^Leffe Rouge — cl 0,33/, 2),
+    r.lines.length === 2, r.unresolved.length === 0]],
+  // errore di battitura: "prochetta" è la porchetta, non un ingrediente nuovo → 235 così com'è
+  ["bruschetta patate e prochetta", (r) => [
+    qty(r, /^235\b/, 1), (line(r, /^235\b/)?.modifiers ?? []).length === 0,
+    r.customDishes.length === 0, r.lines.length === 1]],
 ];
 
 const ROUTE = [

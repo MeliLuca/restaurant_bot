@@ -180,13 +180,17 @@ export function ruleExtract(text: string, quickNotes: string[]): Extraction {
   const chunks: string[] = [];
   text.split(/\n+/).forEach((line) => {
     let first = true;
-    line.split(/\s*[,;]\s*|\s+(?:e|ed|poi|and|plus)\s+/i).forEach((c) => {
-      const t = c.trim();
-      if (!t) return;
-      if (!first && !startsDish(t)) chunks[chunks.length - 1] += `, ${t}`;
-      else chunks.push(t);
-      first = false;
-    });
+    // a decimal comma does not split: "leffe da 0,33cl" is one dish
+    line
+      .replace(/(?<!\d)(\d),(\d{1,2})(?!\d)/g, "$1\u0000$2")
+      .split(/\s*[,;]\s*|\s+(?:e|ed|poi|and|plus)\s+/i)
+      .forEach((c) => {
+        const t = c.trim().replace(/\u0000/g, ",");
+        if (!t) return;
+        if (!first && !startsDish(t)) chunks[chunks.length - 1] += `, ${t}`;
+        else chunks.push(t);
+        first = false;
+      });
   });
   const items = chunks.flatMap((c) => {
     const item = readChunk(c, quickNotes);
@@ -202,7 +206,7 @@ export function ruleExtract(text: string, quickNotes: string[]): Extraction {
 }
 
 /** Corrections the rules cannot follow: when present, the model's word stands */
-const CORRECTION = /\b(anzi|aspetta|togli\w*|meglio|invece|cambia\w*|actually|instead|remove)\b/;
+export const CORRECTION = /\b(anzi|aspetta|togli\w*|meglio|invece|cambia\w*|actually|instead|remove)\b/;
 
 /**
  * The small model sometimes drops a "senza X" it thinks the dish lacks

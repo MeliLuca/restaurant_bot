@@ -47,6 +47,65 @@ export function wordMatches(w: string, target: string): boolean {
   );
 }
 
+/**
+ * One slip of the finger between two (stemmed) words: a letter swapped with
+ * its neighbour ("prochett" ~ "porchett"), missing, extra or wrong. Only for
+ * words of 5+ letters, where one edit cannot turn one food into another.
+ */
+export function oneTypo(a: string, b: string): boolean {
+  if (a === b || Math.min(a.length, b.length) < 5 || Math.abs(a.length - b.length) > 1) return false;
+  if (/\d/.test(a) || /\d/.test(b)) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (a.length === b.length) {
+    // one wrong letter, or two neighbours swapped
+    return (
+      a.slice(i + 1) === b.slice(i + 1) ||
+      (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2))
+    );
+  }
+  const [long, short] = a.length > b.length ? [a, b] : [b, a];
+  return long.slice(i + 1) === short.slice(i);
+}
+
+// --- sizes -------------------------------------------------------------------
+
+const UNIT = "(?:cl|ml|lt|l(?!['’])|litr[oi])"; // not the l' of "l'insalata"
+const NUM = "(\\d+(?:[.,]\\d+)?)";
+/** Tried in this order: a unit says it best, then "da 33", then a bare "0,33" */
+const SIZE_PATTERNS: Array<{ re: RegExp; num: number; unit?: number; bare?: boolean }> = [
+  { re: new RegExp(`(?<![\\d.,])${NUM}\\s*(${UNIT})\\b`, "gi"), num: 1, unit: 2 }, // "0,33cl", "1,5 litri"
+  { re: new RegExp(`\\b(${UNIT})\\s*${NUM}(?![\\d.,]*\\d)`, "gi"), num: 2, unit: 1 }, // "cl 0,33", "lt 1"
+  { re: new RegExp(`\\bda\\s+${NUM}(?![\\d.,]*\\d)`, "gi"), num: 1, bare: true }, // "da 33"
+  { re: /(?<![\d.,])(\d+[.,]\d+)(?![\d.,]*\d)/g, num: 1, bare: true }, // "0,33"
+];
+
+/**
+ * The drink size written in `s`, in cl, and the words that said it. The
+ * listino writes "cl 0,33" for a third of a litre, waiters write "0,33cl",
+ * "33 cl" or "da 33": a number under 10 is litres whatever the unit says.
+ * A bare whole number is not a size (it is a quantity or a codice), except
+ * after "da" when it reads like centilitres ("da 33", not "da 2").
+ */
+export function writtenSize(s: string): { cl: number; text: string } | null {
+  for (const p of SIZE_PATTERNS) {
+    for (const m of Array.from(s.matchAll(p.re))) {
+      const raw = m[p.num];
+      const v = Number(raw.replace(",", "."));
+      if (!Number.isFinite(v) || v <= 0) continue;
+      const decimal = /[.,]/.test(raw);
+      if (p.bare && !decimal && (v < 10 || v > 100)) continue;
+      const unit = p.unit ? m[p.unit].toLowerCase() : "";
+      let cl: number;
+      if (unit === "ml") cl = v / 10;
+      else if (unit && unit !== "cl") cl = v * 100;
+      else cl = v < 10 ? v * 100 : v;
+      return { cl: Math.round(cl), text: m[0] };
+    }
+  }
+  return null;
+}
+
 // --- ingredients -----------------------------------------------------------
 
 /** Short or foreign names → the pantry's long form (normalized). Used only
@@ -127,6 +186,7 @@ export function cleanPhrase(s: string): string {
 export function resolveIngredient(
   phrase: string,
   pool: VariationOption[],
+  typoFixed = false,
 ): VariationOption | null {
   const n = cleanPhrase(phrase);
   if (!n) return null;
@@ -151,7 +211,20 @@ export function resolveIngredient(
         a.w.length - words.length - (b.w.length - words.length) ||
         a.i.name.length - b.i.name.length,
     );
-  return ranked[0]?.i ?? null;
+  if (ranked.length > 0) return ranked[0].i;
+  if (typoFixed) return null;
+  // last: a typo ("prochetta" → porchetta), each word fixed only when the
+  // pantry offers one way to fix it
+  const vocab = Array.from(new Set(pool.flatMap((i) => sigWords(i.name))));
+  let changed = false;
+  const fixed = words.map((q) => {
+    if (vocab.some((t) => wordMatches(q, t))) return q;
+    const near = vocab.filter((t) => oneTypo(q, t));
+    if (near.length !== 1) return q;
+    changed = true;
+    return near[0];
+  });
+  return changed ? resolveIngredient(fixed.join(" "), pool, true) : null;
 }
 
 /** "burrata, crudo e pistacchio" → ["burrata", "crudo", "pistacchio"] */
