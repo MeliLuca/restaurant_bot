@@ -1,0 +1,2511 @@
+{
+ "preso_il": "2026-10-04 17:40:36",
+ "categorie": [
+  "Birre alla spina",
+  "Toast",
+  "Piadine",
+  "Club Sandwich",
+  "Panini caldi",
+  "Hamburger",
+  "Panini al tegamino",
+  "Fritti",
+  "Piatti Freddi",
+  "Dolci",
+  "Servizio",
+  "A richiesta",
+  "Pizze",
+  "Bruschette",
+  "Pizza Longa",
+  "Tagliata",
+  "Piatti unici",
+  "Giraffe"
+ ],
+ "articoli": [
+  {
+   "id": "30000000-0000-0000-0000-000000000001",
+   "categoria": "Birre alla spina",
+   "nome": "FORST in cisterna — cl 0,20",
+   "codice": "01",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000002",
+   "categoria": "Birre alla spina",
+   "nome": "FORST in cisterna — cl 0,40",
+   "codice": "02",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000005",
+   "categoria": "Birre alla spina",
+   "nome": "IPA — cl 0,40",
+   "codice": "65",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000006",
+   "categoria": "Birre alla spina",
+   "nome": "Hoegaarden Blanche — cl 0,25",
+   "codice": "05",
+   "ingredienti": [
+    "belga"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000007",
+   "categoria": "Birre alla spina",
+   "nome": "Hoegaarden Blanche — cl 0,50",
+   "codice": "06",
+   "ingredienti": [
+    "belga"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000008",
+   "categoria": "Birre alla spina",
+   "nome": "Leffe Blonde — cl 0,25",
+   "codice": "07",
+   "ingredienti": [
+    "belga",
+    "doppio malto"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000009",
+   "categoria": "Birre alla spina",
+   "nome": "Leffe Blonde — cl 0,33",
+   "codice": "08",
+   "ingredienti": [
+    "belga",
+    "doppio malto"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000010",
+   "categoria": "Birre alla spina",
+   "nome": "Leffe Rouge — cl 0,25",
+   "codice": "09",
+   "ingredienti": [
+    "belga"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000011",
+   "categoria": "Birre alla spina",
+   "nome": "Leffe Rouge — cl 0,33",
+   "codice": "10",
+   "ingredienti": [
+    "belga"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000012",
+   "categoria": "Birre alla spina",
+   "nome": "Guinness stout — cl 0,25",
+   "codice": "11",
+   "ingredienti": [
+    "irlandese"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000013",
+   "categoria": "Birre alla spina",
+   "nome": "Guinness stout — cl 0,50",
+   "codice": "12",
+   "ingredienti": [
+    "irlandese"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000014",
+   "categoria": "Birre alla spina",
+   "nome": "Birra bionda — lt 1",
+   "codice": "13",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000015",
+   "categoria": "Birre alla spina",
+   "nome": "Birra rossa — lt 1",
+   "codice": "14",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000016",
+   "categoria": "Toast",
+   "nome": "Normale + salsa rosa",
+   "codice": "291",
+   "ingredienti": [
+    "prosciutto cotto",
+    "formaggio"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000017",
+   "categoria": "Toast",
+   "nome": "Farcito + salsa rosa",
+   "codice": "292",
+   "ingredienti": [
+    "prosciutto cotto",
+    "formaggio",
+    "funghi",
+    "peperoni"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000018",
+   "categoria": "Toast",
+   "nome": "Speciale",
+   "codice": "293",
+   "ingredienti": [
+    "salsa rosa a parte",
+    "prosciutto crudo",
+    "insalata",
+    "mozzarella",
+    "pomodoro fresco"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000019",
+   "categoria": "Piadine",
+   "nome": "Saporita + salsa rosa — normale",
+   "codice": "296",
+   "ingredienti": [
+    "prosciutto crudo",
+    "formaggio",
+    "peperoni"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000020",
+   "categoria": "Piadine",
+   "nome": "Saporita + salsa rosa — maxi",
+   "codice": "298",
+   "ingredienti": [
+    "prosciutto crudo",
+    "formaggio",
+    "peperoni"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000021",
+   "categoria": "Piadine",
+   "nome": "Gustosa + salsa rosa — normale",
+   "codice": "297",
+   "ingredienti": [
+    "formaggio",
+    "funghi",
+    "porchetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000022",
+   "categoria": "Piadine",
+   "nome": "Gustosa + salsa rosa — maxi",
+   "codice": "299",
+   "ingredienti": [
+    "formaggio",
+    "funghi",
+    "porchetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000023",
+   "categoria": "Piadine",
+   "nome": "Sfiziosa + salsa rosa — normale",
+   "codice": "324",
+   "ingredienti": [
+    "carciofi",
+    "prosciutto cotto",
+    "formaggio"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000024",
+   "categoria": "Piadine",
+   "nome": "Sfiziosa + salsa rosa — maxi",
+   "codice": "325",
+   "ingredienti": [
+    "carciofi",
+    "prosciutto cotto",
+    "formaggio"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000025",
+   "categoria": "Club Sandwich",
+   "nome": "Club vegetariano — normale",
+   "codice": "268",
+   "ingredienti": [
+    "frittata (con funghi, peperoni)",
+    "formaggio e salsa rosa",
+    "carciofi",
+    "insalata",
+    "melanzane",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000026",
+   "categoria": "Club Sandwich",
+   "nome": "Club vegetariano — maxi",
+   "codice": "267",
+   "ingredienti": [
+    "frittata (con funghi, peperoni)",
+    "formaggio e salsa rosa",
+    "carciofi",
+    "insalata",
+    "melanzane",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000027",
+   "categoria": "Club Sandwich",
+   "nome": "Club Sandwich — normale",
+   "codice": "269",
+   "ingredienti": [
+    "frittata (con funghi, peperoni)",
+    "formaggio e salsa rosa",
+    "prosciutto cotto",
+    "insalata",
+    "pomodoro",
+    "salame"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000028",
+   "categoria": "Club Sandwich",
+   "nome": "Club Sandwich — maxi",
+   "codice": "270",
+   "ingredienti": [
+    "frittata (con funghi, peperoni)",
+    "formaggio e salsa rosa",
+    "prosciutto cotto",
+    "insalata",
+    "pomodoro",
+    "salame"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000029",
+   "categoria": "Panini caldi",
+   "nome": "Primavera",
+   "codice": "271",
+   "ingredienti": [
+    "prosciutto cotto",
+    "insalata",
+    "maionese",
+    "mozzarella",
+    "origano",
+    "pomodoro fresco"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000030",
+   "categoria": "Panini caldi",
+   "nome": "Rustico",
+   "codice": "279",
+   "ingredienti": [
+    "carciofi",
+    "formaggio",
+    "funghi",
+    "porchetta",
+    "salsa rosa"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000031",
+   "categoria": "Panini caldi",
+   "nome": "St. Marteen",
+   "codice": "282",
+   "ingredienti": [
+    "melanzane grigliate",
+    "mozzarella",
+    "porchetta",
+    "salsa rosa"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000032",
+   "categoria": "Panini caldi",
+   "nome": "Vegetariano",
+   "codice": "274",
+   "ingredienti": [
+    "melanzane",
+    "brie",
+    "peperoni",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000033",
+   "categoria": "Panini caldi",
+   "nome": "Poldo",
+   "codice": "250",
+   "ingredienti": [
+    "cipolla",
+    "peperoni",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000034",
+   "categoria": "Panini caldi",
+   "nome": "Corsaro",
+   "codice": "276",
+   "ingredienti": [
+    "funghi",
+    "porchetta",
+    "stracchino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000035",
+   "categoria": "Panini caldi",
+   "nome": "Milanese",
+   "codice": "281",
+   "ingredienti": [
+    "cotoletta alla milanese di pollo",
+    "formaggio",
+    "insalata",
+    "pomodoro fresco"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000036",
+   "categoria": "Panini caldi",
+   "nome": "Hot Dog",
+   "codice": "278",
+   "ingredienti": [
+    "senape e ketch-up",
+    "wurstel"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000037",
+   "categoria": "Panini caldi",
+   "nome": "Hot Dog Piccante",
+   "codice": "283",
+   "ingredienti": [
+    "pancetta affumicata",
+    "formaggio",
+    "salsa piccante",
+    "wurstel"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000038",
+   "categoria": "Panini caldi",
+   "nome": "Pescatora",
+   "codice": "280",
+   "ingredienti": [
+    "salsa tonnata con gamberetti",
+    "insalata",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000039",
+   "categoria": "Hamburger",
+   "nome": "Classico",
+   "codice": "275",
+   "ingredienti": [
+    "hamburger",
+    "ketch-up (servito con patate fritte)",
+    "formaggio",
+    "insalata",
+    "cipolla",
+    "pomodoro fresco"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000040",
+   "categoria": "Hamburger",
+   "nome": "Americano",
+   "codice": "450",
+   "ingredienti": [
+    "hamburger",
+    "pancetta stufata",
+    "salsa piccante (servito con patate fritte)",
+    "formaggio",
+    "insalata",
+    "pomodoro fresco"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000041",
+   "categoria": "Hamburger",
+   "nome": "Montanaro",
+   "codice": "162",
+   "ingredienti": [
+    "hamburger",
+    "insalata (servito con patate fritte)",
+    "formaggio",
+    "funghi",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000042",
+   "categoria": "Hamburger",
+   "nome": "Bomba",
+   "codice": "161",
+   "ingredienti": [
+    "hamburger",
+    "maionese (servito con patate fritte)",
+    "formaggio",
+    "cipolla",
+    "funghi",
+    "peperoni"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000043",
+   "categoria": "Hamburger",
+   "nome": "Cheeseburger",
+   "codice": "261",
+   "ingredienti": [
+    "hamburger",
+    "maionese (servito con patate fritte)",
+    "formaggio",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000044",
+   "categoria": "Hamburger",
+   "nome": "Bekon",
+   "codice": "266",
+   "ingredienti": [
+    "hamburger",
+    "salsa barbecue (servito con patate fritte)",
+    "formaggio",
+    "cipolla",
+    "pancetta",
+    "uova"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000045",
+   "categoria": "Hamburger",
+   "nome": "Doppio Hamburger",
+   "codice": "263",
+   "ingredienti": [
+    "2 hamburger",
+    "ketchup (servito con patate fritte)",
+    "formaggio",
+    "insalata",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000046",
+   "categoria": "Panini al tegamino",
+   "nome": "Diavola",
+   "codice": "251",
+   "ingredienti": [
+    "prosciutto cotto",
+    "formaggio",
+    "funghi",
+    "mozzarella",
+    "origano",
+    "pomodoro",
+    "salamino",
+    "speck di Sauris",
+    "wurstel"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000047",
+   "categoria": "Panini al tegamino",
+   "nome": "Marinara",
+   "codice": "252",
+   "ingredienti": [
+    "prosciutto cotto",
+    "formaggio",
+    "cipolla",
+    "mozzarella",
+    "origano",
+    "peperoni",
+    "pomodoro",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000048",
+   "categoria": "Panini al tegamino",
+   "nome": "Verdure",
+   "codice": "253",
+   "ingredienti": [
+    "zucchine ai ferri",
+    "funghi misto bosco",
+    "asparagi",
+    "carciofi",
+    "formaggio",
+    "mozzarella",
+    "origano",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000049",
+   "categoria": "Panini al tegamino",
+   "nome": "Crostino",
+   "codice": "254",
+   "ingredienti": [
+    "pan carrè",
+    "carciofi",
+    "prosciutto cotto",
+    "formaggio",
+    "funghi",
+    "mozzarella",
+    "origano",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000050",
+   "categoria": "Panini al tegamino",
+   "nome": "Bassanese",
+   "codice": "255",
+   "ingredienti": [
+    "asparagi",
+    "prosciutto cotto",
+    "formaggio",
+    "mozzarella",
+    "origano",
+    "pomodoro",
+    "uovo"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000051",
+   "categoria": "Panini al tegamino",
+   "nome": "Super",
+   "codice": "257",
+   "ingredienti": [
+    "carciofi",
+    "prosciutto cotto",
+    "formaggio",
+    "mozzarella",
+    "origano",
+    "peperoni",
+    "pomodoro",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000052",
+   "categoria": "Panini al tegamino",
+   "nome": "Parmigiano",
+   "codice": "258",
+   "ingredienti": [
+    "melanzane grigliate",
+    "prosciutto cotto",
+    "formaggio",
+    "grana",
+    "mozzarella",
+    "origano",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000053",
+   "categoria": "Panini al tegamino",
+   "nome": "Specialità della casa",
+   "codice": "259",
+   "ingredienti": [
+    "pancetta affumicata",
+    "funghi chiodini",
+    "formaggio",
+    "cipolla",
+    "mozzarella",
+    "origano",
+    "piselli",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000054",
+   "categoria": "Panini al tegamino",
+   "nome": "Tirolo",
+   "codice": "260",
+   "ingredienti": [
+    "melanzane grigliate",
+    "formaggio",
+    "peperoni alla piastra",
+    "mozzarella",
+    "origano",
+    "piselli",
+    "pomodoro",
+    "funghi porcini",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000055",
+   "categoria": "Panini al tegamino",
+   "nome": "Senes",
+   "codice": "428",
+   "ingredienti": [
+    "4 formaggi",
+    "mozzarella",
+    "origano",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000056",
+   "categoria": "Panini al tegamino",
+   "nome": "Treviso",
+   "codice": "429",
+   "ingredienti": [
+    "formaggio",
+    "gorgonzola",
+    "mozzarella",
+    "origano",
+    "pancetta",
+    "pomodoro",
+    "radicchio",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000057",
+   "categoria": "Panini al tegamino",
+   "nome": "Siciliano",
+   "codice": "431",
+   "ingredienti": [
+    "salamino piccante",
+    "prosciutto cotto",
+    "formaggio",
+    "acciughe",
+    "mozzarella",
+    "olive nere",
+    "pomodori secchi",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000058",
+   "categoria": "Fritti",
+   "nome": "Chele di granchio",
+   "codice": "300",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000059",
+   "categoria": "Fritti",
+   "nome": "Patatine fritte",
+   "codice": "303",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000060",
+   "categoria": "Fritti",
+   "nome": "Patatine fritte con salsa",
+   "codice": "304",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000061",
+   "categoria": "Fritti",
+   "nome": "Pepite di pollo",
+   "codice": "305",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000062",
+   "categoria": "Fritti",
+   "nome": "Crocchette di patate",
+   "codice": "306",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000063",
+   "categoria": "Fritti",
+   "nome": "Olive ascolane",
+   "codice": "307",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000064",
+   "categoria": "Fritti",
+   "nome": "Mozzarelline",
+   "codice": "316",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000065",
+   "categoria": "Fritti",
+   "nome": "Verdure pastellate",
+   "codice": "317",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000066",
+   "categoria": "Fritti",
+   "nome": "Speedy pollo",
+   "codice": "302",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000067",
+   "categoria": "Fritti",
+   "nome": "Anelli di cipolla",
+   "codice": "150",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000068",
+   "categoria": "Fritti",
+   "nome": "Ascolano",
+   "codice": "309",
+   "ingredienti": [
+    "patate fritte",
+    "olive ascolane",
+    "salsa a piacere",
+    "crocchette di patate",
+    "pepite di pollo"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000069",
+   "categoria": "Fritti",
+   "nome": "Fritto matto",
+   "codice": "152",
+   "ingredienti": [
+    "2 speedy pollo",
+    "2 pepite",
+    "2 formaggini",
+    "2 chele di granchio",
+    "2 crocchette di patate",
+    "3 anelli di cipolla",
+    "2 olive ascolane",
+    "verdure pastellate",
+    "salsa rosa"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000070",
+   "categoria": "Fritti",
+   "nome": "Disco volante",
+   "codice": "154",
+   "ingredienti": [
+    "pollo",
+    "pancetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000071",
+   "categoria": "Piatti Freddi",
+   "nome": "Sauris",
+   "codice": "322",
+   "ingredienti": [
+    "involtino di speck sauris con mozzarella di bufala su letto di rucola",
+    "olive taggiasche e pomodori secchi",
+    "carciofi"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000072",
+   "categoria": "Piatti Freddi",
+   "nome": "Affettato misto",
+   "codice": "318",
+   "ingredienti": [
+    "pane",
+    "bresaola",
+    "carciofi",
+    "prosciutto cotto",
+    "prosciutto crudo",
+    "olive taggiasche",
+    "pomodori secchi",
+    "porchetta",
+    "salame",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000073",
+   "categoria": "Piatti Freddi",
+   "nome": "Piatto primavera",
+   "codice": "323",
+   "ingredienti": [
+    "pomodoro e rucola",
+    "mozzarella di bufala",
+    "prosciutto crudo"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000074",
+   "categoria": "Piatti Freddi",
+   "nome": "Insalata di pollo",
+   "codice": "159",
+   "ingredienti": [
+    "cotoletta di pollo fritta",
+    "carote",
+    "mais",
+    "misticanza",
+    "olive taggiasche",
+    "pomodorini"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000075",
+   "categoria": "Piatti Freddi",
+   "nome": "Insalatona base",
+   "codice": "163",
+   "ingredienti": [
+    "carote",
+    "mais",
+    "misticanza",
+    "pomodoro",
+    "radicchio",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000076",
+   "categoria": "Piatti Freddi",
+   "nome": "Aggiunta ingrediente",
+   "codice": null,
+   "ingredienti": [
+    "carciofi",
+    "funghi",
+    "gamberetti",
+    "mozzarella",
+    "noci",
+    "olive nere",
+    "peperoni",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000077",
+   "categoria": "Piatti Freddi",
+   "nome": "Pane",
+   "codice": "170",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000078",
+   "categoria": "Dolci",
+   "nome": "Profiterol — bianco",
+   "codice": "23",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000079",
+   "categoria": "Dolci",
+   "nome": "Profiterol — cioccolato",
+   "codice": "24",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000080",
+   "categoria": "Dolci",
+   "nome": "Tartufo — bianco",
+   "codice": "28",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000081",
+   "categoria": "Dolci",
+   "nome": "Tartufo — nero",
+   "codice": "29",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000082",
+   "categoria": "Dolci",
+   "nome": "Tartufo affogato — bianco",
+   "codice": "31",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000083",
+   "categoria": "Dolci",
+   "nome": "Tartufo affogato — nero",
+   "codice": "30",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000084",
+   "categoria": "Dolci",
+   "nome": "Tiramisù",
+   "codice": "25",
+   "ingredienti": [
+    "fatto in casa"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000085",
+   "categoria": "Dolci",
+   "nome": "Panna cotta",
+   "codice": "33",
+   "ingredienti": [
+    "fatta in casa: fragola",
+    "cioccolato",
+    "vaniglia",
+    "caramello"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000086",
+   "categoria": "Dolci",
+   "nome": "Semifreddo al torroncino",
+   "codice": "32",
+   "ingredienti": [
+    "fatto in casa"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000087",
+   "categoria": "Dolci",
+   "nome": "Tortino al cioccolato con cuore fondente",
+   "codice": "36",
+   "ingredienti": [
+    "fatto in casa"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000089",
+   "categoria": "Dolci",
+   "nome": "Sorbetto",
+   "codice": null,
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000090",
+   "categoria": "Dolci",
+   "nome": "Caffè espresso",
+   "codice": "700",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000092",
+   "categoria": "A richiesta",
+   "nome": "Mozzarella di bufala",
+   "codice": null,
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000093",
+   "categoria": "A richiesta",
+   "nome": "Battuta",
+   "codice": "27",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000094",
+   "categoria": "A richiesta",
+   "nome": "Doppia pasta",
+   "codice": "166",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000095",
+   "categoria": "A richiesta",
+   "nome": "Con farina integrale",
+   "codice": "41",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000096",
+   "categoria": "A richiesta",
+   "nome": "Aggiunta patatine fritte",
+   "codice": "836",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000097",
+   "categoria": "A richiesta",
+   "nome": "Aggiunta salsa rosa",
+   "codice": "840",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000098",
+   "categoria": "Pizze",
+   "nome": "Pomodoro, mozzarella",
+   "codice": "1201",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000100",
+   "categoria": "Pizze",
+   "nome": "Base, prosciutto, funghi, carciofi",
+   "codice": "1202",
+   "ingredienti": [
+    "carciofi",
+    "prosciutto",
+    "funghi",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000102",
+   "categoria": "Pizze",
+   "nome": "Base, salamino piccante",
+   "codice": "1204",
+   "ingredienti": [
+    "salamino piccante",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000104",
+   "categoria": "Pizze",
+   "nome": "Base, carciofi, funghi, peperoni",
+   "codice": "1205",
+   "ingredienti": [
+    "carciofi",
+    "funghi",
+    "mozzarella",
+    "peperoni",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000106",
+   "categoria": "Pizze",
+   "nome": "Base, cotto, salamino, funghi",
+   "codice": "1206",
+   "ingredienti": [
+    "prosciutto cotto",
+    "funghi",
+    "mozzarella",
+    "pomodoro",
+    "salamino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000108",
+   "categoria": "Pizze",
+   "nome": "Base, melanzane e grana",
+   "codice": "1207",
+   "ingredienti": [
+    "melanzane e grana",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000110",
+   "categoria": "Pizze",
+   "nome": "Base, tonno, cipolla",
+   "codice": "1208",
+   "ingredienti": [
+    "cipolla",
+    "mozzarella",
+    "pomodoro",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000112",
+   "categoria": "Pizze",
+   "nome": "Base, wurstel",
+   "codice": "1209",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro",
+    "wurstel"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000114",
+   "categoria": "Pizze",
+   "nome": "Base, tonno, peperoni, salamino",
+   "codice": "1210",
+   "ingredienti": [
+    "mozzarella",
+    "peperoni",
+    "pomodoro",
+    "salamino",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000116",
+   "categoria": "Pizze",
+   "nome": "Base, panna, speck di Sauris",
+   "codice": "1211",
+   "ingredienti": [
+    "mozzarella",
+    "panna",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000118",
+   "categoria": "Pizze",
+   "nome": "Base, speck saurius, gorgonzola",
+   "codice": "1212",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000120",
+   "categoria": "Pizze",
+   "nome": "Base, carciofi, funghi, crudo di Parma",
+   "codice": "1213",
+   "ingredienti": [
+    "carciofi",
+    "prosciutto crudo",
+    "funghi",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000122",
+   "categoria": "Pizze",
+   "nome": "Base, porchetta, funghi",
+   "codice": "1214",
+   "ingredienti": [
+    "funghi",
+    "mozzarella",
+    "pomodoro",
+    "porchetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000124",
+   "categoria": "Pizze",
+   "nome": "Base, asiago, crudo di Parma",
+   "codice": "1215",
+   "ingredienti": [
+    "prosciutto crudo",
+    "asiago",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000126",
+   "categoria": "Pizze",
+   "nome": "Base, funghi porcini",
+   "codice": "1216",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro",
+    "funghi porcini"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000128",
+   "categoria": "Pizze",
+   "nome": "Base, gamberetti, salsa rosa",
+   "codice": "1217",
+   "ingredienti": [
+    "gamberetti",
+    "mozzarella",
+    "pomodoro",
+    "salsa rosa"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000130",
+   "categoria": "Pizze",
+   "nome": "Base, asiago, gorgonzola, grana, brie",
+   "codice": "1218",
+   "ingredienti": [
+    "asiago",
+    "brie",
+    "gorgonzola",
+    "grana",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000132",
+   "categoria": "Pizze",
+   "nome": "Base, rucola, grana",
+   "codice": "1219",
+   "ingredienti": [
+    "grana",
+    "mozzarella",
+    "pomodoro",
+    "rucola"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000134",
+   "categoria": "Pizze",
+   "nome": "Base, bresaola, rucola, grana",
+   "codice": "1220",
+   "ingredienti": [
+    "bresaola",
+    "grana",
+    "mozzarella",
+    "pomodoro",
+    "rucola"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000136",
+   "categoria": "Pizze",
+   "nome": "Base, pomodoro fresco, crudo",
+   "codice": "1221",
+   "ingredienti": [
+    "prosciutto crudo",
+    "mozzarella",
+    "pomodoro",
+    "pomodoro fresco"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000138",
+   "categoria": "Pizze",
+   "nome": "Base, chiodini, asiago, crudo",
+   "codice": "1222",
+   "ingredienti": [
+    "funghi chiodini",
+    "prosciutto crudo",
+    "asiago",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000140",
+   "categoria": "Pizze",
+   "nome": "Base, brie, speck",
+   "codice": "1223",
+   "ingredienti": [
+    "brie",
+    "mozzarella",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000142",
+   "categoria": "Pizze",
+   "nome": "Base, peperoni alla piastra, porchetta",
+   "codice": "1224",
+   "ingredienti": [
+    "peperoni alla piastra",
+    "mozzarella",
+    "pomodoro",
+    "porchetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000144",
+   "categoria": "Pizze",
+   "nome": "Base, zucchine, peperoni, melanzane, radicchio (tutto cotto alla piastra)",
+   "codice": "1225",
+   "ingredienti": [
+    "melanzane",
+    "radicchio (tutto cotto alla piastra)",
+    "mozzarella",
+    "peperoni",
+    "pomodoro",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000146",
+   "categoria": "Pizze",
+   "nome": "Base, crudo, philadelphia",
+   "codice": "1226",
+   "ingredienti": [
+    "prosciutto crudo",
+    "philadelphia",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000148",
+   "categoria": "Pizze",
+   "nome": "Base, gorgonzola, salamino, olive nere",
+   "codice": "1227",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "olive nere",
+    "pomodoro",
+    "salamino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000150",
+   "categoria": "Pizze",
+   "nome": "Base, tonno, olive nere",
+   "codice": "1228",
+   "ingredienti": [
+    "mozzarella",
+    "olive nere",
+    "pomodoro",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000151",
+   "categoria": "Pizze",
+   "nome": "Base, pancetta affumicata, piselli, carciofi",
+   "codice": "1230",
+   "ingredienti": [
+    "pancetta affumicata",
+    "carciofi",
+    "mozzarella",
+    "piselli",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000152",
+   "categoria": "Pizze",
+   "nome": "Base, tonno, piselli, peperoni",
+   "codice": "1231",
+   "ingredienti": [
+    "mozzarella",
+    "peperoni",
+    "piselli",
+    "pomodoro",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000153",
+   "categoria": "Pizze",
+   "nome": "Base, spinaci, ricotta",
+   "codice": "1233",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro",
+    "ricotta",
+    "spinaci"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000154",
+   "categoria": "Pizze",
+   "nome": "Base, porchetta, patate",
+   "codice": "1235",
+   "ingredienti": [
+    "mozzarella",
+    "patate",
+    "pomodoro",
+    "porchetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000156",
+   "categoria": "Pizze",
+   "nome": "Base, pomodorini, mais, rucola",
+   "codice": "1236",
+   "ingredienti": [
+    "mais",
+    "mozzarella",
+    "pomodorini",
+    "pomodoro",
+    "rucola"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000157",
+   "categoria": "Pizze",
+   "nome": "Base, sfilacci, stracchino",
+   "codice": "1239",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro",
+    "sfilacci",
+    "stracchino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000158",
+   "categoria": "Pizze",
+   "nome": "Base, radicchio, salsiccia",
+   "codice": "1203",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro",
+    "radicchio",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000160",
+   "categoria": "Pizze",
+   "nome": "Base, pancetta affumicata, radicchio, brie",
+   "codice": "1229",
+   "ingredienti": [
+    "pancetta affumicata",
+    "brie",
+    "mozzarella",
+    "pomodoro",
+    "radicchio"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000162",
+   "categoria": "Pizze",
+   "nome": "Base, salsiccia, misto bosco, prosciutto cotto",
+   "codice": "1232",
+   "ingredienti": [
+    "prosciutto cotto",
+    "misto bosco",
+    "mozzarella",
+    "pomodoro",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000164",
+   "categoria": "Pizze",
+   "nome": "Base, asparagi, gamberetti",
+   "codice": "1234",
+   "ingredienti": [
+    "asparagi",
+    "gamberetti",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000165",
+   "categoria": "Pizze",
+   "nome": "Base, porchetta, chiodini, stracchino",
+   "codice": "1237",
+   "ingredienti": [
+    "funghi chiodini",
+    "mozzarella",
+    "pomodoro",
+    "porchetta",
+    "stracchino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000167",
+   "categoria": "Pizze",
+   "nome": "Base, salmone, philadelphia",
+   "codice": "1238",
+   "ingredienti": [
+    "philadelphia",
+    "mozzarella",
+    "pomodoro",
+    "salmone"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000169",
+   "categoria": "Pizze",
+   "nome": "Base, pancetta affumicata, uova, grana",
+   "codice": "1240",
+   "ingredienti": [
+    "pancetta affumicata",
+    "grana",
+    "mozzarella",
+    "pomodoro",
+    "uova"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000170",
+   "categoria": "Pizze",
+   "nome": "Base, 4 stagioni, prosciutto cotto, funghi, carciofi, asparagi",
+   "codice": "1241",
+   "ingredienti": [
+    "asparagi",
+    "carciofi",
+    "prosciutto cotto",
+    "4 stagioni",
+    "funghi",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000171",
+   "categoria": "Pizze",
+   "nome": "Base, pancetta arrotolata, radicchio, chiodini",
+   "codice": "1242",
+   "ingredienti": [
+    "funghi chiodini",
+    "mozzarella",
+    "pancetta arrotolata",
+    "pomodoro",
+    "radicchio"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000173",
+   "categoria": "Pizze",
+   "nome": "Base, mozzarella di bufala, crudo",
+   "codice": "1243",
+   "ingredienti": [
+    "mozzarella di bufala",
+    "prosciutto crudo",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000174",
+   "categoria": "Pizze",
+   "nome": "Base, radicchio, salsiccia, gorgonzola, salamino",
+   "codice": "1244",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "pomodoro",
+    "radicchio",
+    "salamino",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000176",
+   "categoria": "Pizze",
+   "nome": "Base, porchetta, radicchio, gorgonzola",
+   "codice": "1246",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "pomodoro",
+    "porchetta",
+    "radicchio"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000177",
+   "categoria": "Pizze",
+   "nome": "Base, porcini, salsiccia, brie",
+   "codice": "1247",
+   "ingredienti": [
+    "brie",
+    "mozzarella",
+    "pomodoro",
+    "funghi porcini",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000179",
+   "categoria": "Pizze",
+   "nome": "Base, mozzarella di bufala, chiodini, salamino",
+   "codice": "1248",
+   "ingredienti": [
+    "mozzarella di bufala",
+    "funghi chiodini",
+    "mozzarella",
+    "pomodoro",
+    "salamino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000180",
+   "categoria": "Pizze",
+   "nome": "Base, salsiccia, peperoni, cipolla, salamino",
+   "codice": "1249",
+   "ingredienti": [
+    "cipolla",
+    "mozzarella",
+    "peperoni",
+    "pomodoro",
+    "salamino",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000182",
+   "categoria": "Pizze",
+   "nome": "Base, salamino, olive, acciughe, capperi",
+   "codice": "1250",
+   "ingredienti": [
+    "acciughe",
+    "capperi",
+    "mozzarella",
+    "olive nere",
+    "pomodoro",
+    "salamino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000184",
+   "categoria": "Pizze",
+   "nome": "Base, gorgonzola, noci, speck",
+   "codice": "1251",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "noci",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000186",
+   "categoria": "Pizze",
+   "nome": "Base, porcini, crudo",
+   "codice": "1252",
+   "ingredienti": [
+    "prosciutto crudo",
+    "mozzarella",
+    "pomodoro",
+    "funghi porcini"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000187",
+   "categoria": "Pizze",
+   "nome": "Base, pancetta, misto funghi, rucola, provola",
+   "codice": "1253",
+   "ingredienti": [
+    "misto funghi",
+    "mozzarella",
+    "pancetta",
+    "pomodoro",
+    "provola",
+    "rucola"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000188",
+   "categoria": "Pizze",
+   "nome": "Base, porcini, salamino, gorgonzola",
+   "codice": "1259",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "pomodoro",
+    "funghi porcini",
+    "salamino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000189",
+   "categoria": "Pizze",
+   "nome": "Base, tonno, salamino, olive taggiasche, cipolla di Tropea",
+   "codice": "1260",
+   "ingredienti": [
+    "cipolla di Tropea",
+    "mozzarella",
+    "olive taggiasche",
+    "pomodoro",
+    "salamino",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000190",
+   "categoria": "Pizze",
+   "nome": "Base, zucchine, ricotta, prosciutto crudo",
+   "codice": "1261",
+   "ingredienti": [
+    "prosciutto crudo",
+    "mozzarella",
+    "pomodoro",
+    "ricotta",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000191",
+   "categoria": "Pizze",
+   "nome": "Base, fiocco di maialino, asiago, carciofi",
+   "codice": "1284",
+   "ingredienti": [
+    "carciofi",
+    "fiocco di maialino",
+    "asiago",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000192",
+   "categoria": "Pizze",
+   "nome": "Mozzarella, pomodorini, rucola, bufala",
+   "codice": "1254",
+   "ingredienti": [
+    "mozzarella di bufala",
+    "mozzarella",
+    "pomodorini",
+    "rucola"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000193",
+   "categoria": "Pizze",
+   "nome": "Mozzarella, speck, stracchino, porcini",
+   "codice": "1255",
+   "ingredienti": [
+    "mozzarella",
+    "funghi porcini",
+    "speck di Sauris",
+    "stracchino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000194",
+   "categoria": "Pizze",
+   "nome": "Mozzarella, sfilacci, provola, chiodini",
+   "codice": "1256",
+   "ingredienti": [
+    "funghi chiodini",
+    "mozzarella",
+    "provola",
+    "sfilacci"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000195",
+   "categoria": "Pizze",
+   "nome": "Mozzarella, misticanza, petto d'oca",
+   "codice": "1258",
+   "ingredienti": [
+    "petto d'oca",
+    "misticanza",
+    "mozzarella"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000196",
+   "categoria": "Pizze",
+   "nome": "Mozzarella, stracciatella, mortadella, granella di pistacchio",
+   "codice": "1279",
+   "ingredienti": [
+    "stracciatella",
+    "granella di pistacchio",
+    "mortadella",
+    "mozzarella"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000197",
+   "categoria": "Pizze",
+   "nome": "Base, pomodorini, basilico, burrata",
+   "codice": "1263",
+   "ingredienti": [
+    "basilico",
+    "burrata",
+    "mozzarella",
+    "pomodorini",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000198",
+   "categoria": "Pizze",
+   "nome": "Base, zucchine, gamberetti, burrata",
+   "codice": "1264",
+   "ingredienti": [
+    "burrata",
+    "gamberetti",
+    "mozzarella",
+    "pomodoro",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000199",
+   "categoria": "Pizze",
+   "nome": "Base, misticanza, pomodorini secchi, prosciutto crudo, burrata",
+   "codice": "1265",
+   "ingredienti": [
+    "prosciutto crudo",
+    "burrata",
+    "misticanza",
+    "mozzarella",
+    "pomodori secchi",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000200",
+   "categoria": "Pizze",
+   "nome": "Base, fiocco di maialino, pomodorini, burrata",
+   "codice": "1285",
+   "ingredienti": [
+    "fiocco di maialino",
+    "burrata",
+    "mozzarella",
+    "pomodorini",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000099",
+   "categoria": "Bruschette",
+   "nome": "Pomodoro, mozzarella",
+   "codice": "201",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000101",
+   "categoria": "Bruschette",
+   "nome": "Base, prosciutto, funghi, carciofi",
+   "codice": "202",
+   "ingredienti": [
+    "carciofi",
+    "prosciutto",
+    "funghi",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000103",
+   "categoria": "Bruschette",
+   "nome": "Base, salamino piccante",
+   "codice": "204",
+   "ingredienti": [
+    "salamino piccante",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000105",
+   "categoria": "Bruschette",
+   "nome": "Base, carciofi, funghi, peperoni",
+   "codice": "205",
+   "ingredienti": [
+    "carciofi",
+    "funghi",
+    "mozzarella",
+    "peperoni",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000107",
+   "categoria": "Bruschette",
+   "nome": "Base, cotto, salamino, funghi",
+   "codice": "206",
+   "ingredienti": [
+    "prosciutto cotto",
+    "funghi",
+    "mozzarella",
+    "pomodoro",
+    "salamino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000109",
+   "categoria": "Bruschette",
+   "nome": "Base, melanzane e grana",
+   "codice": "207",
+   "ingredienti": [
+    "melanzane e grana",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000111",
+   "categoria": "Bruschette",
+   "nome": "Base, tonno, cipolla",
+   "codice": "208",
+   "ingredienti": [
+    "cipolla",
+    "mozzarella",
+    "pomodoro",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000113",
+   "categoria": "Bruschette",
+   "nome": "Base, wurstel",
+   "codice": "209",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro",
+    "wurstel"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000115",
+   "categoria": "Bruschette",
+   "nome": "Base, tonno, peperoni, salamino",
+   "codice": "210",
+   "ingredienti": [
+    "mozzarella",
+    "peperoni",
+    "pomodoro",
+    "salamino",
+    "tonno"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000117",
+   "categoria": "Bruschette",
+   "nome": "Base, panna, speck di Sauris",
+   "codice": "211",
+   "ingredienti": [
+    "mozzarella",
+    "panna",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000119",
+   "categoria": "Bruschette",
+   "nome": "Base, speck saurius, gorgonzola",
+   "codice": "212",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000121",
+   "categoria": "Bruschette",
+   "nome": "Base, carciofi, funghi, crudo di Parma",
+   "codice": "213",
+   "ingredienti": [
+    "carciofi",
+    "prosciutto crudo",
+    "funghi",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000123",
+   "categoria": "Bruschette",
+   "nome": "Base, porchetta, funghi",
+   "codice": "214",
+   "ingredienti": [
+    "funghi",
+    "mozzarella",
+    "pomodoro",
+    "porchetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000125",
+   "categoria": "Bruschette",
+   "nome": "Base, asiago, crudo di Parma",
+   "codice": "215",
+   "ingredienti": [
+    "prosciutto crudo",
+    "asiago",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000127",
+   "categoria": "Bruschette",
+   "nome": "Base, funghi porcini",
+   "codice": "216",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro",
+    "funghi porcini"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000129",
+   "categoria": "Bruschette",
+   "nome": "Base, gamberetti, salsa rosa",
+   "codice": "217",
+   "ingredienti": [
+    "gamberetti",
+    "mozzarella",
+    "pomodoro",
+    "salsa rosa"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000131",
+   "categoria": "Bruschette",
+   "nome": "Base, asiago, gorgonzola, grana, brie",
+   "codice": "218",
+   "ingredienti": [
+    "asiago",
+    "brie",
+    "gorgonzola",
+    "grana",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000133",
+   "categoria": "Bruschette",
+   "nome": "Base, rucola, grana",
+   "codice": "219",
+   "ingredienti": [
+    "grana",
+    "mozzarella",
+    "pomodoro",
+    "rucola"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000135",
+   "categoria": "Bruschette",
+   "nome": "Base, bresaola, rucola, grana",
+   "codice": "220",
+   "ingredienti": [
+    "bresaola",
+    "grana",
+    "mozzarella",
+    "pomodoro",
+    "rucola"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000137",
+   "categoria": "Bruschette",
+   "nome": "Base, pomodoro fresco, crudo",
+   "codice": "221",
+   "ingredienti": [
+    "prosciutto crudo",
+    "mozzarella",
+    "pomodoro",
+    "pomodoro fresco"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000139",
+   "categoria": "Bruschette",
+   "nome": "Base, chiodini, asiago, crudo",
+   "codice": "222",
+   "ingredienti": [
+    "funghi chiodini",
+    "prosciutto crudo",
+    "asiago",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000141",
+   "categoria": "Bruschette",
+   "nome": "Base, brie, speck",
+   "codice": "223",
+   "ingredienti": [
+    "brie",
+    "mozzarella",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000143",
+   "categoria": "Bruschette",
+   "nome": "Base, peperoni alla piastra, porchetta",
+   "codice": "224",
+   "ingredienti": [
+    "peperoni alla piastra",
+    "mozzarella",
+    "pomodoro",
+    "porchetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000145",
+   "categoria": "Bruschette",
+   "nome": "Base, zucchine, peperoni, melanzane, radicchio (tutto cotto alla piastra)",
+   "codice": "225",
+   "ingredienti": [
+    "melanzane",
+    "radicchio (tutto cotto alla piastra)",
+    "mozzarella",
+    "peperoni",
+    "pomodoro",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000147",
+   "categoria": "Bruschette",
+   "nome": "Base, crudo, philadelphia",
+   "codice": "226",
+   "ingredienti": [
+    "prosciutto crudo",
+    "philadelphia",
+    "mozzarella",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000149",
+   "categoria": "Bruschette",
+   "nome": "Base, gorgonzola, salamino, olive nere",
+   "codice": "227",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "olive nere",
+    "pomodoro",
+    "salamino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000155",
+   "categoria": "Bruschette",
+   "nome": "Base, porchetta, patate",
+   "codice": "235",
+   "ingredienti": [
+    "mozzarella",
+    "patate",
+    "pomodoro",
+    "porchetta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000159",
+   "categoria": "Bruschette",
+   "nome": "Base, radicchio, salsiccia",
+   "codice": "203",
+   "ingredienti": [
+    "mozzarella",
+    "pomodoro",
+    "radicchio",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000161",
+   "categoria": "Bruschette",
+   "nome": "Base, pancetta affumicata, radicchio, brie",
+   "codice": "229",
+   "ingredienti": [
+    "pancetta affumicata",
+    "brie",
+    "mozzarella",
+    "pomodoro",
+    "radicchio"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000163",
+   "categoria": "Bruschette",
+   "nome": "Base, salsiccia, misto bosco, prosciutto cotto",
+   "codice": "232",
+   "ingredienti": [
+    "prosciutto cotto",
+    "misto bosco",
+    "mozzarella",
+    "pomodoro",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000166",
+   "categoria": "Bruschette",
+   "nome": "Base, porchetta, chiodini, stracchino",
+   "codice": "237",
+   "ingredienti": [
+    "funghi chiodini",
+    "mozzarella",
+    "pomodoro",
+    "porchetta",
+    "stracchino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000168",
+   "categoria": "Bruschette",
+   "nome": "Base, salmone, philadelphia",
+   "codice": "238",
+   "ingredienti": [
+    "philadelphia",
+    "mozzarella",
+    "pomodoro",
+    "salmone"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000172",
+   "categoria": "Bruschette",
+   "nome": "Base, pancetta arrotolata, radicchio, chiodini",
+   "codice": "242",
+   "ingredienti": [
+    "funghi chiodini",
+    "mozzarella",
+    "pancetta arrotolata",
+    "pomodoro",
+    "radicchio"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000175",
+   "categoria": "Bruschette",
+   "nome": "Base, radicchio, salsiccia, gorgonzola, salamino",
+   "codice": "244",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "pomodoro",
+    "radicchio",
+    "salamino",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000178",
+   "categoria": "Bruschette",
+   "nome": "Base, porcini, salsiccia, brie",
+   "codice": "247",
+   "ingredienti": [
+    "brie",
+    "mozzarella",
+    "pomodoro",
+    "funghi porcini",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000181",
+   "categoria": "Bruschette",
+   "nome": "Base, salsiccia, peperoni, cipolla, salamino",
+   "codice": "249",
+   "ingredienti": [
+    "cipolla",
+    "mozzarella",
+    "peperoni",
+    "pomodoro",
+    "salamino",
+    "salsiccia"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000183",
+   "categoria": "Bruschette",
+   "nome": "Base, salamino, olive, acciughe, capperi",
+   "codice": "231",
+   "ingredienti": [
+    "acciughe",
+    "capperi",
+    "mozzarella",
+    "olive nere",
+    "pomodoro",
+    "salamino"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000185",
+   "categoria": "Bruschette",
+   "nome": "Base, gorgonzola, noci, speck",
+   "codice": "245",
+   "ingredienti": [
+    "gorgonzola",
+    "mozzarella",
+    "noci",
+    "pomodoro",
+    "speck di Sauris"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000201",
+   "categoria": "Pizza Longa",
+   "nome": "Pizza Longa 80x40 cm",
+   "codice": "48",
+   "ingredienti": [
+    "ideale per quattro persone"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000202",
+   "categoria": "Pizza Longa",
+   "nome": "Pizza Longa + Giraffa birra bionda",
+   "codice": "98",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000203",
+   "categoria": "Pizza Longa",
+   "nome": "Pizza Longa + Giraffa Leffe",
+   "codice": "99",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000204",
+   "categoria": "Tagliata",
+   "nome": "Tagliata di manzo 250 g",
+   "codice": "180",
+   "ingredienti": [
+    "patate",
+    "salsa rosa",
+    "salsiccia",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000205",
+   "categoria": "Piatti unici",
+   "nome": "Frittura mista di pesce",
+   "codice": "326",
+   "ingredienti": [
+    "calamari",
+    "merluzzo",
+    "gamberi",
+    "anelli di totano",
+    "seppioline",
+    "polenta"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000206",
+   "categoria": "Piatti unici",
+   "nome": "Merkel + patate fritte e salsa rosa",
+   "codice": "312",
+   "ingredienti": [
+    "2 spiedini",
+    "1 hamburger",
+    "3 involtini di radicchio e pancetta",
+    "peperoni",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000207",
+   "categoria": "Piatti unici",
+   "nome": "Obama + patate fritte e salsa rosa",
+   "codice": "327",
+   "ingredienti": [
+    "2 chele di granchio",
+    "4 anelli di cipolla",
+    "3 speedy pollo",
+    "4 formaggini",
+    "3 involtini freschi con prosc. cotto",
+    "ricotta",
+    "spinaci"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000208",
+   "categoria": "Piatti unici",
+   "nome": "Madrid + patate fritte",
+   "codice": "321",
+   "ingredienti": [
+    "2 hamburger",
+    "2 salsicce",
+    "verdure alla griglia",
+    "salsa",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000209",
+   "categoria": "Piatti unici",
+   "nome": "Little Boy + patate fritte",
+   "codice": "153",
+   "ingredienti": [
+    "salsa a piacere",
+    "cotoletta di pollo"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000210",
+   "categoria": "Piatti unici",
+   "nome": "New York + patate fritte e salsa rosa",
+   "codice": "311",
+   "ingredienti": [
+    "insalata",
+    "cotoletta di pollo",
+    "3 crocchette di patate",
+    "pomodoro"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000211",
+   "categoria": "Piatti unici",
+   "nome": "Wurstel + patate fritte",
+   "codice": "301",
+   "ingredienti": [
+    "2 wurstel alla piastra e salsa a piacere"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000212",
+   "categoria": "Piatti unici",
+   "nome": "Mourinho + patate fritte",
+   "codice": "329",
+   "ingredienti": [
+    "melanzane",
+    "2 salsicce",
+    "2 spiedini misto carne",
+    "peperoni",
+    "salsa rosa",
+    "zucchine"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000213",
+   "categoria": "Piatti unici",
+   "nome": "Pollo fritto",
+   "codice": "155",
+   "ingredienti": [
+    "pollo fritto",
+    "misticanza",
+    "patate",
+    "pomodorini"
+   ]
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000214",
+   "categoria": "Giraffe",
+   "nome": "Birra bionda o Hoegaarden — 3,5 litri",
+   "codice": "90",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000215",
+   "categoria": "Giraffe",
+   "nome": "Leffe bionda o rossa — 3,5 litri",
+   "codice": "94",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000216",
+   "categoria": "Giraffe",
+   "nome": "Giraffa birra bionda + Pizza — 3,5 litri",
+   "codice": "97",
+   "ingredienti": []
+  },
+  {
+   "id": "30000000-0000-0000-0000-000000000217",
+   "categoria": "Giraffe",
+   "nome": "Giraffa Leffe + Pizza — 3,5 litri",
+   "codice": null,
+   "ingredienti": []
+  }
+ ],
+ "note_rapide": [
+  "Prima",
+  "Insieme",
+  "Ben cotta",
+  "Poco cotta",
+  "In cottura",
+  "Dopo cottura",
+  "A spicchi",
+  "Poca mozzarella",
+  "Poco pomodoro",
+  "Con ghiaccio",
+  "Senza ghiaccio",
+  "Con limone"
+ ]
+}
