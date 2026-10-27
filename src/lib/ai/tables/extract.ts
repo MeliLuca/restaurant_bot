@@ -26,6 +26,8 @@ export interface RawExtraction {
   persone: number | null;
   orario: string | null;
   esigenze: string[];
+  /** features the text says are no longer wanted ("la TV non serve più") */
+  esigenze_tolte: string[];
   sala: string | null;
 }
 
@@ -34,7 +36,12 @@ export interface Understood {
   partySize: number | null;
   /** "HH:MM", 24 h */
   hhmm: string | null;
+  /** the text says now ("adesso", "subito"): a previous time no longer holds */
+  saysNow: boolean;
   tagIds: string[];
+  /** features taken back ("senza TV", "la TV non serve più") — they win
+   * over tagIds, and over the ones a conversation asked before */
+  removedTagIds: string[];
   mapId: string | null;
 }
 
@@ -129,7 +136,37 @@ const wordIn = (text: string, phrase: string) =>
     text,
   );
 
-/** Features a piece of text asks for: a tag's own name, or a synonym */
+/**
+ * A clause that takes a feature back. Deliberately narrow: "non vediamo
+ * l'ora di vedere la partita" still asks for the TV.
+ */
+const NEGATED =
+  /\b(?:senza|niente|nessun\w*|tranne|togli\w*|non\s+(?:\w+\s+){0,2}?(?:serv\w*|vogliamo|voglio|importa|interessa|bisogno|necessari\w*|guardiamo|ci sono|ce)\b)/;
+
+/** Clauses of a request: "6 persone con bambini, ma la tv non serve" → 2 */
+const clausesOf = (t: string) => t.split(/[,;.!?]|\b(?:ma|pero|invece|anzi)\b/);
+
+/**
+ * Features a text asks for and the ones it takes back, clause by clause:
+ * in a clause that negates ("senza", "non serve"…) every feature named is
+ * taken back.
+ */
+export function readFeatures(
+  text: string,
+  tags: TableTag[],
+): { add: string[]; remove: string[] } {
+  const add = new Set<string>();
+  const remove = new Set<string>();
+  clausesOf(normalize(text)).forEach((clause) => {
+    const named = tagsFromText(clause, tags);
+    named.forEach((id) => (NEGATED.test(clause) ? remove : add).add(id));
+  });
+  remove.forEach((id) => add.delete(id));
+  const order = (s: Set<string>) => tags.filter((tg) => s.has(tg.id)).map((tg) => tg.id);
+  return { add: order(add), remove: order(remove) };
+}
+
+/** Features a piece of text names (asked or not): a tag's own name, or a synonym */
 export function tagsFromText(text: string, tags: TableTag[]): string[] {
   const t = normalize(text);
   const out = new Set<string>();
@@ -156,6 +193,9 @@ export function mapFromText(text: string, maps: FloorMap[]): string | null {
   return named.length === 1 ? named[0].id : null;
 }
 
+/** "adesso", "subito", "in questo momento" (normalized text) */
+const saysNow = (t: string) => /\b(adesso|subito|in questo momento|right now|now)\b/.test(t);
+
 // --- reading without the model -------------------------------------------------
 
 /** The regex reader: the fallback when the model is unavailable */
@@ -165,6 +205,8 @@ export function parseTextFallback(text: string, vocab: TablesVocabulary): Unders
   const party = [
     new RegExp(`\\b${NUM}\\s*(?:persone|persona|pers\\b|pax|coperti|ospiti|adulti|posti)`),
     new RegExp(`\\bsiamo\\s+(?:in\\s+)?${NUM}\\b`),
+    // a follow-up: "e se fossero 8?", "siamo diventati 7"
+    new RegExp(`\\b(?:fossero|diventati|diventate|saremo|saranno)\\s+(?:in\\s+)?${NUM}\\b`),
     new RegExp(`\\b(?:tavolo|posto|prenotazione)\\s+(?:per|da)\\s+${NUM}\\b`),
     new RegExp(`\\bper\\s+${NUM}\\b(?!\\s*[:.]\\d)`),
   ];
@@ -191,10 +233,13 @@ export function parseTextFallback(text: string, vocab: TablesVocabulary): Unders
     if (h !== null) hhmm = hhmmOf(h, m, t);
   }
 
+  const features = readFeatures(text, vocab.tags);
   return {
     partySize,
     hhmm,
-    tagIds: tagsFromText(text, vocab.tags),
+    saysNow: saysNow(t),
+    tagIds: features.add,
+    removedTagIds: features.remove,
     mapId: mapFromText(text, vocab.maps),
   };
 }
@@ -216,12 +261,20 @@ export function extractionSchema(vocab: TablesVocabulary): object {
             : { type: "string" },
         maxItems: 4,
       },
+      esigenze_tolte: {
+        type: "array",
+        items:
+          vocab.tags.length > 0
+            ? { type: "string", enum: vocab.tags.map((t) => t.name) }
+            : { type: "string" },
+        maxItems: 4,
+      },
       sala:
         vocab.maps.length > 0
           ? { type: ["string", "null"], enum: [...vocab.maps.map((m) => m.name), null] }
           : { type: "null" },
     },
-    required: ["persone", "orario", "esigenze", "sala"],
+    required: ["persone", "orario", "esigenze", "esigenze_tolte", "sala"],
   };
 }
 
@@ -236,6 +289,7 @@ export function extractionMessages(text: string, vocab: TablesVocabulary) {
         "persone: quante persone in tutto (intero), null se non detto. " +
         "orario: l'ora chiesta come HH:MM (24 ore), null se non detta o se è adesso. " +
         `esigenze: solo tra ${tags}; [] se nessuna. ` +
+        "esigenze_tolte: le esigenze che il testo dice di non volere più (\"senza tv\", \"la tv non serve\"); [] se nessuna. " +
         `sala: solo tra ${maps}; null se non detta.`,
     },
     { role: "user" as const, content: text.slice(0, 300) },
@@ -264,10 +318,27 @@ export function validateExtraction(
     }
   }
 
-  const tagIds = new Set(tagsFromText(text, vocab.tags));
+  // the text's own reading first; the model may add a feature the text
+  // names, and take one back only where the text negates it
+  const features = readFeatures(text, vocab.tags);
+  const named = new Set(tagsFromText(text, vocab.tags));
+  const tagIds = new Set(features.add);
+  const removed = new Set(features.remove);
   for (const e of Array.isArray(r.esigenze) ? r.esigenze : []) {
     if (typeof e !== "string") continue;
-    tagsFromText(e, vocab.tags).forEach((id) => tagIds.add(id));
+    tagsFromText(e, vocab.tags).forEach((id) => {
+      if (!removed.has(id)) tagIds.add(id);
+    });
+  }
+  const negates = clausesOf(normalize(text)).some((c) => NEGATED.test(c));
+  for (const e of Array.isArray(r.esigenze_tolte) ? r.esigenze_tolte : []) {
+    if (typeof e !== "string" || !negates) continue;
+    tagsFromText(e, vocab.tags).forEach((id) => {
+      if (named.has(id)) {
+        removed.add(id);
+        tagIds.delete(id);
+      }
+    });
   }
 
   const mapId =
@@ -277,7 +348,9 @@ export function validateExtraction(
   return {
     partySize,
     hhmm,
+    saysNow: saysNow(t),
     tagIds: vocab.tags.filter((tg) => tagIds.has(tg.id)).map((tg) => tg.id),
+    removedTagIds: vocab.tags.filter((tg) => removed.has(tg.id)).map((tg) => tg.id),
     mapId,
   };
 }
@@ -301,14 +374,20 @@ export async function extractWithModel(
  */
 export function mergeReadings(model: Understood | null, regex: Understood): Understood {
   if (!model) return regex;
-  const tagIds = model.tagIds.slice();
+  const removedTagIds = model.removedTagIds.slice();
+  regex.removedTagIds.forEach((id) => {
+    if (!removedTagIds.includes(id)) removedTagIds.push(id);
+  });
+  const tagIds = model.tagIds.filter((id) => !removedTagIds.includes(id));
   regex.tagIds.forEach((id) => {
-    if (!tagIds.includes(id)) tagIds.push(id);
+    if (!tagIds.includes(id) && !removedTagIds.includes(id)) tagIds.push(id);
   });
   return {
     partySize: model.partySize ?? regex.partySize,
     hhmm: model.hhmm ?? regex.hhmm,
+    saysNow: model.saysNow || regex.saysNow,
     tagIds,
+    removedTagIds,
     mapId: model.mapId ?? regex.mapId,
   };
 }

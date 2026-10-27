@@ -47,6 +47,24 @@ export type FloorMapElement =
       font?: "serif" | "hand";
     };
 
+/** What an Assistente AI chat is working on (ai_conversations.context):
+ * a follow-up builds on it instead of starting over. Server-written. */
+export interface AiChatContext {
+  /** the task of the last answer */
+  lastIntent?: string;
+  /** the table request so far (TableSuggestResponse.request) */
+  tables?: {
+    partySize: number;
+    time: string | null;
+    tagIds: string[];
+    /** the same features by name, to tell the model what is in progress */
+    tagNames?: string[];
+    mapId: string | null;
+  };
+  /** the period of the last analysis, in days */
+  days?: number;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -302,6 +320,83 @@ export interface Database {
           joinable?: boolean;
         };
         Relationships: [];
+      };
+      ai_conversations: {
+        // Assistente AI saved chats, one owner each
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          /** false while the title is still the first words of the first message */
+          titled: boolean;
+          /** what the chat is working on (AiChatContext) */
+          context: AiChatContext;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          titled?: boolean;
+          context?: AiChatContext;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          titled?: boolean;
+          context?: AiChatContext;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversations_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "app_users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          role: "user" | "assistant";
+          content: string;
+          intent: string | null;
+          model_ms: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          role: "user" | "assistant";
+          content: string;
+          intent?: string | null;
+          model_ms?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          role?: "user" | "assistant";
+          content?: string;
+          intent?: string | null;
+          model_ms?: number | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "ai_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       ai_settings: {
         // Singleton (Assistente AI prototype): exactly one row, primary key is the constant `true`.
@@ -1324,6 +1419,8 @@ export type WaitlistEntry = Database["public"]["Tables"]["waitlist"]["Row"];
 export type TableJoinRule = Database["public"]["Tables"]["table_join_rules"]["Row"];
 export type FloorZone = Database["public"]["Tables"]["floor_zones"]["Row"];
 export type AiSettings = Database["public"]["Tables"]["ai_settings"]["Row"];
+export type AiConversation = Database["public"]["Tables"]["ai_conversations"]["Row"];
+export type AiMessage = Database["public"]["Tables"]["ai_messages"]["Row"];
 export type SmartFloorSettings =
   Database["public"]["Tables"]["smart_floor_settings"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];

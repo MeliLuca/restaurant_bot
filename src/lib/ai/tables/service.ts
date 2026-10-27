@@ -11,6 +11,7 @@ import type { AiMeta } from "@/lib/ai/contracts/common";
 import {
   TABLES_MAX_PARTY,
   TABLES_NOW_MINUTES,
+  type TablePreviousRequest,
   type TableSuggestion,
   type TableSuggestRequest,
   type TableSuggestResponse,
@@ -96,13 +97,23 @@ export function explanationPrompt(
   partySize: number,
   start: number | null,
   options: TableSuggestion[],
+  tagNames: string[] = [],
 ): string {
   const lines = options.slice(0, 4).map((o, i) => {
     const room = o.mapName ? ` (${o.mapName})` : "";
-    return `${i + 1}. Tavolo ${o.tableNames.join(" + ")}${room}, ${o.seats} posti, ${KIND_WORD[o.kind]}: ${o.reason}`;
+    // which of the asked features it has — what the guest asked for comes
+    // before seats in the explanation
+    const fit =
+      tagNames.length === 0
+        ? ""
+        : / senza /.test(` ${o.reason} `)
+          ? ""
+          : ` [ha tutto ciò che è chiesto: ${tagNames.join(", ")}]`;
+    return `${i + 1}. Tavolo ${o.tableNames.join(" + ")}${room}, ${o.seats} posti, ${KIND_WORD[o.kind]}: ${o.reason}${fit}`;
   });
+  const asked = tagNames.length ? `, con ${tagNames.join(", ")}` : "";
   return (
-    `Richiesta: ${partySize} persone, ${start === null ? "adesso" : `alle ${timeText(start)}`}.\n` +
+    `Richiesta: ${partySize} persone, ${start === null ? "adesso" : `alle ${timeText(start)}`}${asked}.\n` +
     `Opzioni calcolate (la 1 è la migliore):\n${lines.join("\n")}`
   );
 }
@@ -120,15 +131,17 @@ async function explain(
   partySize: number,
   start: number | null,
   options: TableSuggestion[],
+  tagNames: string[],
 ): Promise<ChatResult<string | null>> {
-  const facts = explanationPrompt(partySize, start, options);
+  const facts = explanationPrompt(partySize, start, options, tagNames);
   const { data, meta } = await chatText(
     [
       {
         role: "system",
         content:
           "Sei l'assistente di sala di un ristorante. In una o due frasi brevi, in italiano, " +
-          "di' al cameriere perché l'opzione 1 è la migliore (e, se utile, l'alternativa). " +
+          "di' al cameriere perché l'opzione 1 è la migliore (e, se utile, l'alternativa): " +
+          "prima le esigenze richieste che rispetta, poi il resto. " +
           "Usa solo i fatti dati: non inventare tavoli, numeri o orari.",
       },
       { role: "user", content: facts },
@@ -146,10 +159,35 @@ export interface ParsedRequest {
   tagIds: string[] | null;
   /** undefined = not given; null = anywhere */
   mapId: string | null | undefined;
+  /** the conversation's request so far (lowest priority) */
+  previous: TablePreviousRequest | null;
+}
+
+function parsePrevious(raw: unknown): TablePreviousRequest | null {
+  if (raw === undefined || raw === null) return null;
+  const p = raw as Partial<TablePreviousRequest>;
+  const ok =
+    typeof p === "object" &&
+    typeof p.partySize === "number" &&
+    Number.isInteger(p.partySize) &&
+    p.partySize >= 1 &&
+    p.partySize <= TABLES_MAX_PARTY &&
+    (p.time === null || (typeof p.time === "string" && !Number.isNaN(Date.parse(p.time)))) &&
+    Array.isArray(p.tagIds) &&
+    p.tagIds.every((id) => typeof id === "string") &&
+    (p.mapId === null || typeof p.mapId === "string");
+  if (!ok) throw new TablesRequestError("previous must be a previous answer's request");
+  return {
+    partySize: p.partySize!,
+    time: p.time ?? null,
+    tagIds: p.tagIds!,
+    mapId: p.mapId ?? null,
+  };
 }
 
 export function parseRequest(body: Record<string, unknown>): ParsedRequest {
-  const { text, partySize, time, tagIds, mapId } = body as TableSuggestRequest & Record<string, unknown>;
+  const { text, partySize, time, tagIds, mapId, previous } = body as TableSuggestRequest &
+    Record<string, unknown>;
   if (text !== undefined && typeof text !== "string") throw new TablesRequestError("text must be a string");
   if (typeof text === "string" && text.length > 500) throw new TablesRequestError("text is too long");
   if (
@@ -175,6 +213,7 @@ export function parseRequest(body: Record<string, unknown>): ParsedRequest {
     time: typeof time === "string" && time.trim() ? time.trim() : null,
     tagIds: tagIds ?? null,
     mapId,
+    previous: parsePrevious(previous),
   };
 }
 
@@ -183,7 +222,10 @@ export async function suggestForRequest(
   now: number = Date.now(),
 ): Promise<TableSuggestResponse> {
   const vocab = await loadVocabulary();
-  const unknownTag = (req.tagIds ?? []).find((id) => !vocab.tags.some((t) => t.id === id));
+  const prev = req.previous;
+  const unknownTag = [...(req.tagIds ?? []), ...(prev?.tagIds ?? [])].find(
+    (id) => !vocab.tags.some((t) => t.id === id),
+  );
   if (unknownTag) throw new TablesRequestError(`Unknown table feature: ${unknownTag}`);
   if (req.mapId && !vocab.allMapIds.has(req.mapId)) {
     throw new TablesRequestError(`Unknown room: ${req.mapId}`);
@@ -203,7 +245,7 @@ export async function suggestForRequest(
     modelDown = model === null;
     read = mergeReadings(model?.data ?? null, parseTextFallback(req.text!, vocab));
   }
-  const partySize = req.partySize ?? read?.partySize ?? null;
+  const partySize = req.partySize ?? read?.partySize ?? prev?.partySize ?? null;
   if (partySize === null) {
     throw new TablesRequestError(
       req.text
@@ -211,14 +253,26 @@ export async function suggestForRequest(
         : "Quante persone? Scrivi la richiesta o indica il numero di persone.",
     );
   }
+  // a follow-up keeps what was asked before: features add up, minus the
+  // ones the text takes back
+  const removed = read?.removedTagIds ?? [];
+  const asked = req.tagIds ?? [
+    ...(prev?.tagIds ?? []),
+    ...(read?.tagIds ?? []).filter((id) => !(prev?.tagIds ?? []).includes(id)),
+  ];
   const walkIn = {
     partySize,
-    tagIds: req.tagIds ?? read?.tagIds ?? [],
-    mapId: req.mapId !== undefined ? req.mapId : read?.mapId ?? null,
+    tagIds: req.tagIds ? asked : asked.filter((id) => !removed.includes(id)),
+    mapId: req.mapId !== undefined ? req.mapId : read?.mapId ?? prev?.mapId ?? null,
   };
 
-  // 2. when, 3. the engine
-  const when = resolveStart(req.time ?? read?.hhmm ?? null, now);
+  // 2. when, 3. the engine — a previous time holds unless the text says
+  // another one, or now; once it has passed it is now
+  const prevTime =
+    prev?.time && !read?.saysNow && Date.parse(prev.time) > now - TABLES_NOW_MINUTES * MINUTE
+      ? prev.time
+      : null;
+  const when = resolveStart(req.time ?? read?.hhmm ?? prevTime, now);
   const start = when.mode === "booking" ? when.start : null;
   const computed =
     when.mode === "now"
@@ -228,7 +282,14 @@ export async function suggestForRequest(
   // 4. the explanation — never when there's nothing to explain
   const explained =
     computed.options.length > 0 && !modelDown
-      ? await tryAi(() => explain(partySize, start, computed.options))
+      ? await tryAi(() =>
+          explain(
+            partySize,
+            start,
+            computed.options,
+            walkIn.tagIds.map((id) => vocab.tags.find((t) => t.id === id)?.name ?? id),
+          ),
+        )
       : null;
 
   return {
@@ -236,6 +297,7 @@ export async function suggestForRequest(
       partySize,
       time: start === null ? null : new Date(start).toISOString(),
       tagIds: walkIn.tagIds,
+      tagNames: walkIn.tagIds.map((id) => vocab.tags.find((t) => t.id === id)?.name ?? id),
       mapId: walkIn.mapId,
       mode: when.mode,
     },

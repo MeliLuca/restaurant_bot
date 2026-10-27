@@ -15,10 +15,14 @@ export class AiRequestError extends Error {
   }
 }
 
-/** GET when `body` is undefined, else POST JSON. Throws AiRequestError. */
-export async function aiFetch<T>(path: string, body?: unknown): Promise<T> {
+/** GET when `body` is undefined, else POST JSON (or `method`). Throws AiRequestError. */
+export async function aiFetch<T>(
+  path: string,
+  body?: unknown,
+  method?: "PATCH" | "DELETE",
+): Promise<T> {
   const res = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
+    method: method ?? (body === undefined ? "GET" : "POST"),
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",

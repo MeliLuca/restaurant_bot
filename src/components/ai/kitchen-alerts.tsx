@@ -63,6 +63,10 @@ function KitchenAlertsStack() {
   // pill beside it (lg: the panel is 400px) and open only when asked
   const onPos = pathname.startsWith("/pos");
   const [collapsed, setCollapsed] = useState(onPos);
+  // the stack stays mounted across pages: entering Cassa folds it away
+  useEffect(() => {
+    if (onPos) setCollapsed(true);
+  }, [onPos]);
 
   // an order shows while one of its late items is not "Visto" (or its 10
   // minutes ran out): a newly late item brings the card back

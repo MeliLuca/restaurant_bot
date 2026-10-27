@@ -48,12 +48,20 @@ intento:
 - product_stats: vendite, incasso, margini o andamento di piatti e prodotti
 - other: tutto il resto
 testo: la richiesta riscritta in modo autonomo, prendendo dai messaggi precedenti i dettagli che servono; non aggiungere nulla che non è stato detto. Per price solo il piatto ("pizza con burrata e crudo"), senza la domanda.
-giorni: solo per table_stats/product_stats, il periodo chiesto in giorni (ieri = 1, settimana = 7, mese = 30, anno = 365); null se non detto.`;
+giorni: solo per table_stats/product_stats, il periodo chiesto in giorni (ieri = 1, settimana = 7, mese = 30, anno = 365); null se non detto.
+Se c'è una richiesta in corso e il messaggio aggiunge, toglie o cambia un dettaglio ("abbiamo anche dei bambini", "e alle 22?", "la tv non serve"), l'intento resta quello della richiesta in corso.`;
+
+/** What the conversation is working on, said to the model in a line */
+export interface RouteContext {
+  lastIntent?: ChatIntent;
+  /** e.g. "tavolo per 6 persone, adesso, con TV screen" */
+  summary?: string;
+}
 
 const has = (text: string, words: string[]) => words.some((w) => text.includes(w));
 
 /** Keyword fallback when the model is unavailable */
-export function routeByKeywords(message: string): RoutedIntent {
+export function routeByKeywords(message: string, context?: RouteContext): RoutedIntent {
   const n = ` ${normalize(message)} `;
   const days = /\bsettiman/.test(n) ? 7 : /\bmese\b/.test(n) ? 30 : /\banno\b/.test(n) ? 365 : null;
   let intent: ChatIntent = "order";
@@ -65,6 +73,12 @@ export function routeByKeywords(message: string): RoutedIntent {
     intent = "tables";
   } else if (has(n, ["quanto", "prezzo", "fuori menu", "far pagare"])) {
     intent = "price";
+  } else if (
+    context?.lastIntent === "tables" &&
+    has(n, ["bambin", "tv", "partita", "schermo", "disabil", "carrozzin", "finestr", " alle ", " ore ", "adesso", "fossero", "siamo", "sala", "giardino", "non serve", "senza"])
+  ) {
+    // a detail added to the table request in progress
+    intent = "tables";
   }
   return { intent, text: message.trim(), days };
 }
@@ -73,11 +87,16 @@ const MAX_TURNS = 6;
 
 export async function routeIntent(
   turns: ChatTurn[],
+  context?: RouteContext,
 ): Promise<{ routed: RoutedIntent; ai: AiMeta | null }> {
   const last = turns[turns.length - 1]?.content ?? "";
   const history = turns.slice(-MAX_TURNS, -1);
+  const inProgress =
+    context?.lastIntent && context.summary
+      ? `\nRichiesta in corso (intento ${context.lastIntent}): ${context.summary}.`
+      : "";
   const messages: ChatMessage[] = [
-    { role: "system", content: SYSTEM },
+    { role: "system", content: SYSTEM + inProgress },
     ...history.map((t) => ({ role: t.role, content: t.content.slice(0, 400) })),
     { role: "user", content: last },
   ];
@@ -87,7 +106,7 @@ export async function routeIntent(
       temperature: 0,
     }),
   );
-  if (!result) return { routed: routeByKeywords(last), ai: null };
+  if (!result) return { routed: routeByKeywords(last, context), ai: null };
   const { intento, testo, giorni } = result.data;
   const intent = (CHAT_INTENTS as string[]).includes(intento) ? (intento as ChatIntent) : "other";
   return {

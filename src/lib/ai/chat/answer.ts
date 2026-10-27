@@ -15,6 +15,7 @@ import { GET as kitchenAlerts } from "@/app/api/ai/kitchen/alerts/route";
 import { POST as tableStats } from "@/app/api/ai/analytics/tables/route";
 import { POST as productStats } from "@/app/api/ai/analytics/products/route";
 import { chatText, tryAi } from "../ollama";
+import type { AiChatContext } from "@/lib/database.types";
 import type { ChatData } from "../contracts/chat";
 import type { OrderParseResponse, OrderPriceResponse } from "../contracts/order";
 import type { TableSuggestResponse } from "../contracts/tables";
@@ -107,16 +108,31 @@ function priceReply(r: OrderPriceResponse): string {
 /** Tables are named by number here: "12" reads as "Tavolo 12" */
 const tableLabel = (name: string) => (/^\d+$/.test(name) ? `Tavolo ${name}` : name);
 
+const clock = (iso: string) =>
+  new Date(iso).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+
+/** "6 persone, adesso, con TV screen e Child friendly" */
+export function tablesRequestText(r: {
+  partySize: number;
+  time: string | null;
+  tagNames?: string[];
+}): string {
+  const when = r.time ? `alle ${clock(r.time)}` : "adesso";
+  const tags = r.tagNames?.length
+    ? `, con ${r.tagNames.length > 1 ? `${r.tagNames.slice(0, -1).join(", ")} e ${r.tagNames[r.tagNames.length - 1]}` : r.tagNames[0]}`
+    : "";
+  return `${r.partySize} persone, ${when}${tags}`;
+}
+
 function tablesReply(r: TableSuggestResponse): string {
-  if (!r.options.length) return r.reason ?? "Nessun tavolo adatto.";
-  const when = r.request.time
-    ? `alle ${new Date(r.request.time).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`
-    : "adesso";
+  if (!r.options.length) {
+    return `${tablesRequestText(r.request)}: ${r.reason ?? "nessun tavolo adatto."}`;
+  }
   const list = r.options
     .slice(0, 4)
     .map((o) => `• ${o.tableNames.map(tableLabel).join(" + ")} (${o.seats} posti${o.mapName ? `, ${o.mapName}` : ""}) — ${o.reason}`)
     .join("\n");
-  return [`${r.request.partySize} persone, ${when}:`, list, r.explanation ?? ""].filter(Boolean).join("\n\n");
+  return [`${tablesRequestText(r.request)}:`, list, r.explanation ?? ""].filter(Boolean).join("\n\n");
 }
 
 function kitchenReply(r: KitchenAlertsResponse): string {
@@ -171,43 +187,104 @@ function productStatsReply(r: ProductStatsResponse): string {
 
 const OTHER_SYSTEM = `Sei l'assistente di una trattoria, dentro il gestionale. Sai: scrivere un'ordinazione dal testo, proporre il prezzo di un piatto fuori menù, trovare il tavolo migliore per un gruppo, segnalare i ritardi in cucina, analizzare la resa di tavoli e prodotti. Rispondi in italiano in una o due frasi brevi. Non dire mai prezzi, numeri o dati che non ti sono stati dati: se la domanda chiede dati, spiega quale delle cose che sai fare può rispondere.`;
 
+/** "e il mese prima?" keeps the period of the analysis before; else 30 days */
+const statsDays = (context: AiChatContext) =>
+  (context.lastIntent === "table_stats" || context.lastIntent === "product_stats") && context.days
+    ? context.days
+    : 30;
+
+/** The line that tells the router what the chat is working on */
+export function contextSummary(context: AiChatContext): string | undefined {
+  if (context.lastIntent === "tables" && context.tables) {
+    return `tavolo per ${tablesRequestText(context.tables)}`;
+  }
+  if ((context.lastIntent === "table_stats" || context.lastIntent === "product_stats") && context.days) {
+    return `analisi degli ultimi ${context.days} giorni`;
+  }
+  return undefined;
+}
+
+export interface Answer {
+  reply: string;
+  data: ChatData;
+  /** what the conversation works on after this answer */
+  context: AiChatContext;
+}
+
 export async function answer(
   routed: RoutedIntent,
   question: string,
-): Promise<{ reply: string; data: ChatData }> {
-  const fail = (error: string, data: ChatData) => ({ reply: `Non sono riuscito: ${error}`, data });
+  context: AiChatContext = {},
+): Promise<Answer> {
+  const fail = (error: string): Answer => ({
+    reply: `Non sono riuscito: ${error}`,
+    data: { intent: "other", result: null },
+    // a failed turn changes nothing the chat was working on
+    context,
+  });
+  const done = (reply: string, data: ChatData, extra: AiChatContext = {}): Answer => ({
+    reply,
+    data,
+    context: { ...context, ...extra, lastIntent: data.intent },
+  });
   switch (routed.intent) {
     case "order": {
       const r = await call<OrderParseResponse>(orderParse, "/api/ai/order/parse", { text: routed.text });
-      if (!r.ok) return fail(r.error, { intent: "other", result: null });
-      return { reply: orderReply(r.data), data: { intent: "order", result: r.data } };
+      if (!r.ok) return fail(r.error);
+      return done(orderReply(r.data), { intent: "order", result: r.data });
     }
     case "price": {
       const r = await call<OrderPriceResponse>(orderPrice, "/api/ai/order/price", { text: routed.text });
-      if (!r.ok) return fail(r.error, { intent: "other", result: null });
-      return { reply: priceReply(r.data), data: { intent: "price", result: r.data } };
+      if (!r.ok) return fail(r.error);
+      return done(priceReply(r.data), { intent: "price", result: r.data });
     }
     case "tables": {
-      const r = await call<TableSuggestResponse>(tablesSuggest, "/api/ai/tables/suggest", { text: routed.text });
-      if (!r.ok) return fail(r.error, { intent: "other", result: null });
-      return { reply: tablesReply(r.data), data: { intent: "tables", result: r.data } };
+      // a follow-up reads the new message on top of the request so far —
+      // the request is kept by the app, not re-told by the model
+      const previous = context.lastIntent === "tables" ? context.tables : undefined;
+      const r = await call<TableSuggestResponse>(
+        tablesSuggest,
+        "/api/ai/tables/suggest",
+        previous
+          ? {
+              text: question,
+              previous: {
+                partySize: previous.partySize,
+                time: previous.time,
+                tagIds: previous.tagIds,
+                mapId: previous.mapId,
+              },
+            }
+          : { text: routed.text },
+      );
+      if (!r.ok) return fail(r.error);
+      const q = r.data.request;
+      return done(tablesReply(r.data), { intent: "tables", result: r.data }, {
+        tables: {
+          partySize: q.partySize,
+          time: q.time,
+          tagIds: q.tagIds,
+          tagNames: q.tagNames,
+          mapId: q.mapId,
+        },
+      });
     }
     case "kitchen": {
       const r = await call<KitchenAlertsResponse>(kitchenAlerts, "/api/ai/kitchen/alerts?summary=1");
-      if (!r.ok) return fail(r.error, { intent: "other", result: null });
-      return { reply: kitchenReply(r.data), data: { intent: "kitchen", result: r.data } };
+      if (!r.ok) return fail(r.error);
+      return done(kitchenReply(r.data), { intent: "kitchen", result: r.data });
     }
     case "table_stats": {
-      const range = lastDays(routed.days ?? 30);
-      const r = await call<TableStatsResponse>(tableStats, "/api/ai/analytics/tables", range);
-      if (!r.ok) return fail(r.error, { intent: "other", result: null });
-      return { reply: tableStatsReply(r.data), data: { intent: "table_stats", result: r.data } };
+      const days = routed.days ?? statsDays(context);
+      const r = await call<TableStatsResponse>(tableStats, "/api/ai/analytics/tables", lastDays(days));
+      if (!r.ok) return fail(r.error);
+      return done(tableStatsReply(r.data), { intent: "table_stats", result: r.data }, { days });
     }
     case "product_stats": {
-      const range = lastDays(routed.days ?? 30);
-      const r = await call<ProductStatsResponse>(productStats, "/api/ai/analytics/products", range);
-      if (!r.ok) return fail(r.error, { intent: "other", result: null });
-      return { reply: productStatsReply(r.data), data: { intent: "product_stats", result: r.data } };
+      const days = routed.days ?? statsDays(context);
+      const r = await call<ProductStatsResponse>(productStats, "/api/ai/analytics/products", lastDays(days));
+      if (!r.ok) return fail(r.error);
+      return done(productStatsReply(r.data), { intent: "product_stats", result: r.data }, { days });
     }
     default: {
       const r = await tryAi(() =>
@@ -219,12 +296,11 @@ export async function answer(
           { numPredict: 120 },
         ),
       );
-      return {
-        reply:
-          r?.data ||
+      return done(
+        r?.data ||
           "Posso scrivere un ordine, proporre un prezzo fuori menù, trovare un tavolo, controllare i ritardi in cucina o analizzare tavoli e prodotti.",
-        data: { intent: "other", result: null },
-      };
+        { intent: "other", result: null },
+      );
     }
   }
 }

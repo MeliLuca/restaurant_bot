@@ -23,6 +23,17 @@ export interface TableSuggestRequest {
   tagIds?: string[];
   /** floor_maps id; null = anywhere */
   mapId?: string | null;
+  /** a conversation's request so far (the previous answer's `request`): what
+   * the text doesn't say comes from here, features add up ("…e abbiamo dei
+   * bambini" keeps the TV), and the text can take one back ("la TV non serve") */
+  previous?: TablePreviousRequest;
+}
+
+export interface TablePreviousRequest {
+  partySize: number;
+  time: string | null;
+  tagIds: string[];
+  mapId: string | null;
 }
 
 /** now = a party at the door (walk-in finder); booking = a later time */
@@ -61,6 +72,8 @@ export interface TableSuggestResponse {
     /** ISO start for a booking; null = now */
     time: string | null;
     tagIds: string[];
+    /** the same features by name, for a reply ("TV screen, Child friendly") */
+    tagNames: string[];
     mapId: string | null;
     mode: TableSuggestMode;
   };
