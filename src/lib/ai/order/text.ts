@@ -70,6 +70,17 @@ export function oneTypo(a: string, b: string): boolean {
 
 // --- sizes -------------------------------------------------------------------
 
+/** Size words (stemmed) → the sizes they mean, in cl, on this listino */
+export const SIZE_WORDS: Record<string, number[]> = {
+  piccol: [20, 25],
+  small: [20, 25],
+  medi: [40, 50],
+  medium: [40, 50],
+  grand: [50, 100],
+  large: [50, 100],
+  big: [50, 100],
+};
+
 const UNIT = "(?:cl|ml|lt|l(?!['’])|litr[oi])"; // not the l' of "l'insalata"
 const NUM = "(\\d+(?:[.,]\\d+)?)";
 /** Tried in this order: a unit says it best, then "da 33", then a bare "0,33" */
@@ -190,6 +201,8 @@ export function resolveIngredient(
 ): VariationOption | null {
   const n = cleanPhrase(phrase);
   if (!n) return null;
+  // "grande" is a size, not grana
+  if (sigWords(n).every((w) => w in SIZE_WORDS)) return null;
   const byName = new Map(pool.map((i) => [normalize(i.name), i]));
   const exact = byName.get(n);
   if (exact) return exact;
@@ -271,7 +284,8 @@ export function resolvePhrases(
         found.push({ written: words.slice(i, hit.j).join(" "), ingredient: hit.ing });
         i = hit.j;
       } else {
-        if (sigWords(words[i]).length > 0) leftovers.push(words[i]);
+        const w = sigWords(words[i]);
+        if (w.length > 0 && !w.every((x) => x in SIZE_WORDS)) leftovers.push(words[i]);
         i += 1;
       }
     }

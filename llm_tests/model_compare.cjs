@@ -70,6 +70,9 @@ const ORDER = [
   ["bruschetta patate e prochetta", (r) => [
     qty(r, /^235\b/, 1), (line(r, /^235\b/)?.modifiers ?? []).length === 0,
     r.customDishes.length === 0, r.lines.length === 1]],
+  // refuso + parola di formato: "guinnes grande" = Guinness cl 0,50, sicura
+  ["guinnes grande", (r) => [
+    qty(r, /^Guinness.*0,50/, 1), line(r, /^Guinness/)?.confidence === "high", r.lines.length === 1]],
 ];
 
 const ROUTE = [

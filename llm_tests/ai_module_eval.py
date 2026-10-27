@@ -110,6 +110,11 @@ CASI = [
          ("nessun ingrediente inventato", lambda d: not d["customDishes"]
           and all(not l["modifiers"] and not l["unknownIngredients"] for l in d["lines"])),
      ]),
+    ("order", "ord_formato_parola", "POST", "/api/ai/order/parse",
+     {"text": "guinnes grande"}, [
+         ("Guinness cl 0,50", lambda d: any(l["name"] == "Guinness stout — cl 0,50" for l in d["lines"])),
+         ("una sola riga", lambda d: len(d["lines"]) == 1 and not d["customDishes"]),
+     ]),
     ("order", "price_testo", "POST", "/api/ai/order/price",
      {"text": "pizza con salmone, rucola e zucca"}, [
          ("prezzo > 0", lambda d: d["price"] > 0),

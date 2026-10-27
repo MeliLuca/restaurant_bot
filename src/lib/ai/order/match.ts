@@ -30,10 +30,12 @@ import type { OrderData } from "./data";
 import {
   cleanNote,
   mentionedCategories,
+  oneTypo,
   resolveIngredient,
   resolvePhrases,
   sigWords,
   splitPhrases,
+  SIZE_WORDS,
   validateCategoryHint,
   wordMatches,
   writtenSize,
@@ -57,13 +59,6 @@ const DISH_ALIASES: Record<string, string> = {
   margherit: "pomodoro, mozzarella",
 };
 
-/** Size words → the numbers the beer names carry ("cl 0,40") */
-const SIZE_WORDS: Record<string, string[]> = {
-  piccol: ["20", "25"],
-  small: ["20", "25"],
-  medi: ["40", "50"],
-  medium: ["40", "50"],
-};
 
 /** Words the listino writes in another language: "leffe rossa" is the
  * Leffe Rouge, "birra bianca" the Hoegaarden Blanche (stemmed, both ways) */
@@ -141,7 +136,7 @@ function nameWords(item: MenuItemView): string[] {
 /**
  * 0..1: how much of what was written the dish carries (codice, name,
  * ingredients, category — the POS search haystack), and how much of the
- * dish's own name was written. Size words stand for any of their numbers.
+ * dish's own name was written. Size words stand for any of their sizes.
  */
 function wordScore(
   words: string[],
@@ -152,26 +147,23 @@ function wordScore(
   if (words.length === 0) return { score: 0, precision: 0 };
   const hay = buildHaystack([item.codice, item.name, ...(item.ingredients ?? []), categoryName]);
   const hayWords = hay.split(" ");
-  // a written size ("0,33cl") stands for the item's whole size ("cl 0,33")
-  const itemSize = sizeCl === null ? null : writtenSize(item.name);
-  const sizeWords = itemSize?.cl === sizeCl ? sigWords(itemSize.text) : [];
+  // a written size ("0,33cl", "grande") stands for the item's whole size ("cl 0,50")
+  const itemSize = writtenSize(item.name);
+  const itemSizeWords = itemSize ? sigWords(itemSize.text) : [];
+  const fits = (w: string) =>
+    !!itemSize && (w === SIZE_WORD ? itemSize.cl === sizeCl : SIZE_WORDS[w]!.includes(itemSize.cl));
+  const isSize = (w: string) => w === SIZE_WORD || w in SIZE_WORDS;
   const same = (w: string, target: string) =>
-    w === SIZE_WORD
-      ? sizeWords.includes(target)
-      : wordMatches(w, target) || (WORD_SYNONYMS[w] ?? []).some((s) => wordMatches(s, target));
-  const covers = (w: string) => {
-    const sizes = SIZE_WORDS[w];
-    if (sizes) return sizes.some((n) => hayWords.includes(n));
-    return hayWords.some((h) => same(w, h));
-  };
+    isSize(w)
+      ? fits(w) && itemSizeWords.includes(target)
+      : wordMatches(w, target) ||
+        oneTypo(w, target) ||
+        (WORD_SYNONYMS[w] ?? []).some((s) => wordMatches(s, target));
+  const covers = (w: string) => (isSize(w) ? fits(w) : hayWords.some((h) => same(w, h)));
   const coverage = words.filter(covers).length / words.length;
   const own = nameWords(item);
   const precision =
-    own.length === 0
-      ? 0
-      : own.filter((o) =>
-          words.some((w) => (SIZE_WORDS[w] ? SIZE_WORDS[w].includes(o) : same(w, o))),
-        ).length / own.length;
+    own.length === 0 ? 0 : own.filter((o) => words.some((w) => same(w, o))).length / own.length;
   return { score: 0.6 * coverage + 0.4 * precision, precision };
 }
 
@@ -250,6 +242,15 @@ function resolveDish(piatto: string, extras: string[], hint: string | undefined,
     .split(" ")
     .filter((w) => !mention.words.includes(w))
     .join(" ");
+  // a size says nothing about a food ("pizza grande con funghi"); drinks keep
+  // it through allWords (step 4)
+  if (mention.categories.some((c) => isCodeNamedCategory(c.name))) {
+    qWords = qWords.filter((w) => !(w in SIZE_WORDS));
+    qText = qText
+      .split(" ")
+      .filter((w) => !(stem(w) in SIZE_WORDS))
+      .join(" ");
+  }
   const bianca = qWords.includes("bianc");
   if (bianca) {
     qWords = qWords.filter((w) => w !== "bianc");

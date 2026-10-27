@@ -17,6 +17,7 @@ import { matchItem, type MatchContext } from "./match";
 import { normalize } from "@/lib/menu-search";
 import {
   mentionedCategories,
+  oneTypo,
   sigWords,
   splitPhrases,
   validateCategoryHint,
@@ -38,8 +39,14 @@ export async function parseOrder(text: string, settings: AiSettings): Promise<Or
   const lines: ParsedLine[] = [];
   const customDishes: CustomDishProposal[] = [];
   const unresolved: OrderParseResponse["unresolved"] = [];
+  const written = sigWords(text);
   items.forEach((item) => {
     const r = matchItem(item, ctx);
+    // a dish named only with words never written ("una coca" → the model's
+    // "birra media") is a guess: shown, never sure
+    if (r.kind === "menu" && extraction.by === "ai" && inventedWords(item.piatto, written)) {
+      r.line.confidence = "low";
+    }
     if (r.kind === "menu") lines.push(r.line);
     else if (r.kind === "custom") customDishes.push(r.proposal);
     else unresolved.push({ text: r.text, reason: r.reason, categoryName: r.categoryName });
@@ -69,8 +76,11 @@ export async function parseOrder(text: string, settings: AiSettings): Promise<Or
  *    dish, read as written — kept only when that reading finds something;
  *  - one item that lost the phrase's size, all its "con X" or all its note
  *    rapide gets them back.
- * Items the rules cannot place, or anything after "anzi"/"togli", stay the
- * model's.
+ *  - an item with words never written (the model's rewrite: "una guiness
+ *    piccola" → "birra media") is replaced by the dish written in its place,
+ *    when the text has as many dishes as the model found and the written one
+ *    is on the menu — surely, or the model's reading is not sure either.
+ * Anything else, or anything after "anzi"/"togli", stays the model's.
  */
 function regroupWithRules(items: ExtractedItem[], text: string, ctx: MatchContext): ExtractedItem[] {
   if (items.length === 0 || CORRECTION.test(normalize(text))) return items;
@@ -90,10 +100,33 @@ function regroupWithRules(items: ExtractedItem[], text: string, ctx: MatchContex
     if (at >= 0) from = at;
   });
 
+  // a dish the model rewrote with words never written ("una guinness
+  // grande" → "birra grande"): when it reads to nothing sure, the dish in
+  // the same place as written, if that one is on the menu
+  const textWords = sigWords(text);
+  const sameShape =
+    rules.length === items.length && rules.every((r, i) => r.quantita === items[i].quantita);
+  const rewritten = (item: ExtractedItem, k: number): ExtractedItem | null => {
+    if (!sameShape || owner[k] >= 0) return null;
+    if (!inventedWords(item.piatto, textWords)) return null;
+    const asWritten = matchItem(rules[k], ctx);
+    if (asWritten.kind !== "menu") return null;
+    const mine = matchItem(item, ctx);
+    const mineSure = mine.kind === "menu" && mine.line.confidence === "high";
+    if (mineSure && asWritten.line.confidence !== "high") return null;
+    return { ...rules[k], categoria: item.categoria, note: item.note ?? rules[k].note };
+  };
+
   const out: ExtractedItem[] = [];
   const done = new Set<number>();
   items.forEach((item, k) => {
     if (done.has(k)) return;
+    const fix = rewritten(item, k);
+    if (fix) {
+      done.add(k);
+      out.push(fix);
+      return;
+    }
     const r = owner[k];
     const members = r < 0 ? [k] : items.map((_, j) => j).filter((j) => owner[j] === r);
     const rule = r >= 0 ? rules[r] : null;
@@ -134,6 +167,13 @@ function regroupWithRules(items: ExtractedItem[], text: string, ctx: MatchContex
     });
   });
   return out;
+}
+
+/** The dish name has words the text never wrote (typos and plurals allowed) */
+function inventedWords(piatto: string, written: string[]): boolean {
+  return sigWords(piatto).some(
+    (w) => !/^\d+$/.test(w) && !written.some((x) => wordMatches(w, x) || wordMatches(x, w) || oneTypo(w, x)),
+  );
 }
 
 /** A note that names an ingredient the text never mentions ("Poca
