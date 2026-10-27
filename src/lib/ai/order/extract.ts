@@ -4,8 +4,10 @@
 // returns words only — no ids, no prices. When it is unavailable, a plain
 // rule-based reader does the simple cases ("2 margherite senza basilico,
 // 1202 ben cotta") so the waiter is never left with nothing.
-// Either way, two safety rules are applied here, not trusted to the model:
-// allergies always go to staff, and a reply that talks money is dropped.
+// Either way, the safety rules are applied here, not trusted to the model:
+// allergies always go to staff, a manipulation attempt is refused whole
+// (looksLikeManipulation), a refusal never carries dishes, and a reply that
+// talks money is dropped.
 
 import { normalize } from "@/lib/menu-search";
 import type { AiMeta } from "../contracts/common";
@@ -32,8 +34,33 @@ const STATUSES: OrderParseStatus[] = ["ok", "clarify", "staff", "refuse"];
 
 /** Allergies & co. — a person must confirm, whatever the model said */
 const ALLERGY = /\b(allerg\w*|celiac\w*|glutin\w*|gluten\w*|intolleran\w*|lattosio|lactose|coeliac\w*|anafilass\w*|nichel)\b/;
-/** Attempts to talk the till into something */
-const INJECTION = /\b(ignora\w*|ignore|dimentica\w*|forget|gratis|gratuit\w*|free|omagg\w*|scont\w*|discount|regal\w*|prompt|istruzion\w*|instructions?)\b/;
+/**
+ * Manipulation — ONE general criterion, not a list of known attacks: a
+ * waiter's order talks about dishes. A message that talks to or about the
+ * assistant itself (its rules, instructions, prompt, system, identity, role,
+ * mode, how it should answer), about money (free, discounts, prices), or
+ * that carries fake chat-role / section markers is refused WHOLE, whatever
+ * the model answered. Only the subject counts, never order verbs: "ignora la
+ * birra di prima", "togli", "anzi", "offre lui" stay orders.
+ */
+const OFF_ORDER = new RegExp(
+  "\\b(" +
+    // the assistant itself
+    "prompt\\w*|istruzion\\w*|instruction\\w*|regol[ae]|rules?|system\\w*|assistant\\w*|assistente|" +
+    "modalita|mode|ruolo|role\\w*|fingi|pretend\\w*|rispond\\w*|respond\\w*|reply|" +
+    "you are now|sei ora|ora sei|da ora|from now on|" +
+    // money
+    "gratis|gratuit\\w*|free|omagg\\w*|regal\\w*|scont\\w*|discount\\w*|prezz\\w*|pric\\w*|costs?|cost[ao]|costano|euro?s?" +
+    ")\\b",
+);
+/** A line opened by a chat role, or prompt-format tokens: "SYSTEM:", "###", "[INST]", "<|im_start|>" */
+const ROLE_MARKER = /^\s*(system|assistant|developer)\s*:|#{2,}|\[\/?inst\]|<\|[^|>]*\|>/im;
+
+export function looksLikeManipulation(text: string): boolean {
+  // "gluten-free", "alcohol-free" mean "without", not money
+  return ROLE_MARKER.test(text) || OFF_ORDER.test(normalize(text.replace(/-\s*free\b/gi, " senza")));
+}
+
 /** A reply mentioning money is never shown: prices come from the app */
 const MONEY = /(€|\$|\beur\w*|\bprezz\w*|\bpric\w*|\bcost\w*|\btotal\w*|\bgratis\b|\bfree\b|\bscont\w*|\bdiscount\w*|\bomagg\w*|\d+[.,]\d{2})/i;
 
@@ -144,7 +171,7 @@ function readChunk(chunk: string, quickNotes: string[]): ExtractedItem | null {
 
 export function ruleExtract(text: string, quickNotes: string[]): Extraction {
   const n = normalize(text);
-  if (INJECTION.test(n)) {
+  if (!ALLERGY.test(n) && looksLikeManipulation(text)) {
     return { status: "refuse", items: [], reply: null, by: "rules", ai: null };
   }
   // split into dishes: lines, then commas / " e " / " poi " — a chunk that
@@ -223,10 +250,16 @@ export async function extractOrder(
   let status: OrderParseStatus = STATUSES.includes(data.status as OrderParseStatus)
     ? (data.status as OrderParseStatus)
     : "ok";
-  const items = reconcileWithRules(cleanItems(data.items), text, quickNotes);
-  if (ALLERGY.test(n)) status = "staff";
-  else if (INJECTION.test(n) && status === "ok" && items.length === 0) status = "refuse";
+  let items = reconcileWithRules(cleanItems(data.items), text, quickNotes);
   let reply = typeof data.risposta === "string" ? data.risposta.trim().slice(0, 240) : "";
+  if (ALLERGY.test(n)) status = "staff";
+  else if (looksLikeManipulation(text) && status !== "refuse") {
+    // the model went along with it: its reply ("OK", "aggiunte 20 birre") goes too
+    status = "refuse";
+    reply = "";
+  }
+  // consistency: a refusal never carries dishes, whoever decided it
+  if (status === "refuse") items = [];
   if (reply && MONEY.test(reply) && status !== "refuse") reply = "";
   // a refusal may say "nothing for free", but never a figure
   if (reply && status === "refuse" && /(€|\d+[.,]\d{2})/.test(reply)) reply = "";

@@ -6,9 +6,9 @@
 // * persone must be a whole 1..60 that the text says (a number, a number
 //   word, or two of them added up: "4 adulti e 2 bambini");
 // * orario must be HH:MM whose hour the text says;
-// * esigenze / sala must name a real table feature / bookable room.
-// Features also come from a fixed synonym table run on the text itself
-// ("carrozzina" → Accessible), so the model is only a hint there. Without
+// * esigenze / sala must name a real table feature / bookable room, and a
+//   feature only counts if the text names it too (its name, or a synonym
+//   from FEATURE_SYNONYMS: "carrozzina" → Accessible). Without
 // the model, a small regex reader takes its place.
 
 import type { FloorMap, TableTag } from "@/lib/database.types";
@@ -318,8 +318,10 @@ export function validateExtraction(
     }
   }
 
-  // the text's own reading first; the model may add a feature the text
-  // names, and take one back only where the text negates it
+  // the text is the source of truth, for features as for persone/orario:
+  // the model may confirm a feature only if the text names it (by the tag's
+  // own name or a FEATURE_SYNONYMS word — the one list to extend), and take
+  // one back only where the text negates it. It never invents one.
   const features = readFeatures(text, vocab.tags);
   const named = new Set(tagsFromText(text, vocab.tags));
   const tagIds = new Set(features.add);
@@ -327,7 +329,7 @@ export function validateExtraction(
   for (const e of Array.isArray(r.esigenze) ? r.esigenze : []) {
     if (typeof e !== "string") continue;
     tagsFromText(e, vocab.tags).forEach((id) => {
-      if (!removed.has(id)) tagIds.add(id);
+      if (named.has(id) && !removed.has(id)) tagIds.add(id);
     });
   }
   const negates = clausesOf(normalize(text)).some((c) => NEGATED.test(c));
