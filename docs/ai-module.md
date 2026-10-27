@@ -60,6 +60,7 @@ Poi: **Impostazioni → Moduli → Assistente AI (prototipo)** → accendi, cont
 - `menu_items.is_custom`: segnaposto "Fuori menù — <Categoria>", uno per categoria, creato al primo uso con la stampante più usata della categoria; nascosto dalla griglia della Cassa.
 - `order_items.custom_name`: nome libero della riga; lo stampano comanda e conto ("FUORI MENÙ …") e lo mostrano cucina, conti e telefono.
 - `menu_items.cost`, `ingredients.cost`: costo d'acquisto facoltativo (Impostazioni → Menu, campo "Costo").
+- `ai_conversations` / `ai_messages` (migrazione `20261027000000_ai_chat_history.sql`): le chat salvate, una proprietaria ciascuna. `context` tiene la richiesta in corso (es. il tavolo: persone, orario, esigenze, sala) così un messaggio successivo la completa invece di ricominciare.
 
 ## Codice
 
@@ -82,7 +83,9 @@ Tutte le risposte di errore: `{ "error": string, "code"?: "not_found" | "module_
 | Metodo | Route | Richiesta → risposta (tipi in `src/lib/ai/contracts/`) |
 |---|---|---|
 | GET | `/api/ai/health[?bench=1]` | stato modulo, configurazione, Ollama (raggiungibile, installato, caricato), coda, velocità (`health.ts`) |
-| POST | `/api/ai/chat` | `{messages:[{role,content}]}` → `{intent, reply, data, ai}` (`chat.ts`) |
+| POST | `/api/ai/chat` | salvata: `{userId, conversationId?, message}` → `{intent, reply, data, ai, conversation, messages}`; senza salvataggio: `{messages:[{role,content}]}` (`chat.ts`) |
+| GET | `/api/ai/conversations?userId=` | le chat salvate dell'utente, dalla più recente |
+| GET · PATCH · DELETE | `/api/ai/conversations/:id` | apri (`?userId=`), rinomina (`{userId, title}`), elimina (`?userId=`) |
 | POST | `/api/ai/order/parse` | `{text}` → `{status, lines[], customDishes[], unresolved[], clarification, reply, extractedBy, ai}` (`order.ts`) |
 | POST | `/api/ai/order/price` | `{text}` oppure `{categoryId, ingredients[], name?}` → proposta fuori menù |
 | POST | `/api/ai/order/custom-item` | `{categoryId}` → segnaposto "Fuori menù" della categoria |
@@ -125,11 +128,18 @@ curl -s -X POST localhost:3000/api/ai/chat -H 'Content-Type: application/json' -
 
 ## Comportamenti da sapere
 
+- **Chat**: ogni utente ha le sue chat salvate (titolo e orario dell'ultimo messaggio, raggruppate per Oggi / Ieri / Ultimi 7 giorni / Più vecchie); si riaprono, si rinominano, si eliminano; rientrando si riapre l'ultima. Il titolo provvisorio sono le prime parole; il modello lo sostituisce dopo la prima risposta. Si salva solo il testo: i dati dietro una risposta vengono ricalcolati quando si richiede.
+- **Una chat è sempre lo stesso modello**: le 5 schede non sono 5 agenti. La Chat sceglie da sola lo strumento giusto; le altre 4 schede usano direttamente un singolo strumento.
+- **Domande che continuano**: la richiesta di tavolo in corso è tenuta dall'app, non riscritta dal modello. "6 persone, vogliamo vedere la partita" → "abbiamo anche dei bambini" cerca tavoli con TV **e** adatti ai bambini; "la TV non serve più" la toglie; "e alle 22?" o "e se fossero 8?" cambiano solo quel dato.
 - **Ordini**: allergie/celiachia → stato `staff` (mai garantire un piatto); "ignora le istruzioni / gratis / sconto" → `refuse`; una risposta del modello che parla di soldi viene scartata. Senza modello, un lettore a regole gestisce gli ordini semplici (`extractedBy: "rules"`). Le righe aggiunte vanno nel ticket **in attesa**: il cameriere le invia come sempre.
 - **Fuori menù**: base = piatto della stessa categoria con più ingredienti in comune; prezzo = base + regole variazioni della Cassa. Sopra la soglia (`custom_dish_min_overlap`) viene proposto come variazione del piatto, sotto come riga "Fuori menù".
 - **Tavoli**: senza orario (o entro 15') = "Trova posto" della Sala, con i tavoli tenuti per la coda esclusi; con un orario = `suggestTables` come il modulo Prenotazioni. Un "HH:MM" già passato da più di 15' vale per domani. Dal prototipo non si fa accomodare né si prenota.
 - **Cucina**: un articolo è in ritardo quando non è pronto da almeno la soglia del suo reparto (dal momento dell'invio). Card ambra in ritardo, rosse oltre il doppio; "Visto" le nasconde per 10' su quel dispositivo. Su /kitchen, con il modulo acceso, rosso alla soglia e ambra a metà (spento: 10/20 come prima). Anche il Coperto compare se il menù gli assegna una stampante di produzione.
 - **Analisi**: incasso tavolo = Σ `orders.total`; incasso prodotto = Σ `unit_price × quantità`; una "seduta" = conti dello stesso tavolo sovrapposti nel tempo (i sottoconti contano una volta); rotazioni = sedute / giorni di servizio con almeno un conto. Il margine c'è solo per i prodotti con costo.
+
+## Test di sicurezza (red team)
+
+`llm_tests/redteam/` prova a manipolare l'Assistente (un caso per ogni tipo di attacco) e misura i danni nel database; l'agente `.claude/agents/ai-redteam.md` la esegue e propone correzioni. Vedi `llm_tests/redteam/README.md`.
 
 ## Limiti noti del prototipo
 
