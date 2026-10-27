@@ -59,8 +59,9 @@ function KitchenAlertsStack() {
   // the corner FloorAlerts leaves free: it sits bottom-left, except on
   // Prenotazioni where it moves right
   const onLeft = pathname.startsWith("/prenotazioni");
-  // in Cassa the right column is the ticket with "Invia in cucina": stay a
-  // pill beside it (lg: the panel is 400px) and open only when asked
+  // in Cassa: stay a pill and open only when asked. The search bar is at the
+  // top there, so on phones it sits above the "Conto" bar instead; on lg it
+  // takes the bottom-right corner, over the menu, clear of the bill buttons
   const onPos = pathname.startsWith("/pos");
   const [collapsed, setCollapsed] = useState(onPos);
   // the stack stays mounted across pages: entering Cassa folds it away
@@ -110,8 +111,7 @@ function KitchenAlertsStack() {
         // never wider than the room FloorAlerts leaves
         "right-4 top-4 w-[min(24rem,calc(100vw-2rem))] items-end lg:top-auto lg:bottom-4 lg:w-[min(24rem,calc(100vw-41rem))]",
         onLeft && "lg:left-60 lg:right-auto lg:items-start",
-        // …and above the menu search bar
-        onPos && "lg:right-[26rem] lg:bottom-20",
+        onPos && "top-auto bottom-36 sm:bottom-24 lg:bottom-4",
       )}
     >
       {collapsed ? (

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Printer, TriangleAlert, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,7 @@ function timeOf(iso: string): string {
  */
 export function PrintQueueWatcher() {
   const t = useT();
+  const onPos = usePathname().startsWith("/pos");
   const [queues, setQueues] = useState<PrinterQueue[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -150,7 +152,16 @@ export function PrintQueueWatcher() {
 
   return (
     <>
-      <div className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 print:hidden sm:bottom-4">
+      <div
+        className={cn(
+          "pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 print:hidden sm:bottom-4",
+          // Cassa: the bill's buttons own the bottom of the page — sit above
+          // the phone's "Conto" bar and the delays pill, and on lg over the
+          // menu column, under its search bar
+          onPos &&
+            "bottom-52 sm:bottom-40 lg:inset-x-auto lg:bottom-auto lg:right-4 lg:top-28 lg:items-end",
+        )}
+      >
         {queues.map((q) => {
           const back = q.status === null;
           return (

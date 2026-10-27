@@ -45,6 +45,7 @@ export function MoveBillForm({
   tableName,
   tables,
   pendingCount,
+  initialIds,
   onDone,
   onCancel,
 }: {
@@ -53,6 +54,8 @@ export function MoveBillForm({
   tables: RestaurantTable[];
   /** Unsent lines on the source target — the move is blocked while any */
   pendingCount: number;
+  /** order_items to start with (the rows selected on the bill); all when absent */
+  initialIds?: string[];
   onDone: (done: MoveDone) => void;
   onCancel: () => void;
 }) {
@@ -66,7 +69,12 @@ export function MoveBillForm({
   const hasPaidLines = items.some((i) => !isCoperto(i) && i.paid_by_payment_id !== null);
 
   const [qty, setQty] = useState<Record<string, number>>(() =>
-    Object.fromEntries(movable.map((i) => [i.id, i.quantity])),
+    Object.fromEntries(
+      movable.map((i) => [
+        i.id,
+        !initialIds?.length || initialIds.includes(i.id) ? i.quantity : 0,
+      ]),
+    ),
   );
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
   const [query, setQuery] = useState("");

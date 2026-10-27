@@ -2,30 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  ArrowRightLeft,
-  Check,
-  ChefHat,
-  CreditCard,
-  Link2,
-  Minus,
-  Pencil,
-  Plus,
-  ReceiptText,
-  ShoppingBag,
-  Split,
-  Trash2,
-  Users,
-  X,
-} from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -33,9 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CoversChip, CoversPrompt } from "@/components/order/covers-prompt";
+import { CoversPrompt } from "@/components/order/covers-prompt";
 import { MoveBillForm, type MoveDone } from "@/components/order/move-bill-form";
 import {
   createDeliveryOrder,
@@ -45,10 +21,7 @@ import {
   type OpenOrder,
   type VariationData,
 } from "@/lib/api";
-import { formatMoney } from "@/lib/constants";
-import { orderItemLabel } from "@/lib/menu-display";
 import { calcTotals, toCents } from "@/lib/money";
-import { collapseCoperto } from "@/lib/pos/coperto";
 import type {
   MenuItem,
   Order,
@@ -65,73 +38,23 @@ import {
   lineUnitPrice,
   useTicketStore,
   type TicketLine,
-  type TicketMode,
 } from "@/stores/ticket-store";
 import { useT } from "@/lib/i18n/use-translation";
 import { useOrderActions } from "@/hooks/use-order-actions";
 import { useAuthStore, usePermission } from "@/stores/auth-store";
 import { VariationDialog } from "./variation-dialog";
-import { parseModifiers } from "@/lib/printing/route-order";
 import { PriceEditDialog, type PriceEditTarget } from "./price-edit-dialog";
 import { SplitBillDialog } from "./split-bill-dialog";
-import { SplitPicker } from "./split-picker";
 import { LinkTablesDialog } from "./link-tables-dialog";
 import { LinkedBillsDialog } from "./linked-bills-dialog";
 import { createFollowUpOrder } from "@/lib/takeaway/api";
-import { TakeawayCapacityBanner } from "@/components/takeaway/capacity-banner";
-import { TakeawayCaption } from "@/components/takeaway/takeaway-caption";
-import { PickupTimeControl } from "@/components/takeaway/pickup-time-control";
-import { TakeawayPicker } from "./takeaway-picker";
-import { OrderAssistButton } from "@/components/ai/order-dialog";
+import { TicketHeader } from "./ticket-header";
+import { TicketLines } from "./ticket-lines";
+import { TicketFooter } from "./ticket-footer";
 
-/** Selected variations, indented right under their parent line. Additions show
- * their list price as detail (the line price carries the diminishing-scaled
- * surcharge); removals never deduct, so they show no amount. Note rapide
- * follow in italics, with no sign — they are instructions, not ingredients. */
-function ModifierRows({
-  modifiers,
-  notes = [],
-  muted,
-}: {
-  modifiers: Array<{
-    key: string;
-    name: string;
-    priceAdjustment: number;
-    isRemoval: boolean;
-  }>;
-  notes?: string[];
-  muted?: boolean;
-}) {
-  if (modifiers.length === 0 && notes.length === 0) return null;
-  return (
-    <ul
-      className={
-        muted
-          ? "flex flex-col gap-0.5 pl-5 text-xs text-muted-foreground/60"
-          : "flex flex-col gap-0.5 pl-5 text-xs text-muted-foreground"
-      }
-    >
-      {modifiers.map((m) => (
-        <li key={m.key} className="flex justify-between gap-2">
-          <span className="min-w-0 truncate">
-            {m.isRemoval ? "− " : "+ "}
-            {m.name}
-          </span>
-          {m.priceAdjustment > 0 && (
-            <span className="shrink-0 tabular-nums">
-              +{formatMoney(m.priceAdjustment)}
-            </span>
-          )}
-        </li>
-      ))}
-      {notes.map((n) => (
-        <li key={`note:${n}`} className="truncate italic">
-          {n}
-        </li>
-      ))}
-    </ul>
-  );
-}
+// The ticket is split in three parts with their own files — TicketHeader
+// (who it is for), TicketLines (the bill) and TicketFooter (totals and
+// actions). This container keeps the state, the order actions and every dialog.
 
 interface TicketPanelProps {
   tables: RestaurantTable[];
@@ -168,15 +91,10 @@ export function TicketPanel({
     tableId,
     tableName,
     subtable,
-    takeawayOrderId,
-    takeawayName,
     lines,
-    setMode,
     setTable,
     setSubtable,
     setTakeaway,
-    removeItem,
-    setQuantity,
     setLinePrice,
     setLineModifiers,
     setDraftCovers,
@@ -190,7 +108,6 @@ export function TicketPanel({
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [priceEdit, setPriceEdit] = useState<PriceEditTarget | null>(null);
   const [editLine, setEditLine] = useState<TicketLine | null>(null);
-  const hasNotes = variations.quickNotes.length > 0;
   const [splitOpen, setSplitOpen] = useState(false);
   // Reusable customer-name labels, shown as quick-picks when starting a
   // take-away (same saved-labels list as the floor-plan New Delivery flow).
@@ -264,6 +181,12 @@ export function TicketPanel({
 
   const [linkOpen, setLinkOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  // order_items picked on the bill before "Sposta"; null = start with all
+  const [moveIds, setMoveIds] = useState<string[] | null>(null);
+  const openMove = (ids?: string[]) => {
+    setMoveIds(ids ?? null);
+    setMoveOpen(true);
+  };
   const canTakeOrders = usePermission("take_orders");
 
   // After a cambio tavolo: follow the bill when it left this target entirely,
@@ -329,14 +252,14 @@ export function TicketPanel({
     }
   }
 
-  // Manual price override — the pending branch is pure store state, so it
-  // stays here; only the sent branch hits the DB.
-  async function applyPriceEdit(target: PriceEditTarget, unitPrice: number) {
-    if (target.kind === "pending") {
-      setLinePrice(target.id, unitPrice);
-      return;
+  // Manual price override, on one line or a multi-selection — pending lines
+  // are pure store state; only sent ones hit the DB, one row after another.
+  async function applyPriceEdit(target: PriceEditTarget, prices: number[]) {
+    for (let n = 0; n < target.lines.length; n++) {
+      const line = target.lines[n];
+      if (line.kind === "pending") setLinePrice(line.id, prices[n]);
+      else await setSentPrice(line.id, prices[n], target.name);
     }
-    await setSentPrice(target.id, unitPrice, target.name);
   }
 
   // sent unit_price already includes modifier adjustments (snapshot at send);
@@ -451,492 +374,54 @@ export function TicketPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-col gap-3 border-b p-4">
-        <Tabs value={mode} onValueChange={(m) => setMode(m as TicketMode)}>
-          <TabsList className="grid h-12 w-full grid-cols-2">
-            <TabsTrigger value="table" className="h-10 text-base">
-              {t("pos.dineIn")}
-            </TabsTrigger>
-            <TabsTrigger value="takeaway" className="h-10 text-base">
-              {t("pos.takeaway")}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <TicketHeader
+        tables={tables}
+        openOrder={openOrder}
+        openSplits={openSplits}
+        openTakeaways={openTakeaways}
+        covers={covers}
+        linkNames={linkNames}
+        busy={busy}
+        canTakeOrders={canTakeOrders}
+        savedLabels={savedLabels}
+        onOpenCovers={() => setCoversOpen(true)}
+        onOpenLink={() => setLinkOpen(true)}
+        onOpenMove={openMove}
+        onStartNewTakeaway={(name) => void startNewTakeaway(name)}
+        onAddToExistingTakeaway={(o) => void addToExistingTakeaway(o)}
+        onOrderChanged={onOrderChanged}
+      />
 
-        {mode === "table" ? (
-          <>
-            <Select
-              value={tableId ?? ""}
-              onValueChange={(id) => {
-                const tbl = tables.find((x) => x.id === id);
-                if (tbl) setTable(tbl.id, tbl.name);
-              }}
-            >
-              <SelectTrigger className="h-12 text-base">
-                <SelectValue placeholder={t("pos.selectTable")} />
-              </SelectTrigger>
-              <SelectContent>
-                {tables.map((tbl) => (
-                  <SelectItem key={tbl.id} value={tbl.id}>
-                    {t("pos.tableOption", {
-                      name: tbl.name,
-                      count: tbl.capacity,
-                    })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {tableId && (
-              <>
-                <SplitPicker
-                  tableName={tableName ?? ""}
-                  openSplits={openSplits}
-                  subtable={subtable}
-                  onSelect={setSubtable}
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <CoversChip
-                    covers={covers}
-                    onClick={() => setCoversOpen(true)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setLinkOpen(true)}
-                    className={
-                      linkNames.length > 0
-                        ? "flex h-9 max-w-full items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/20"
-                        : "flex h-9 items-center gap-1.5 rounded-full border border-dashed px-3 text-sm font-medium text-muted-foreground hover:bg-accent"
-                    }
-                  >
-                    <Link2 className="h-4 w-4 shrink-0" />
-                    <span className="truncate">
-                      {linkNames.length > 0
-                        ? linkNames.join(", ")
-                        : t("links.link")}
-                    </span>
-                  </button>
-                  {openOrder && canTakeOrders && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setMoveOpen(true)}
-                      className="flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium hover:bg-accent disabled:opacity-50"
-                    >
-                      <ArrowRightLeft className="h-4 w-4 shrink-0" />
-                      {t("move.button")}
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </>
-        ) : takeawayName ? (
-          <div className="flex h-12 items-center gap-2 rounded-md border px-3">
-            <ShoppingBag className="h-5 w-5 shrink-0 text-muted-foreground" />
-            {openOrder?.order.delivery_number != null && (
-              <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground tabular-nums">
-                #{openOrder.order.delivery_number}
-              </span>
-            )}
-            <div className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{takeawayName}</span>
-              <TakeawayCaption
-                order={openOrder?.order ?? null}
-                bound={takeawayOrderId !== null}
-              />
-            </div>
-            <PickupTimeControl
-              orderId={openOrder?.order.id ?? null}
-              pickupAt={openOrder?.order.pickup_at ?? null}
-              onChanged={onOrderChanged}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10"
-              aria-label={t("pos.clearTakeawayAria")}
-              onClick={clearTicket}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
-          <TakeawayPicker
-            openOrders={openTakeaways}
-            savedLabels={savedLabels}
-            onPickExisting={(o) => setTakeaway(o.id, o.customer_name ?? "")}
-            onStartNew={(name) => void startNewTakeaway(name)}
-            onAddToExisting={(o) => void addToExistingTakeaway(o)}
-          />
-        )}
-      </div>
+      <TicketLines
+        openOrder={openOrder}
+        hasTarget={hasTarget}
+        variations={variations}
+        canOverridePrice={canOverridePrice}
+        busy={busy}
+        paidCovers={paidCovers}
+        onSetCovers={handleCovers}
+        onAmendSent={amendSentItem}
+        onEditPrice={setPriceEdit}
+        onEditLine={setEditLine}
+        onOpenMove={openMove}
+        onOrderChanged={onOrderChanged}
+      />
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <TakeawayCapacityBanner
-          openOrder={openOrder}
-          onChanged={onOrderChanged}
-        />
-
-        {!hasTarget && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            {mode === "table"
-              ? t("pos.pickTableToStart")
-              : t("pos.findOpenTakeaway")}
-          </p>
-        )}
-
-        {openOrder && openOrder.items.length > 0 && (
-          <div className="mb-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("pos.sentToKitchen")}
-            </h3>
-            <div className="flex flex-col gap-1.5">
-              {collapseCoperto(openOrder.items).map((i) => {
-                // Same label rule as the menu: a pizza that was tapped as
-                // "1202" reads as 1202 here too, with its toppings underneath.
-                const label = orderItemLabel(
-                  i.menu_items,
-                  t("floor.itemFallback"),
-                  i.custom_name,
-                );
-                const name =
-                  label.title + (i.fraction_of ? ` (1/${i.fraction_of})` : "");
-                const modifierRows = (i.order_item_modifiers ?? []).map(
-                  (m) => ({
-                    key: m.id,
-                    name: m.name,
-                    priceAdjustment: m.price_adjustment,
-                    isRemoval: m.is_removal,
-                  }),
-                );
-                if (i.paid_by_payment_id) {
-                  // settled by a split payment — immutable from here on
-                  return (
-                    <div key={i.id}>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground/60">
-                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                        <span className="min-w-0 flex-1 line-through">
-                          <span className="block truncate">
-                            {i.quantity > 1 ? `${i.quantity}× ` : ""}
-                            {name}
-                          </span>
-                          {label.ingredients && (
-                            <span className="block truncate text-xs">
-                              {label.ingredients}
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-xs font-medium uppercase">
-                          {t("pos.paid")}
-                        </span>
-                        <span className="w-14 text-right tabular-nums line-through">
-                          {formatMoney(i.unit_price * i.quantity)}
-                        </span>
-                      </div>
-                      <ModifierRows
-                        modifiers={modifierRows}
-                        notes={parseModifiers(i.notes)}
-                        muted
-                      />
-                    </div>
-                  );
-                }
-                // The coperto is a product like any other, but its row can
-                // stand for several (collapseCoperto folds the per-guest rows
-                // a split leaves behind), so its steps go through the count:
-                // updateOrderCovers folds the unpaid rows into one at the new
-                // total. Its price comes from the menu, so no re-price here.
-                const isCoperto = i.menu_items?.is_coperto ?? false;
-                const setSentQty = (q: number) =>
-                  isCoperto
-                    ? handleCovers(paidCovers + Math.max(0, q))
-                    : amendSentItem(i.id, q);
-                return (
-                  <div key={i.id}>
-                  <div
-                    className="flex items-center gap-2 text-sm text-muted-foreground"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5 truncate">
-                        {isCoperto && (
-                          <Users className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        {name}
-                      </span>
-                      {label.ingredients && (
-                        <span className="block truncate text-xs leading-snug">
-                          {label.ingredients}
-                        </span>
-                      )}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        aria-label={t("pos.decreaseSent", { name })}
-                        disabled={busy}
-                        onClick={() => void setSentQty(i.quantity - 1)}
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </Button>
-                      <span className="w-6 text-center font-semibold tabular-nums">
-                        {i.quantity}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        aria-label={t("pos.increaseSent", { name })}
-                        disabled={busy}
-                        onClick={() => void setSentQty(i.quantity + 1)}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    <span className="w-14 text-right tabular-nums">
-                      {formatMoney(i.unit_price * i.quantity)}
-                    </span>
-                    {/* Sent lines are re-priced, not re-composed: the kitchen
-                        already has the slip. The spacer keeps the totals
-                        column aligned for staff who may not re-price. */}
-                    {canOverridePrice && !isCoperto ? (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        aria-label={t("pos.adjustPriceOf", { name })}
-                        disabled={busy}
-                        onClick={() =>
-                          setPriceEdit({
-                            kind: "sent",
-                            id: i.id,
-                            name,
-                            unitPrice: i.unit_price,
-                          })
-                        }
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    ) : (
-                      <span className="w-8" aria-hidden />
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label={t("pos.removeSent", { name })}
-                      disabled={busy}
-                      onClick={() => void setSentQty(0)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <ModifierRows
-                    modifiers={modifierRows}
-                    notes={parseModifiers(i.notes)}
-                  />
-                  </div>
-                );
-              })}
-            </div>
-            <Separator className="mt-3" />
-          </div>
-        )}
-
-        {hasTarget && lines.length === 0 && (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            {openOrder ? t("pos.tapAnotherRound") : t("pos.tapToBuild")}
-          </p>
-        )}
-
-        <div className="flex flex-col gap-2">
-          {lines.map((l) => (
-            <div key={l.lineId}>
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{l.name}</div>
-                  {l.ingredients && (
-                    <div className="text-xs leading-snug text-muted-foreground line-clamp-2">
-                      {l.ingredients}
-                    </div>
-                  )}
-                  <div className="text-xs text-muted-foreground">
-                    {t("pos.each", { amount: formatMoney(lineUnitPrice(l)) })}
-                    {l.priceOverridden && (
-                      <span className="ml-1 font-medium text-amber-600">
-                        {" "}
-                        {t("pos.adjusted")}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {/* One door for the whole line: ingredients and notes for
-                    everyone, price for those allowed. Hidden only when there
-                    is nothing to change, so it never opens onto an empty
-                    dialog. */}
-                {(l.menuItemId in variations.byItem ||
-                  hasNotes ||
-                  canOverridePrice) && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10 text-muted-foreground"
-                    // name what this user can actually change, so the label
-                    // never promises a price field they will not be shown
-                    aria-label={t(
-                      l.menuItemId in variations.byItem
-                        ? canOverridePrice
-                          ? "pos.editLineAria"
-                          : "pos.editLineIngredientsAria"
-                        : hasNotes
-                          ? canOverridePrice
-                            ? "pos.editLineNotesPriceAria"
-                            : "pos.editLineNotesAria"
-                          : "pos.editLinePriceAria",
-                      { name: l.name },
-                    )}
-                    onClick={() => setEditLine(l)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                )}
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10"
-                    aria-label={t("pos.decrease", { name: l.name })}
-                    onClick={() => setQuantity(l.lineId, l.quantity - 1)}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="w-8 text-center font-semibold tabular-nums">
-                    {l.quantity}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10"
-                    aria-label={t("pos.increase", { name: l.name })}
-                    onClick={() => setQuantity(l.lineId, l.quantity + 1)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <span className="w-16 text-right font-medium tabular-nums">
-                  {formatMoney(lineUnitPrice(l) * l.quantity)}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 text-muted-foreground"
-                  aria-label={t("pos.remove", { name: l.name })}
-                  onClick={() => removeItem(l.lineId)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <ModifierRows
-                modifiers={l.modifiers.map((m) => ({
-                  key: `${m.ingredientId}:${m.isRemoval}`,
-                  name: m.name,
-                  priceAdjustment: m.priceAdjustment,
-                  isRemoval: m.isRemoval,
-                }))}
-                notes={l.notes}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="border-t p-4">
-        <div className="mb-4 flex flex-col gap-1.5 text-sm">
-          <div className="flex justify-between text-muted-foreground">
-            <span>{t("pos.subtotal")}</span>
-            <span className="tabular-nums">{formatMoney(totals.subtotal)}</span>
-          </div>
-          <div className="flex justify-between text-muted-foreground">
-            <span>{t("pos.tax")}</span>
-            <span className="tabular-nums">{formatMoney(totals.tax)}</span>
-          </div>
-          <div className="flex justify-between text-lg font-semibold">
-            <span>{t("pos.total")}</span>
-            <span className="tabular-nums">{formatMoney(totals.total)}</span>
-          </div>
-          {paidCents > 0 && (
-            <>
-              <div className="flex justify-between text-muted-foreground">
-                <span>
-                  {payments.length === 1
-                    ? t("pos.paidPaymentsOne")
-                    : t("pos.paidPaymentsMany", { count: payments.length })}
-                </span>
-                <span className="tabular-nums">
-                  -{formatMoney(paidCents / 100)}
-                </span>
-              </div>
-              <div className="flex justify-between text-lg font-semibold">
-                <span>{t("pos.balanceDue")}</span>
-                <span className="tabular-nums">
-                  {formatMoney(balanceCents / 100)}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {/* AI prototype: free text → pending lines (self-gated) */}
-          {hasTarget && <OrderAssistButton disabled={busy} />}
-          <Button
-            size="lg"
-            className="h-14 text-base"
-            disabled={busy || !hasTarget || lines.length === 0}
-            onClick={handleSend}
-          >
-            <ChefHat className="mr-2 h-5 w-5" /> {t("pos.sendToKitchenBtn")}
-          </Button>
-          {openOrder && (
-            <div className="flex gap-2">
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 flex-1 text-sm"
-                disabled={busy}
-                onClick={handlePreReceipt}
-              >
-                <ReceiptText className="mr-2 h-4 w-4" /> {t("pos.preReceiptBtn")}
-              </Button>
-              {canCheckout && (
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-12 flex-1 text-sm"
-                  disabled={busy}
-                  onClick={() => void guardLinked("split")}
-                >
-                  <Split className="mr-2 h-4 w-4" /> {t("pos.splitBillBtn")}
-                </Button>
-              )}
-
-            </div>
-          )}
-          {canCheckout && (
-            <Button
-              size="lg"
-              variant="secondary"
-              className="h-14 text-base"
-              disabled={busy || !hasTarget || (!openOrder && lines.length === 0)}
-              onClick={() => void guardLinked("checkout")}
-            >
-              <CreditCard className="mr-2 h-5 w-5" />{" "}
-              {t("pos.checkoutBtn", { amount: formatMoney(balanceCents / 100) })}
-            </Button>
-          )}
-        </div>
-      </div>
+      <TicketFooter
+        totals={totals}
+        payments={payments}
+        paidCents={paidCents}
+        balanceCents={balanceCents}
+        pendingCount={lines.length}
+        hasTarget={hasTarget}
+        hasOpenOrder={!!openOrder}
+        busy={busy}
+        canCheckout={canCheckout}
+        onSend={() => void handleSend()}
+        onPreReceipt={() => void handlePreReceipt()}
+        onSplit={() => void guardLinked("split")}
+        onCheckout={() => void guardLinked("checkout")}
+      />
 
       {/* Asked as soon as a table is targeted and nobody has answered yet, and
           on demand from the chip. Closing it leaves the table unanswered
@@ -981,6 +466,7 @@ export function TicketPanel({
                 tableName={tableName ?? ""}
                 tables={tables}
                 pendingCount={lines.length}
+                initialIds={moveIds ?? undefined}
                 onDone={(d) => void handleMoved(d)}
                 onCancel={() => setMoveOpen(false)}
               />

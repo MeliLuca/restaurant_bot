@@ -46,6 +46,9 @@ interface MenuListProps {
   scrollToCategoryId?: string | null;
   onScrolledToCategory?: () => void;
   className?: string;
+  /** Grid variant only: replaces the default column classes, for a list that
+   * sits in a narrower column than the viewport suggests */
+  gridColsClassName?: string;
 }
 
 export function MenuList({
@@ -58,6 +61,7 @@ export function MenuList({
   scrollToCategoryId,
   onScrolledToCategory,
   className,
+  gridColsClassName,
 }: MenuListProps) {
   const t = useT();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -160,7 +164,11 @@ export function MenuList({
           <ul
             className={cn(
               variant === "grid"
-                ? "grid grid-cols-2 gap-3 p-4 md:grid-cols-3 2xl:grid-cols-4"
+                ? cn(
+                    "grid gap-3 p-4",
+                    gridColsClassName ??
+                      "grid-cols-2 md:grid-cols-3 2xl:grid-cols-4",
+                  )
                 : "divide-y",
             )}
           >

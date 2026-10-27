@@ -7,6 +7,8 @@
 
 // The Assistente AI prototype's strings live in their own files (one per task)
 import { aiEn, aiIt } from "./ai";
+// The Cassa ticket's reworked parts keep their strings in their own files too
+import { cassaEn, cassaIt } from "./cassa";
 
 export const it = {
   common: {
@@ -1759,6 +1761,7 @@ export const it = {
     reprintFailed: "Ristampa non riuscita",
   },
   ai: aiIt,
+  cassa: cassaIt,
 };
 
 type DeepStringRecord = { [key: string]: string | DeepStringRecord };
@@ -3485,6 +3488,7 @@ export const en: typeof it = {
     reprintFailed: "Reprint failed",
   },
   ai: aiEn,
+  cassa: cassaEn,
 };
 
 // Dotted-path key union derived from the Italian shape, for autocomplete and

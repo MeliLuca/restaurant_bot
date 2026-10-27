@@ -1,0 +1,48 @@
+// Cassa (POS) — strings of the ticket header. Owned by that part only.
+// Keys are read as "cassa.header.<key>"; add every key to both it and en.
+
+export const it = {
+  chooseTable: "Scegli un tavolo",
+  chooseTakeaway: "Scegli un asporto",
+  tableLabel: "Tavolo {name}",
+  changeTargetAria: "Cambia tavolo o asporto",
+  pickerTitle: "Scegli il conto",
+  pickerDescription: "Tocca un tavolo, oppure passa ad Asporto.",
+  tabTables: "Tavoli",
+  tabTakeaway: "Asporto",
+  searchTables: "Cerca tavolo…",
+  searchTablesAria: "Cerca un tavolo per nome",
+  openTables: "Tavoli aperti",
+  otherTables: "Altri tavoli",
+  noTablesMatch: "Nessun tavolo con questo nome",
+  current: "Attuale",
+  seatsAria: "{count} posti",
+  tableActions: "Azioni tavolo",
+  linkTables: "Collega tavoli",
+  moveTable: "Cambio tavolo",
+  newSplit: "Nuovo sottoconto",
+  subBillsAria: "Sottoconti del tavolo",
+};
+
+export const en: typeof it = {
+  chooseTable: "Choose a table",
+  chooseTakeaway: "Choose a take-away",
+  tableLabel: "Table {name}",
+  changeTargetAria: "Change table or take-away",
+  pickerTitle: "Choose the bill",
+  pickerDescription: "Tap a table, or switch to Take-away.",
+  tabTables: "Tables",
+  tabTakeaway: "Take-away",
+  searchTables: "Search table…",
+  searchTablesAria: "Search a table by name",
+  openTables: "Open tables",
+  otherTables: "Other tables",
+  noTablesMatch: "No table with this name",
+  current: "Current",
+  seatsAria: "{count} seats",
+  tableActions: "Table actions",
+  linkTables: "Link tables",
+  moveTable: "Move table",
+  newSplit: "New sub-bill",
+  subBillsAria: "Table sub-bills",
+};
